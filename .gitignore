@@ -1,5 +1,3 @@
-local.mk
-
 src/dnethack
 util/recover
 util/makedefs
