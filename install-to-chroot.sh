@@ -10,11 +10,11 @@
 DATESTAMP=`date +%Y%m%d-%H%M%S`
 NAO_CHROOT="/opt/nethack/chroot"
 # already compiled versions of dgl and nethack
-NETHACK_GIT="/home/build/dNAO"
+NETHACK_GIT="/home/build/dNetHack"
 # the user & group from dgamelaunch config file.
 USRGRP="games:games"
 # fixed data to copy (leave blank to skip)
-NH_GIT="/home/build/dNAO"
+NH_GIT="/home/build/dNetHack"
 # HACKDIR from include/config.h; aka nethack subdir inside chroot
 # Make a new one each time save compat is broken
 NHSUBDIR="dnethack-3.21.0"
