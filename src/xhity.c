@@ -745,7 +745,9 @@ int tary;
 							u.uy == tary - dy
 							)
 						{
-							struct monst *mdef2 = m_at(tarx + dx, tary + dy);
+							struct monst *mdef2 = u.uswallow ? u.ustuck : 
+													(dx || dy) ? m_at(tarx + dx, tary + dy) : 
+													(struct monst *)0;
 							if (mdef2 && (mdef2 != mdef) && !DEADMONSTER(mdef2)) {
 								int vis2 = (VIS_MAGR | VIS_NONE) | (canseemon(mdef2) ? VIS_MDEF : 0);
 								bhitpos.x = tarx + dx; bhitpos.y = tary + dy;
@@ -777,7 +779,9 @@ int tary;
 						}
 						if (isok(x(magr) + nx, y(magr) + ny))
 						{
-							struct monst *mdef2 = m_at(x(magr) + nx, y(magr) + ny);
+							struct monst *mdef2 = u.uswallow ? u.ustuck : 
+													(nx || ny) ? m_at(x(magr) + nx, y(magr) + ny) : 
+													(struct monst *)0;
 							if (mdef2 && (mdef2 != mdef) && !DEADMONSTER(mdef2)
 								&& !((youagr && mdef2->mpeaceful) || (!youagr && magr->mpeaceful == mdef2->mpeaceful))
 							){
@@ -803,7 +807,10 @@ int tary;
 							y(magr) == tary - dy
 							)
 						{
-							struct monst *mdef2 = m_u_at(tarx + dx, tary + dy);
+							struct monst *mdef2 = !youagr ? m_u_at(tarx + dx, tary + dy) : 
+													u.uswallow ? u.ustuck : 
+													(dx || dy) ? m_at(tarx + dx, tary + dy) : 
+													(struct monst *)0;
 							if (mdef2 
 								&& (!DEADMONSTER(mdef2) || mdef2 == &youmonst)
 								&& ((!youagr && mdef2 != &youmonst && mdef2->mpeaceful != magr->mpeaceful) ||
@@ -826,7 +833,10 @@ int tary;
 							nx = sgn(dx+dy);
 							ny = sgn(dy-dx);
 							if (isok(x(magr) + nx, y(magr) + ny) && !(result&(MM_AGR_DIED|MM_AGR_STOP))){
-								struct monst *mdef2 = m_u_at(x(magr) + nx, y(magr) + ny);
+								struct monst *mdef2 = !youagr ? m_u_at(x(magr) + nx, y(magr) + ny) : 
+														u.uswallow ? u.ustuck : 
+														(nx || ny) ? m_at(x(magr) + nx, y(magr) + ny) : 
+														(struct monst *)0;
 								if (mdef2 
 									&& (!DEADMONSTER(mdef2) || mdef2 == &youmonst)
 									&& ((!youagr && mdef2 != &youmonst && mdef2->mpeaceful != magr->mpeaceful) ||
@@ -848,7 +858,10 @@ int tary;
 							nx = sgn(dx-dy);
 							ny = sgn(dx+dy);
 							if (isok(x(magr) + nx, y(magr) + ny) && !(result&(MM_AGR_DIED|MM_AGR_STOP))){
-								struct monst *mdef2 = m_u_at(x(magr) + nx, y(magr) + ny);
+								struct monst *mdef2 = !youagr ? m_u_at(x(magr) + nx, y(magr) + ny) : 
+														u.uswallow ? u.ustuck : 
+														(nx || ny) ? m_at(x(magr) + nx, y(magr) + ny) : 
+														(struct monst *)0;
 								if (mdef2 
 									&& (!DEADMONSTER(mdef2) || mdef2 == &youmonst)
 									&& ((!youagr && mdef2 != &youmonst && mdef2->mpeaceful != magr->mpeaceful) ||
@@ -885,7 +898,10 @@ int tary;
 							y(magr) == tary - dy
 							)
 						{
-							struct monst *mdef2 = m_u_at(tarx + dx, tary + dy);
+							struct monst *mdef2 = !youagr ? m_u_at(tarx + dx, tary + dy) : 
+													u.uswallow ? u.ustuck : 
+													(dx || dy) ? m_at(tarx + dx, tary + dy) : 
+													(struct monst *)0;
 							if (mdef2 
 								&& (!DEADMONSTER(mdef2) || mdef2 == &youmonst)
 								&& ((!youagr && mdef2 != &youmonst && mdef2->mpeaceful != magr->mpeaceful) ||
@@ -3318,6 +3334,10 @@ int flat_acc;
 	{
 		vdef_acc += 20;
 	}
+	/* Shades (and other insubstantial creatures) edge-case handler */
+	/* generally, miss_via_insubstantial() should do this, but some edge cases (like rolling boulder traps) are missed */
+	if (insubstantial(pd) && !hits_insubstantial(magr, mdef, attk, weapon))
+		vdef_acc -= 2000;
 
 	/* weapon accuracy -- only applies for a weapon attack OR a properly-thrown object */
 	if ((attk && weapon_aatyp(attk->aatyp))
@@ -3577,47 +3597,9 @@ boolean ranged;
 		vis = getvis(magr, mdef, 0, 0);
 	
 	/* Some things cause immediate misses */
-	/* monster displacement */
-	if (!youdef &&
-		mon_resistance(mdef, DISPLACED) &&
-		!(youagr && u.ustuck && u.ustuck == mdef) &&
-		!(youagr && u.uswallow) &&
-		!(has_passthrough_displacement(pd) && hits_insubstantial(magr, mdef, attk, weapon)) &&
-		rn2(2)
-		) {
-		if (has_passthrough_displacement(pd)){
-			if (vis&VIS_MAGR) {
-				pline("%s attack passes harmlessly through %s!",
-					(youagr ? "Your" : s_suffix(Monnam(magr))),
-					the(mon_nam(mdef)));
-			}
-		}
-		else {
-			if (vis&VIS_MAGR) {
-				pline("%s attack%s %s displaced image!",
-					(youagr ? "You" : Monnam(magr)),
-					(youagr ? "" : "s"),
-					(youagr ? "a" : s_suffix(mon_nam(mdef)))
-					);
-			}
-		}
-		domissmsg = FALSE;
+	if (miss_via_insubstantial(magr, mdef, attk, weapon, vis)) {
 		miss = TRUE;
-	}
-	/* insubstantial (shade-type) immunity to being hit */
-	if (!miss && insubstantial(pd) && !hits_insubstantial(magr, mdef, attk, weapon)) {
-		/* Print message */
-		if (vis&VIS_MAGR) {
-			Sprintf(buf, "%s", ((!weapon || valid_weapon(weapon)) ? "attack" : cxname(weapon)));
-			pline("%s %s %s harmlessly through %s.",
-				(youagr ? "Your" : s_suffix(Monnam(magr))),
-				buf,
-				vtense(buf, "pass"),
-				(youdef ? "you" : mon_nam(mdef))
-				);
-		}
 		domissmsg = FALSE;
-		miss = TRUE;
 	}
 	/* Otiax protects you from being hit (1/5) */
 	if (youdef && u.sealsActive&SEAL_OTIAX && !rn2(5))
@@ -5641,7 +5623,7 @@ boolean ranged;
 						u.ualign.sins++;
 						u.hod += rnd(20);
 						u.ugangr[Align2gangr(angrygod)]++;
-						angrygods(angrygod);
+						angrygods(Align2gangr(angrygod));
 					}
 					return MM_HIT;
 				/*Lower Sanity*/
@@ -5734,11 +5716,11 @@ boolean ranged;
 				/*Lower protection*/
 				case 6:
 					if(youdef){
+						pline("%s shares a prophecy of your death!", Monnam(magr));
 						u.uacinc -= dmg;
 						u.ublessed = max(0, u.ublessed-dmg);
 					}
 					else {
-						pline("%s shares a prophecy of your death!", Monnam(magr));
 						if(canseemon(mdef))
 							pline("%s looks fearful.", Monnam(mdef));
 						//Monsters are less detailed, just discourage them.
@@ -11605,7 +11587,7 @@ int vis;
 			u.ualign.sins++;
 			u.hod += rnd(20);
 			u.ugangr[Align2gangr(angrygod)]++;
-			angrygods(angrygod);
+			angrygods(Align2gangr(angrygod));
 		}
 		break;
 
@@ -12177,6 +12159,7 @@ int vis;						/* True if action is at all visible to the player */
 			weapon->oartifact == ART_WEBWEAVER_S_CROOK ||
 			weapon->oartifact == ART_SILENCE_GLAIVE ||
 			weapon->oartifact == ART_HEARTCLEAVER ||
+			weapon->oartifact == ART_GREEN_DRAGON_CRESCENT_BLAD ||
 			weapon->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING ||
 			weapon->oartifact == ART_SOL_VALTIVA ||
 			weapon->oartifact == ART_DEATH_SPEAR_OF_KEPTOLO ||

@@ -2735,16 +2735,16 @@ int final;
 		dump("  ", "The golden pyramid increased your healing");
 	
 	/*** Troubles ***/
-	if(u.usanity < 100)
-		dump("  ", "You were a little touched in the head");
-	else if(u.usanity < 50)
-		dump("  ", "You sometimes struggled with insanity");
-	else if(u.usanity < 25)
-		dump("  ", "You frequently struggled with insanity");
+	if(u.usanity == 0)
+		dump("  ", "You were quite insane");
 	else if(u.usanity < 10)
 		dump("  ", "You constantly struggled with insanity");
-	else if(u.usanity == 0)
-		dump("  ", "You were quite insane");
+	else if(u.usanity < 25)
+		dump("  ", "You frequently struggled with insanity");
+	else if(u.usanity < 50)
+		dump("  ", "You sometimes struggled with insanity");
+	else if(u.usanity < 100)
+		dump("  ", "You were a little touched in the head");
 	
 	if(u.uinsight > 40)
 		dump("  ", "You frequently saw things you wished you hadn't");
@@ -3233,16 +3233,16 @@ resistances_enlightenment()
 	if (active_glyph(BEASTS_EMBRACE)) putstr(en_win, 0, "A bestial figure hides inside of you.");
 	
 	/*** Troubles ***/
-	if(u.usanity < 100)
-		putstr(en_win, 0, "You are a little touched in the head.");
-	else if(u.usanity < 50)
-		putstr(en_win, 0, "You sometimes struggle with insanity.");
-	else if(u.usanity < 25)
-		putstr(en_win, 0, "You frequently struggle with insanity.");
+	if(u.usanity == 0)
+		putstr(en_win, 0, "You are quite insane.");
 	else if(u.usanity < 10)
 		putstr(en_win, 0, "You constantly struggle with insanity.");
-	else if(u.usanity == 0)
-		putstr(en_win, 0, "You are quite insane.");
+	else if(u.usanity < 25)
+		putstr(en_win, 0, "You frequently struggle with insanity.");
+	else if(u.usanity < 50)
+		putstr(en_win, 0, "You sometimes struggle with insanity.");
+	else if(u.usanity < 100)
+		putstr(en_win, 0, "You are a little touched in the head.");
 	
 	if(u.uinsight > 40)
 		putstr(en_win, 0, "You frequently see things you wish you hadn't.");
@@ -5062,6 +5062,55 @@ int final;
 	    Sprintf(buf, "magically identified %ld item%s",
 		    u.uconduct.IDs, plur(u.uconduct.IDs));
 	    you_have_X(buf);
+	}
+	if(is_june()){
+#define	CHECK_ACHIEVE(aflag, string) \
+	if(achieve.trophies&aflag){\
+		putstr(en_win, 0, string);\
+	}
+		putstr(en_win, 0, "");
+		putstr(en_win, 0, "Junethack challenges:");
+		putstr(en_win, 0, "");
+	CHECK_ACHIEVE(ARC_QUEST,"Walking international incident: completed archeologist quest")
+	CHECK_ACHIEVE(CAV_QUEST,"Serpent slayer: completed caveman quest")
+	CHECK_ACHIEVE(CON_QUEST,"Sentence commuted: completed convict quest")
+	CHECK_ACHIEVE(KNI_QUEST,"Into the crystal cave: completed knight quest")
+	CHECK_ACHIEVE(ANA_QUEST,"Back from the future: completed anachrononaut quest")
+	CHECK_ACHIEVE(AND_QUEST,"Glory to mankind: completed android quest")
+	CHECK_ACHIEVE(BIN_QUEST,"33 spirits: completed binder quest")
+	CHECK_ACHIEVE(PIR_QUEST,"Not so inconceivable: completed pirate quest")
+	CHECK_ACHIEVE(BRD_QUEST,"Not so spoony: completed bard quest")
+	CHECK_ACHIEVE(NOB_QUEST,"Rebellion crushed: completed base noble quest")
+	CHECK_ACHIEVE(MAD_QUEST,"Oh good. I'm not crazy: completed madman quest")
+	CHECK_ACHIEVE(HDR_NOB_QUEST,"Family drama: completed hedrow noble quest")
+	CHECK_ACHIEVE(HDR_SHR_QUEST,"On agency: completed hedrow shared quest")
+	CHECK_ACHIEVE(DRO_NOB_QUEST,"Foreshadowing: completed drow noble quest")
+	CHECK_ACHIEVE(DRO_SHR_QUEST,"Old friends: completed drow shared quest")
+	CHECK_ACHIEVE(DWA_NOB_QUEST,"Durin's Bane's Bane: completed dwarf noble quest")
+	CHECK_ACHIEVE(DWA_KNI_QUEST,"Battle of (5-4) armies: completed dwarf knight quest")
+	CHECK_ACHIEVE(GNO_RAN_QUEST,"Strongest of all time: completed gnome ranger quest")
+	CHECK_ACHIEVE(ELF_SHR_QUEST,"Driven out: completed elf shared quest")
+	CHECK_ACHIEVE(LAW_QUEST,"Ripple-resistant tower: completed law quest")
+	CHECK_ACHIEVE(NEU_QUEST,"Key to the (corpse) city: completed neutral quest")
+	CHECK_ACHIEVE(CHA_QUEST,"Asinine paradigm: completed chaos temple quest")
+	CHECK_ACHIEVE(MITH_QUEST,"Chasing after the wind: completed mithardir quest")
+	CHECK_ACHIEVE(MORD_QUEST,"Fossil of the First Age: completed mordor quest")
+	CHECK_ACHIEVE(SECOND_THOUGHTS,"Had second thoughts after a drow quest")
+	CHECK_ACHIEVE(LAMASHTU_KILL,"Does this count as a paradox?: killed Lamashtu")
+	CHECK_ACHIEVE(BAALPHEGOR_KILL,"A universe without motion: killed Baalphegor")
+	CHECK_ACHIEVE(ANGEL_VAULT,"Opened an angelic hell-vault")
+	CHECK_ACHIEVE(ANCIENT_VAULT,"Opened an ancient hell-vault")
+	CHECK_ACHIEVE(TANNINIM_VAULT,"Opened a tanninim hell-vault")
+	CHECK_ACHIEVE(UNKNOWN_WISH,"Earned a wish from an unknown god")
+	CHECK_ACHIEVE(CASTLE_WISH,"Completed the castle")
+	CHECK_ACHIEVE(ILLUMIAN,"Became illuminated")
+	CHECK_ACHIEVE(RESCUE,"Lead an exodus")
+	CHECK_ACHIEVE(FULL_LOADOUT,"Super Fighting Robot: fully upgraded a clockwork automata")
+	CHECK_ACHIEVE(NIGHTMAREHUNTER,"Hunter of Nightmares")
+	CHECK_ACHIEVE(QUITE_MAD,"Quite Mad: Suffered six madnesses")
+	CHECK_ACHIEVE(TOTAL_DRUNK,"Booze Hound")
+		
+#undef	CHECK_ACHIEVE
 	}
 	/* Pop up the window and wait for a key */
 	display_nhwindow(en_win, TRUE);

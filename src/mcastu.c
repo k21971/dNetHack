@@ -1868,9 +1868,10 @@ int tary;
 		/* special case override: the avatar of lolth can ask Lolth to intercede instead of casting a spell */
 		if (youdef && magr->mtyp == PM_AVATAR_OF_LOLTH && !strcmp(urole.cgod, "Lolth") && !is_undirected_spell(spellnum) && !magr->mpeaceful){
 			u.ugangr[Align2gangr(A_CHAOTIC)]++;
-			angrygods(A_CHAOTIC);
+			angrygods(Align2gangr(A_CHAOTIC));
 			result = MM_HIT;
 		}
+		// !!!
 		/* generally: cast the spell */
 		result = cast_spell(magr, mdef, attk, spellnum, tarx, tary);
 	}
@@ -2591,10 +2592,12 @@ int tary;
 					dmg = (dmg + 1) / 2;
 			}
 
-			(void)burnarmor(mdef);
-			destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
-			destroy_item(mdef, POTION_CLASS, AD_FIRE);
-			destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
+			if (!InvFire_res(mdef)) {
+				(void)burnarmor(mdef);
+				destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
+				destroy_item(mdef, POTION_CLASS, AD_FIRE);
+				destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
+			}
 
 			if (youdef) {
 				burn_away_slime();
@@ -3339,7 +3342,7 @@ int tary;
 	case MON_WARP_THROW:
 		/* needs direct target */
 		if (!foundem) {
-			impossible("warp with no mdef?");
+			impossible("warp-throw with no mdef?");
 			return MM_MISS;
 		}
 		else
@@ -3359,7 +3362,7 @@ int tary;
 				!(dx == x(mdef) - x(magr) && dy == y(mdef) - y(magr))
 			);
 			if(youdef){
-				hurtle(dx, dy, BOLT_LIM, FALSE, TRUE);
+				hurtle(dx, dy, BOLT_LIM, FALSE, FALSE);
 			}
 			else {
 				mhurtle(mdef, dx, dy, BOLT_LIM, TRUE);
@@ -3370,7 +3373,7 @@ int tary;
 	case MON_WARP:
 		/* needs direct target */
 		if (!foundem) {
-			impossible("warp-throw with no mdef?");
+			impossible("warp-blades with no mdef?");
 			return MM_MISS;
 		}
 		else

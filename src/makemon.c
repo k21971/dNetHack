@@ -4270,7 +4270,8 @@ int mkobjflags;
 				break;
 				case 2:
 					otmp = mksobj(CHAIN_MAIL, mkobjflags);
-					otmp->oeroded = 2;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 2;
 					(void) mpickobj(mtmp, otmp);
 				break;
 			}
@@ -4279,32 +4280,38 @@ int mkobjflags;
 				switch (rn2(6)) {
 				case 0:
 					otmp = mksobj(TWO_HANDED_SWORD, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				case 1:
 					otmp = mksobj(SCIMITAR, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				case 2:
 					otmp = mksobj(TRIDENT, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				case 3:
 					otmp = mksobj(SHORT_SWORD, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				case 4:
 					otmp = mksobj(DAGGER, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				case 5:
 					otmp = mksobj(SPEAR, mkobjflags);
-					otmp->oeroded = 3;
+					if (is_rustprone(otmp))
+						otmp->oeroded = 3;
 					(void)mpickobj(mtmp, otmp);
 				break;
 				}
@@ -7512,7 +7519,7 @@ int mkobjflags;
 				break;
 				case 4:
 					mtmp->mvar_syllable = SYLLABLE_OF_SPIRIT__VAUL;
-					mtmp->mintrinsics[(DISPLACED-1)/32] |= (1 << (DISPLACED-1)%32);
+					give_mintrinsic(mtmp, DISPLACED);
 				break;
 				case 5:
 					mtmp->mvar_syllable = SYLLABLE_OF_POWER__KRAU;
@@ -10912,7 +10919,7 @@ struct monst *mtmp, *victim;
 	else if (ptr->mtyp == PM_PLUMACH_RILMANI || ptr->mtyp == PM_FERRUMACH_RILMANI) lev_limit = 20;
 	else if (is_eladrin(ptr) && ptr->mlevel <= 20) lev_limit = 30;
 	else if (ptr->mtyp == PM_OONA) lev_limit = 60;
-	else if (ptr->mtyp == PM_ANCIENT_OF_ICE || ptr->mtyp == PM_ANCIENT_OF_DEATH) lev_limit = 45;
+	else if (is_ancient(ptr)) lev_limit = 45;
 	else if (lev_limit < 5) lev_limit = 5;	/* arbitrary */
 	else if (lev_limit > 49) lev_limit = (ptr->mlevel > 49 ? ptr->mlevel : 49);
 
