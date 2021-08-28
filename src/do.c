@@ -196,8 +196,13 @@ const char *verb;
 			}
 		}
 		deltrap(t);
-		bury_objs(x, y); //Crate handling: Bury everything here (inc boulder item) then free the boulder after
-		if(obj->otyp == MASSIVE_STONE_CRATE){
+		if(obj->otyp == MASS_OF_STUFF){
+			place_object(obj, x, y);
+			separate_mass_of_stuff(obj, FALSE);
+			obj = (struct obj *) 0;
+		}
+		bury_objs(x, y); //Crate handling: Bury everything here (inc mass of stuff products) then free the boulder after
+		if(obj && obj->otyp == MASSIVE_STONE_CRATE){
 			struct obj *item;
 			if(Blind) pline("Click!");
 			else pline("The crate pops open as it lands.");
@@ -207,7 +212,7 @@ const char *verb;
 				place_object(item, x, y);
 			}
 		}
-		obfree(obj, (struct obj *)0);
+		if(obj) obfree(obj, (struct obj *)0);
 		newsym(x,y);
 		return TRUE;
 	} else if (is_lava(x, y)) {
@@ -261,7 +266,7 @@ void
 doaltarobj(obj)  /* obj is an object dropped on an altar */
 	register struct obj *obj;
 {
-	if (Blind)
+	if (Blind || Misotheism)
 		return;
 
 	/* KMH, conduct */
@@ -1219,6 +1224,8 @@ int portal;
 			u.uz.flags.mirror = 1;
 	}
 	keepdogs(FALSE);
+	u.ux = u.uy = 0;			/* comes after keepdogs() */
+	
 	if (u.uswallow)				/* idem */
 		u.uswldtim = u.uswallow = 0;
 	recalc_mapseen(); /* recalculate map overview before we leave the level */

@@ -1209,7 +1209,7 @@ boolean telekinesis;
 {
     int result, old_wt, new_wt, prev_encumbr, next_encumbr;
 
-    if (obj->otyp == BOULDER && In_sokoban(&u.uz)) {/*note, sokoban limit is just boulders*/
+    if (is_boulder(obj) && In_sokoban(&u.uz)) {
 	You("cannot get your %s around this %s.",
 			body_part(HAND), xname(obj));
 	return -1;
@@ -1996,6 +1996,8 @@ dopetequip()
 			flag = W_ARMF;
 		} else if(is_suit(otmp)){
 			flag = W_ARM;
+		} else if(is_worn_tool(otmp)){
+			flag = W_TOOL;
 		} else {
 			pline("Error: Unknown monster armor type!?");
 			return 0;
@@ -2759,7 +2761,9 @@ struct monst *mon;
 				addArmorMenuOption
 			} else if(is_helmet(otmp) && !(mon->misc_worn_check&W_ARMH) && 
 				((helm_match(mon->data,otmp) && has_head_mon(mon) && otmp->objsize == mon->data->msize && !has_horns(mon->data))
-				|| is_flimsy(otmp))
+				|| is_flimsy(otmp)
+				|| otmp->otyp == find_gcirclet()
+				)
 			){
 				addArmorMenuOption
 			} else if(is_shield(otmp) && !(mon->misc_worn_check&W_ARMS) && !cantwield(mon->data)){
@@ -2769,6 +2773,8 @@ struct monst *mon;
 			} else if(is_boots(otmp) && !(mon->misc_worn_check&W_ARMF) && otmp->objsize == mon->data->msize && can_wear_boots(mon->data)){
 				addArmorMenuOption
 			} else if(is_suit(otmp) && !(mon->misc_worn_check&W_ARM) && arm_match(mon->data, otmp) && arm_size_fits(mon->data, otmp)){
+				addArmorMenuOption
+			} else if(is_worn_tool(otmp) && !(mon->misc_worn_check&W_TOOL) && can_wear_blindf(mon->data)){
 				addArmorMenuOption
 			}
 		}
@@ -3455,7 +3461,7 @@ tipmonster:
 				mtmp->mpeaceful = TRUE;
 				
 				if (!tele_restrict(mtmp)) {
-					(void)rloc(mtmp, FALSE);
+					(void)rloc(mtmp, TRUE);
 					if (canspotmon(mtmp))
 						pline("%s suddenly disappears!", Monnam(mtmp));
 				}
@@ -3607,6 +3613,9 @@ struct obj *box; /* or bag */
 				terse = FALSE;
 				continue;
 			}
+
+			if (maybeshopgoods && !otmp->no_charge)
+				addtobill(otmp, FALSE, FALSE, TRUE);;
 
 			if (highdrop) {
 				/* might break or fall down stairs; handles altars itself */

@@ -951,6 +951,20 @@ unsigned int type;
 			break;
 		}
 	break;
+	case PM_WATERSPOUT:
+		return GEYSER;
+	break;
+	case PM_CAILLEA_ELADRIN:
+			switch(rnd(8)){
+				default:
+				case 1: return ICE_STORM;
+				case 2: return EVIL_EYE;
+				case 3: return RAISE_DEAD;
+				case 4: return MASS_CURE_CLOSE;
+				case 5: return DEATH_TOUCH;
+				case 6: return DRAIN_LIFE;
+			}
+	   break;
 	case PM_KUKER:
 		switch (rnd(6)) {
 			case 6:
@@ -1091,8 +1105,8 @@ unsigned int type;
 				case 3: return MON_FIRA;
 			}
 		} else {
-			if(mtmp->mvar2 > 3) mtmp->mvar2 = 0;
-			switch(mtmp->mvar2++){
+			if(mtmp->mvar_spList_2 > 3) mtmp->mvar_spList_2 = 0;
+			switch(mtmp->mvar_spList_2++){
 				case 0: return LIGHTNING_BOLT;
 				case 1: return MON_POISON_GAS;
 				case 2: return ICE_STORM;
@@ -1114,8 +1128,8 @@ unsigned int type;
 				case 7: return MON_FLARE;
 			}
 		} else {
-			if(mtmp->mvar2 > 3) mtmp->mvar2 = 0;
-			switch(mtmp->mvar2++){
+			if(mtmp->mvar_spList_2 > 3) mtmp->mvar_spList_2 = 0;
+			switch(mtmp->mvar_spList_2++){
 				case 0: return FIRE_PILLAR;
 				case 1: return GEYSER;
 				case 2: return MON_POISON_GAS;
@@ -1363,7 +1377,7 @@ unsigned int type;
 		return spelln;
 	} break;
 	case PM_PALE_NIGHT:
-		switch(rn2(5)){
+		switch(rn2(6)){
 			case 0:
 				return OPEN_WOUNDS;
 			break;
@@ -1378,6 +1392,9 @@ unsigned int type;
 			break;
 			case 4:
 				return DEATH_TOUCH;
+			break;
+			case 5:
+				return rn2(6) ? SUMMON_DEVIL : SUMMON_TANNIN;
 			break;
 		}
 	break;
@@ -1660,6 +1677,7 @@ const char * spellname[] =
 	//75
 	"DISINT_RAY"
 	"MON_WARP_THROW",
+	"SUMMON_TANNIN",
 };
 
 
@@ -1696,6 +1714,14 @@ int tary;
 	if (cantmove(magr))
 		return MM_MISS;
 	if (youagr ? Nullmagic : mon_resistance(magr, NULLMAGIC))
+		return MM_MISS;
+	if (Deadmagic && attk->adtyp != AD_PSON && attk->adtyp != AD_CLRC)
+		return MM_MISS;
+	if (Catapsi && attk->adtyp == AD_PSON)
+		return MM_MISS;
+	if (Misotheism && attk->adtyp == AD_CLRC)
+		return MM_MISS;
+	if (attk->adtyp == AD_PSON && !youdef && (!mdef || mindless_mon(mdef)))
 		return MM_MISS;
 
 	/* Attempt to find a spell to cast */
@@ -2057,7 +2083,7 @@ int tary;
 				dmg = 0;
 			}
 			/* damage inventory */
-			if (!InvShock_res(mdef)){
+			if (!UseInvShock_res(mdef)){
 				destroy_item(mdef, WAND_CLASS, AD_ELEC);
 			}
 			return xdamagey(magr, mdef, attk, dmg);
@@ -2080,7 +2106,7 @@ int tary;
 				dmg = 0;
 			}
 			/* damage inventory */
-			if (!InvFire_res(mdef)){
+			if (!UseInvFire_res(mdef)){
 				destroy_item(mdef, POTION_CLASS, AD_FIRE);
 				if (!rn2(6)) destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 				if (!rn2(10)) destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -2110,7 +2136,7 @@ int tary;
 				dmg = 0;
 			}
 			/* damage inventory */
-			if (!InvCold_res(mdef)){
+			if (!UseInvCold_res(mdef)){
 				destroy_item(mdef, POTION_CLASS, AD_FIRE);
 			}
 			/* other effects */
@@ -2329,6 +2355,9 @@ int tary;
 		/* needs direct target */
 		if (!foundem) {
 			impossible("No mdef for psibolt");
+			return MM_MISS;
+		}
+		if ((!youdef && mindless_mon(mdef)) || Catapsi) {
 			return MM_MISS;
 		}
 		/* calculate resistance */
@@ -2552,7 +2581,7 @@ int tary;
 			}
 
 			/* destroy items if it hit */
-			if (!(reflects || InvShock_res(mdef))) {
+			if (!(reflects || UseInvShock_res(mdef))) {
 				destroy_item(mdef, WAND_CLASS, AD_ELEC);
 				destroy_item(mdef, RING_CLASS, AD_ELEC);
 			}
@@ -2593,7 +2622,7 @@ int tary;
 			}
 
 			if (!InvFire_res(mdef)) {
-				(void)burnarmor(mdef);
+				(void)burnarmor(mdef, FALSE);
 				destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 				destroy_item(mdef, POTION_CLASS, AD_FIRE);
 				destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -2710,7 +2739,7 @@ int tary;
 					dmg = 0;
 				}
 				/* damage inventory */
-				if (!InvAcid_res(mdef)) {
+				if (!UseInvAcid_res(mdef)) {
 					erode_obj(youdef ? uwep : MON_WEP(mdef), TRUE, FALSE);
 					erode_obj(youdef ? uswapwep : MON_SWEP(mdef), TRUE, FALSE);
 					erode_armor(mdef, TRUE);
@@ -2765,7 +2794,7 @@ int tary;
 				if (Half_spel(mdef))
 					cdmg = (cdmg + 1) / 2;
 			}
-			if (!InvCold_resistance) {
+			if (!UseInvCold_res(mdef)) {
 				destroy_item(mdef, POTION_CLASS, AD_COLD);
 			}
 
@@ -3158,7 +3187,7 @@ int tary;
 					pline("%s %s burned by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = (d(n, 20) * 3 + 1) / 2;
-				if (!InvFire_res(mdef)) {
+				if (!UseInvFire_res(mdef)) {
 					destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 					destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -3169,7 +3198,7 @@ int tary;
 					pline("%s %s frozen by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = (d(n, 20) * 3 + 1) / 2;
-				if (!InvCold_res(mdef)) {
+				if (!UseInvCold_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_COLD);
 				}
 			}
@@ -3196,7 +3225,7 @@ int tary;
 					pline("%s %s burned by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = d(n, 20);
-				if (!InvFire_res(mdef)) {
+				if (!UseInvFire_res(mdef)) {
 					destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 					destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -3207,7 +3236,7 @@ int tary;
 					pline("%s %s shocked by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = d(n, 20);
-				if (!InvShock_res(mdef)) {
+				if (!UseInvShock_res(mdef)) {
 					destroy_item(mdef, WAND_CLASS, AD_ELEC);
 					destroy_item(mdef, RING_CLASS, AD_ELEC);
 				}
@@ -3217,7 +3246,7 @@ int tary;
 					pline("%s %s frozen by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = d(n, 20);
-				if (!InvCold_res(mdef)) {
+				if (!UseInvCold_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_COLD);
 				}
 			}
@@ -3226,7 +3255,7 @@ int tary;
 					pline("%s %s burned by %s of silver light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is", rays);
 				dmg = d(n, 20);
-				if (!InvAcid_res(mdef)) {
+				if (!UseInvAcid_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 				}
 			}
@@ -3252,7 +3281,7 @@ int tary;
 					pline("%s %s burned by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = (d(2, 12) * 3 + 1) / 2;
-				if (!InvFire_res(mdef)) {
+				if (!UseInvFire_res(mdef)) {
 					destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 					destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -3263,7 +3292,7 @@ int tary;
 					pline("%s %s frozen by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = (d(2, 12) * 3 + 1) / 2;
-				if (!InvCold_res(mdef)) {
+				if (!UseInvCold_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_COLD);
 				}
 			}
@@ -3296,7 +3325,7 @@ int tary;
 					pline("%s %s burned by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = d(2, 12);
-				if (!InvFire_res(mdef)) {
+				if (!UseInvFire_res(mdef)) {
 					destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 					destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -3307,7 +3336,7 @@ int tary;
 					pline("%s %s shocked by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = d(2, 12);
-				if (!InvShock_res(mdef)) {
+				if (!UseInvShock_res(mdef)) {
 					destroy_item(mdef, WAND_CLASS, AD_ELEC);
 					destroy_item(mdef, RING_CLASS, AD_ELEC);
 				}
@@ -3317,7 +3346,7 @@ int tary;
 					pline("%s %s frozen by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = d(2, 12);
-				if (!InvCold_res(mdef)) {
+				if (!UseInvCold_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_COLD);
 				}
 			}
@@ -3326,7 +3355,7 @@ int tary;
 					pline("%s %s burned by golden light!",
 					youdef ? "You" : Monnam(mdef), youdef ? "are" : "is");
 				dmg = d(2, 12);
-				if (!InvAcid_res(mdef)) {
+				if (!UseInvAcid_res(mdef)) {
 					destroy_item(mdef, POTION_CLASS, AD_FIRE);
 				}
 			}
@@ -3502,7 +3531,7 @@ int tary;
 				explode(tarx + rn2(3) - 1, tary + rn2(3) - 1, adtyp, MON_EXPLODE, dmg, color, 1);
 			}
 		}
-		return MM_HIT | ((mdef && !youdef && DEADMONSTER(mdef)) ? MM_DEF_DIED : 0);
+		return MM_HIT | ((mdef && DEADMONSTER(mdef)) ? MM_DEF_DIED : 0);
 
 	case MON_FLARE:
 		if (!(tarx || tary)) {
@@ -3518,7 +3547,7 @@ int tary;
 			explode(tarx, tary, AD_PHYS, MON_EXPLODE, dmg, EXPL_FROSTY, 2);
 			dmg = 0;
 		}
-		return MM_HIT | ((mdef && !youdef && DEADMONSTER(mdef)) ? MM_DEF_DIED : 0);
+		return MM_HIT | ((mdef && DEADMONSTER(mdef)) ? MM_DEF_DIED : 0);
 
 	case PRISMATIC_SPRAY:
 		if (!(tarx || tary)) {
@@ -3577,7 +3606,7 @@ int tary;
 		else {
 			create_fog_cloud(tarx, tary, 3, 8, youagr);
 			if (!youagr && magr->mtyp == PM_PLUMACH_RILMANI)
-				magr->mcan = 1;
+				magr->mspec_used += 1000;
 			if (youdef)
 				stop_occupation();
 		}
@@ -3676,7 +3705,7 @@ int tary;
 		else {
 			if (!magr->perminvis) magr->minvis = 0;
 			if (magr->permspeed == MSLOW) magr->permspeed = 0;
-			magr->mcan = 0;
+			set_mcan(magr, FALSE);
 			magr->mcrazed = 0;
 			magr->mdisrobe = 0;
 			magr->mcansee = 1;
@@ -3791,26 +3820,13 @@ int tary;
 		return MM_HIT;
 
 	case MON_TIME_STOP:
-		if (u.summonMonster || youagr) {
-			/* only allow one "summoning" spell per turn. This isn't summoning but it's close enough? */
+		if (youagr) {
 			/* you don't get to cast this one, either */
 			return cast_spell(magr, mdef, attk, (foundem ? PSI_BOLT : CURE_SELF), tarx, tary);
 		}
 		else {
 			int extraturns = d(1, 4) + 1, i;
 			struct monst *tmpm;
-			// if(canseemon(magr))
-			// pline("%s blurs with speed!", Monnam(magr));
-			// magr->movement += (extraturns)*12;
-			// for(tmpm = fmon; tmpm; tmpm = tmpm->nmon){
-			// if(tmpm->mtyp == PM_UVUUDAUM && tmpm != magr){
-			// tmpm->movement += (extraturns)*12;
-			// if(canseemon(tmpm))
-			// pline("%s blurs with speed!", Monnam(tmpm));
-			// }
-			// }
-			// u.summonMonster = TRUE;//Not exactly a summoning, but don't stack this too aggressively.
-			//Note: 1-4 free turns is too strong.  Just give that much healing instead.
 			if (canseemon(magr))
 				pline("%s blurs with speed!", Monnam(magr));
 			for (i = extraturns; i > 0; i--){
@@ -3897,6 +3913,8 @@ int tary;
 			impossible("summon insects with no target location");
 			return MM_MISS;
 		}
+		else if(DimensionalLock)
+			return MM_MISS;
 		else if (!(youdef || youagr)) {
 			/* only uvm / mvu allowed */
 			return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
@@ -3983,13 +4001,15 @@ int tary;
 				pline("%s raised the dead!", Monnam(magr));
 			mm.x = x(magr);
 			mm.y = y(magr);
-			mkundead(&mm, TRUE, NO_MINVENT);
+			mkundead(&mm, TRUE, NO_MINVENT, normalAngel(magr) ? HOLYDEAD_FACTION : magr->mfaction);
 			stop_occupation();
 		}
 		return MM_HIT;
 
 	case SUMMON_MONS:
-		if (!youdef || u.summonMonster || (Role_if(PM_ANACHRONONAUT) && In_quest(&u.uz))) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster || (Role_if(PM_ANACHRONONAUT) && In_quest(&u.uz))) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			/* disallowed in Anachrononaut quest */
@@ -4021,7 +4041,9 @@ int tary;
 		return MM_HIT;
 
 	case SUMMON_DEVIL:
-		if (!youdef || u.summonMonster || !foundem) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster || !foundem) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			/* since it always summons adjacent to player, only allow casting if they've found you */
@@ -4052,8 +4074,41 @@ int tary;
 		}
 		return MM_HIT;
 
+	case SUMMON_TANNIN:
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster || !foundem) {
+			/* only mvu allowed */
+			/* only one summon spell per global turn allowed */
+			/* since it always summons adjacent to player, only allow casting if they've found you */
+			return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
+		}
+		else
+		{
+			struct monst * mtmp;
+			/* summon_minion always appears near the player */
+			mtmp = makemon(&mons[pick_tannin(magr)], tarx, tary, MM_ADJACENTOK | MM_NOCOUNTBIRTH | MM_ESUM);
+			if (mtmp) {
+				// mtmp->mvar_tannintype = pick_tannin(magr);
+				u.summonMonster = TRUE;
+				if (canspotmon(mtmp))
+					pline("%s ascends from below!",
+					An(Hallucination ? rndmonnam() : "fiend"));
+				else
+					You("sense the arrival of %s.",
+					an(Hallucination ? rndmonnam() : "hostile fiend"));
+				mark_mon_as_summoned(mtmp, magr, ESUMMON_PERMANENT, 0);
+			}
+			else
+				return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
+			stop_occupation();
+		}
+		return MM_HIT;
+
 	case SUMMON_ANGEL:
-		if (!youdef || u.summonMonster) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
@@ -4107,7 +4162,9 @@ int tary;
 		return MM_HIT;
 
 	case SUMMON_ALIEN:
-		if (!youdef || u.summonMonster) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
@@ -4153,7 +4210,9 @@ int tary;
 		return MM_HIT;
 
 	case SUMMON_YOUNG:
-		if (!youdef || u.summonMonster) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			return cast_spell(magr, mdef, attk, (foundem ? OPEN_WOUNDS : CURE_SELF), tarx, tary);
@@ -4181,7 +4240,7 @@ int tary;
 			}
 
 			do {
-				mtmp = makemon(young[rn2(SIZE(young))], tarx, tary, MM_ADJACENTOK | MM_NOCOUNTBIRTH | MM_ESUM);
+				mtmp = makemon_full(young[rn2(SIZE(young))], tarx, tary, MM_ADJACENTOK | MM_NOCOUNTBIRTH | MM_ESUM, -1, GOATMOM_FACTION);
 			} while (!mtmp && tries++ < 10);
 			if (mtmp) {
 				u.summonMonster = TRUE;
@@ -4198,7 +4257,9 @@ int tary;
 		return MM_HIT;
 
 	case TIME_DUPLICATE:
-		if (!youdef || u.summonMonster) {
+		if(DimensionalLock)
+			return MM_MISS;
+		else if (!youdef || u.summonMonster) {
 			/* only mvu allowed */
 			/* only one summon spell per global turn allowed */
 			return cast_spell(magr, mdef, attk, (foundem ? PSI_BOLT : CURE_SELF), tarx, tary);
@@ -5047,6 +5108,7 @@ int spellnum;
 	case RAISE_DEAD:
 	case SUMMON_MONS:
 	case SUMMON_DEVIL:
+	case SUMMON_TANNIN:
 	case SUMMON_ANGEL:
 	case SUMMON_ALIEN:
 	case SUMMON_YOUNG:
@@ -5476,6 +5538,24 @@ struct monst *mon;
 		if(mtmp->mtyp == PM_WITCH_S_FAMILIAR && mtmp->mvar_witchID == (long)mon->m_id)
 			return FALSE;
 	return TRUE;
+}
+
+/*
+ * Pick a minion for the given monster
+ */
+
+int
+pick_tannin(mon)
+struct monst *mon;
+{
+	switch(mon->mtyp){
+		case PM_PALE_NIGHT:
+			if(rn2(6))
+				return PM_SHALOSH_TANNAH;
+			else return PM_TERAPHIM_TANNAH;
+		break;
+	}
+	return PM_AKKABISH_TANNIN;
 }
 
 #endif /* OVL0 */

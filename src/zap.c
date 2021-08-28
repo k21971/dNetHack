@@ -97,13 +97,21 @@ int adtyp, ztyp;
 		switch (adtyp)
 		{
 		case AD_MAGM: return "blast of missiles";
-		case AD_FIRE: return "blast of fire";
-		case AD_COLD: return "blast of frost";
+		case AD_EFIR: 
+		case AD_FIRE: 
+			return "blast of fire";
+		case AD_COLD:
+		case AD_ECLD:
+			return "blast of frost";
 		case AD_SLEE: return "blast of sleep gas";
 		case AD_DISN: return "blast of disintegration";
-		case AD_ELEC: return "blast of lightning";
+		case AD_EELC: 
+		case AD_ELEC: 
+			return "blast of lightning";
 		case AD_DRST: return "blast of poison gas";
-		case AD_ACID: return "blast of acid";
+		case AD_ACID:
+		case AD_EACD:
+			return "blast of acid";
 		case AD_DRLI: return "blast of dark energy";
 		case AD_GOLD: return "blast of golden shards";
 		// These are provided to deal with spray breaths, and aren't handled for direct hits.
@@ -149,6 +157,7 @@ int adtyp;
 		return CLR_RED;
 	case AD_SLIM:
 	case AD_ACID:
+	case AD_EACD:
 		return CLR_GREEN;
 	case AD_PHYS:
 		return CLR_BROWN;
@@ -159,6 +168,7 @@ int adtyp;
 		//	return CLR_CYAN;
 		//	return CLR_GRAY;
 		//	return NO_COLOR;
+	case AD_EFIR:
 	case AD_FIRE:
 		return CLR_ORANGE;
 		//	return CLR_BRIGHT_GREEN;
@@ -170,7 +180,9 @@ int adtyp;
 		return CLR_BRIGHT_BLUE;
 		//	return CLR_BRIGHT_MAGENTA;
 		//	return CLR_BRIGHT_CYAN;
+	case AD_ECLD:
 	case AD_COLD:
+	case AD_EELC:
 	case AD_ELEC:
 	case AD_STAR:
 		return CLR_WHITE;
@@ -225,12 +237,21 @@ struct obj *otmp;
 		zap_type_text = "wand";
 		/* fall through */
 	case SPE_FORCE_BOLT:
+	case ROD_OF_FORCE:
 		reveal_invis = TRUE;
-		if (resists_magm(mtmp)) {	/* match effect on player */
+		if (MON_WEP(mtmp) && MON_WEP(mtmp)->otyp == ROD_OF_FORCE) {
+			MON_WEP(mtmp)->age = min(MON_WEP(mtmp)->age+10000, LIGHTSABER_MAX_CHARGE);
+			reveal_invis = FALSE;
+			break;	/* skip makeknown */
+		} else if (MON_SWEP(mtmp) && MON_SWEP(mtmp)->otyp == ROD_OF_FORCE) {
+			MON_SWEP(mtmp)->age = min(MON_SWEP(mtmp)->age+10000, LIGHTSABER_MAX_CHARGE);
+			reveal_invis = FALSE;
+			break;	/* skip makeknown */
+		} else if (resists_magm(mtmp)) {	/* match effect on player */
 			shieldeff(mtmp->mx, mtmp->my);
 			break;	/* skip makeknown */
-		} else if (u.uswallow || otyp == WAN_STRIKING || rnd(20) < 10 + find_mac(mtmp) + 2*P_SKILL(P_ATTACK_SPELL)) {
-			if(otyp == WAN_STRIKING) dmg = d(wand_damage_die(P_SKILL(P_WAND_POWER))-4,12);
+		} else if (u.uswallow || otyp == WAN_STRIKING || rnd(20) < 10 + find_mac(mtmp) + 2*P_SKILL(otyp == SPE_FORCE_BOLT ? P_ATTACK_SPELL : P_WAND_POWER)) {
+			if(otyp == WAN_STRIKING || otyp == ROD_OF_FORCE) dmg = d(wand_damage_die(P_SKILL(P_WAND_POWER))-4,12);
 			else dmg = d(fblt_damage_die(P_SKILL(P_ATTACK_SPELL)),12);
 			if (!flags.mon_moving && otyp == SPE_FORCE_BOLT && (uwep && uwep->oartifact == ART_ANNULUS && uwep->otyp == CHAKRAM))
 				dmg += d((u.ulevel+1)/2, 12);
@@ -242,7 +263,10 @@ struct obj *otmp;
 			}
 			
 			hit(zap_type_text, mtmp, exclam(dmg));
-			(void) resist(mtmp, otmp->oclass, dmg, TELL);
+			(void) resist(mtmp, otmp->otyp == ROD_OF_FORCE ? WAND_CLASS : otmp->oclass, dmg, TELL);
+			if(otyp == ROD_OF_FORCE && !DEADMONSTER(mtmp) && u.usteed != mtmp){
+				mhurtle(mtmp, sgn(mtmp->mx - u.ux), sgn(mtmp->my - u.uy), BOLT_LIM, FALSE);
+			}
 		} else if(!flags.mon_moving || cansee(mtmp->mx, mtmp->my)) miss(zap_type_text, mtmp);
 		makeknown(otyp);
 		break;
@@ -674,7 +698,7 @@ coord *cc;
 #ifdef SEDUCE
 				&& !dmgtype(mtmp2->data, AD_SSEX)
 #endif
-		    ) mtmp2->mcan = 0;
+		    ) set_mcan(mtmp2, FALSE);
 		mtmp2->mcansee = 1;	/* set like in makemon */
 		mtmp2->mblinded = 0;
 		mtmp2->mstun = 0;
@@ -806,9 +830,34 @@ boolean dolls;
 				mtmp = montraits(obj, &xy);
 				if (mtmp && get_mx(mtmp, MX_EDOG))
 					wary_dog(mtmp, TRUE);
-		    } else
+		    } else {
+				/* Generic android corpse */
+				if(is_android(&mons[montype])){
+					if(rn2(2)){
+						if(montype == PM_ANDROID)
+							montype = PM_FLAYED_ANDROID;
+						else 
+							montype = PM_FLAYED_GYNOID;
+						mtmp = makemon(&mons[montype], x, y,
+						   NO_MINVENT|MM_NOWAIT|MM_NOCOUNTBIRTH);
+						if(mtmp && !rn2(4))
+							set_template(mtmp, M_BLACK_WEB);
+					}
+					else {
+						mtmp = makemon(&mons[montype], x, y,
+						   NO_MINVENT|MM_NOWAIT|MM_NOCOUNTBIRTH|MM_EDOG);
+						if(mtmp){
+							initedog(mtmp);
+							if(rn2(2))
+								mtmp->mcrazed = TRUE;
+						}
+					}
+				}
+				else {
  		            mtmp = makemon(&mons[montype], x, y,
 				       NO_MINVENT|MM_NOWAIT|MM_NOCOUNTBIRTH);
+				}
+			}
 		    if (mtmp) {
 				if (get_ox(obj, OX_EMID)) {
 					unsigned m_id;
@@ -1402,7 +1451,12 @@ create_polymon(obj, okind)
 
 	/* some of these choices are arbitrary */
 	switch(okind) {
+	case GREEN_STEEL:
+	    pm_index = PM_GREEN_STEEL_GOLEM;
+	    material = "metal ";
+	    break;
 	case IRON:
+	case LEAD:
 	case METAL:
 	case MITHRIL:
 	    pm_index = PM_IRON_GOLEM;
@@ -2022,12 +2076,9 @@ struct obj *obj, *otmp;
 		break;
 	case WAN_STRIKING:
 	case SPE_FORCE_BOLT:
-		if (obj->otyp == BOULDER) /*boulders only*/
-			fracture_rock(obj);
-		else if (obj->otyp == STATUE)
-			(void) break_statue(obj);
-		else if (obj->otyp == MASSIVE_STONE_CRATE)
-			(void) break_crate(obj);
+	case ROD_OF_FORCE:
+		if (is_boulder(obj))
+			break_boulder(obj);
 		else {
 			if (!flags.mon_moving)
 			    (void)hero_breaks(obj, obj->ox, obj->oy, FALSE);
@@ -2234,7 +2285,7 @@ bhitpile(obj,fhito,tx,ty)
     int hitanything = 0;
     register struct obj *otmp, *next_obj;
 
-    if (obj->otyp == SPE_FORCE_BOLT || obj->otyp == WAN_STRIKING) {
+    if (obj->otyp == SPE_FORCE_BOLT || obj->otyp == ROD_OF_FORCE || obj->otyp == WAN_STRIKING) {
 		struct trap *t = t_at(tx, ty);
 
 		/* We can't settle for the default calling sequence of
@@ -2270,16 +2321,25 @@ int
 zappable(wand)
 register struct obj *wand;
 {
-	if(wand->oartifact && wand->spe < 1 && wand->age < moves){
-		wand->spe = 1;
-		wand->age = moves + (long)(rnz(100)*(Role_if(PM_PRIEST) ? .8 : 1));
+	if(wand->oclass == WAND_CLASS){
+		if(wand->oartifact && wand->spe < 1 && wand->age < moves){
+			wand->spe = 1;
+			wand->age = moves + (long)(rnz(100)*(Role_if(PM_PRIEST) ? .8 : 1));
+		}
+		if(wand->spe < 0 || (wand->spe == 0 && (wand->oartifact || rn2(121))))
+			return 0;
+		if(wand->spe == 0)
+			You("wrest one last charge from the worn-out wand.");
+		wand->spe--;
+		return 1;
 	}
-	if(wand->spe < 0 || (wand->spe == 0 && (wand->oartifact || rn2(121))))
-		return 0;
-	if(wand->spe == 0)
-		You("wrest one last charge from the worn-out wand.");
-	wand->spe--;
-	return 1;
+	else if(wand->otyp == ROD_OF_FORCE){
+		if(wand->age <= 0)
+			return 0;
+		wand->age = max(wand->age-10000, 0);
+		return 1;
+	}
+	return 0;
 }
 
 /*
@@ -2318,8 +2378,13 @@ register struct obj *obj;
 			if (!Blind) known = TRUE;
 		break;
 		case WAN_CREATE_MONSTER:
-			known = create_critters(rn2(23) ? 1 : rn1(7,2),
-					(struct permonst *)0);
+			if(!DimensionalLock){
+				known = create_critters(rn2(23) ? 1 : rn1(7,2),
+						(struct permonst *)0);
+			}
+			else {
+				pline("Unfortunately, nothing happens.");
+			}
 		break;
 		case WAN_WISHING:
 			known = TRUE;
@@ -2370,13 +2435,13 @@ struct obj *otmp;
 	useup(otmp);
 }
 
-static NEARDATA const char zap_syms[] = { WAND_CLASS, 0 };
+static NEARDATA const char zap_syms[] = { WAND_CLASS, TOOL_CLASS, 0 };
 
 int
 dozap()
 {
 	register struct obj *obj;
-	int	damage;
+	int damage;
 
 	if(check_capacity((char *)0)) return(0);
 	obj = getobj(zap_syms, "zap");
@@ -2386,7 +2451,7 @@ dozap()
 
 	/* zappable addition done by GAN 11/03/86 */
 	if(!zappable(obj)) pline1(nothing_happens);
-	else if(obj->cursed && !obj->oartifact && !rn2(100)) {
+	else if(obj->cursed && obj->oclass == WAND_CLASS && !obj->oartifact && !rn2(100)) {
 		backfire(obj);	/* the wand blows up in your face! */
 		exercise(A_STR, FALSE);
 		return(1);
@@ -2396,12 +2461,11 @@ dozap()
 		/* make him pay for knowing !NODIR */
 	} else if(!u.dx && !u.dy && !u.dz && !(objects[obj->otyp].oc_dir == NODIR)) {
 	    if ((damage = zapyourself(obj, TRUE)) != 0) {
-		char buf[BUFSZ];
-		Sprintf(buf, "zapped %sself with a wand", uhim());
-		losehp(damage, buf, NO_KILLER_PREFIX);
+			char buf[BUFSZ];
+			Sprintf(buf, "zapped %sself with a wand", uhim());
+			losehp(damage, buf, NO_KILLER_PREFIX);
 	    }
 	} else {
-
 		/*	Are we having fun yet?
 		 * weffects -> buzz(obj->otyp) -> zhitm (temple priest) ->
 		 * attack -> hitum -> known_hitum -> ghod_hitsu ->
@@ -2413,7 +2477,7 @@ dozap()
 		obj = current_wand;
 		current_wand = 0;
 	}
-	if (obj && obj->spe < 0) {
+	if (obj && obj->oclass == WAND_CLASS && !obj->oartifact && obj->spe < 0) {
 	    pline("%s to dust.", Tobjnam(obj, "turn"));
 	    useup(obj);
 	}
@@ -2434,9 +2498,18 @@ boolean ordinary;
 		case WAN_STRIKING:
 		    makeknown(WAN_STRIKING);
 		case SPE_FORCE_BOLT:
-		    if(Antimagic) {
-			shieldeff(u.ux, u.uy);
-			pline("Boing!");
+		case ROD_OF_FORCE:
+			if (uwep && uwep->otyp == ROD_OF_FORCE) {
+				You_hear("a rushing sound.");
+				uwep->age = min(uwep->age+10000, LIGHTSABER_MAX_CHARGE);
+			}
+			else if (uswapwep && uswapwep->otyp == ROD_OF_FORCE) {
+				You_hear("a rushing sound.");
+				uswapwep->age = min(uswapwep->age+10000, LIGHTSABER_MAX_CHARGE);
+			}
+		    else if(Antimagic) {
+				shieldeff(u.ux, u.uy);
+				pline("Boing!");
 		    } else {
 			if (ordinary) {
 			    You("bash yourself!");
@@ -2460,7 +2533,7 @@ boolean ordinary;
 				You("zap yourself, but seem unharmed.");
 				ugolemeffects(AD_ELEC, d(12,6));
 		    }
-			if(!InvShock_resistance){
+			if(!UseInvShock_res(&youmonst)){
 				destroy_item(&youmonst, WAND_CLASS, AD_ELEC);
 				destroy_item(&youmonst, RING_CLASS, AD_ELEC);
 			}
@@ -2484,14 +2557,14 @@ boolean ordinary;
 				pline("You've set yourself afire!");
 				damage = d(12,6);
 		    }
-			if(!InvFire_resistance){
+			if(!UseInvFire_res(&youmonst)){
 				destroy_item(&youmonst, SCROLL_CLASS, AD_FIRE);
 				destroy_item(&youmonst, POTION_CLASS, AD_FIRE);
 				destroy_item(&youmonst, SPBOOK_CLASS, AD_FIRE);
 			}
 		    burn_away_slime();
 		    melt_frozen_air();
-		    (void) burnarmor(&youmonst);
+		    (void) burnarmor(&youmonst, FALSE);
 		    break;
 
 		case WAN_COLD:
@@ -2508,7 +2581,7 @@ boolean ordinary;
 				damage = d(12,6);
 		    }
 			roll_frigophobia();
-			if(!InvCold_resistance){
+			if(!UseInvCold_res(&youmonst)){
 				destroy_item(&youmonst, POTION_CLASS, AD_COLD);
 			}
 		    break;
@@ -2786,6 +2859,7 @@ struct obj *obj;	/* wand or spell */
 		case SPE_POLYMORPH:
 		case WAN_STRIKING:
 		case SPE_FORCE_BOLT:
+		case ROD_OF_FORCE:
 		case WAN_SLOW_MONSTER:
 		case SPE_SLOW_MONSTER:
 		case WAN_SPEED_MONSTER:
@@ -2830,7 +2904,7 @@ int gaze_cancel;
 	static const char your[] = "your";	/* should be extern */
 
 	if (youdefend ? (!youattack && Antimagic)
-		      : resist(mdef, obj->oclass, 0, TELL)){
+		      : resist(mdef, obj ? obj->oclass : WAND_CLASS, 0, TELL)){
 		if(cansee(mdef->mx,mdef->my)) shieldeff(mdef->mx, mdef->my);
 		return FALSE;	/* resisted cancellation */
 	}
@@ -2885,7 +2959,7 @@ int gaze_cancel;
 			calc_total_maxen();
 		}
 	} else {
-	    mdef->mcan = TRUE;
+	    set_mcan(mdef, TRUE);
 
 	    if (is_were(mdef->data) && mdef->data->mlet != S_HUMAN)
 		were_change(mdef);
@@ -2951,6 +3025,7 @@ struct obj *obj;	/* wand or spell */
 	    break;
 	case WAN_STRIKING:
 	case SPE_FORCE_BOLT:
+	case ROD_OF_FORCE:
 	    striking = TRUE;
 	    /*FALLTHRU*/
 	case WAN_LOCKING:
@@ -3077,6 +3152,7 @@ struct obj *obj;	/* wand or spell */
 		    break;
 		case WAN_STRIKING:
 		case SPE_FORCE_BOLT:
+		case ROD_OF_FORCE:
 		    wipe_engr_at(x, y, d(2,4));
 		    break;
 		default:
@@ -3349,7 +3425,7 @@ boolean *obj_destroyed;/* has object been deallocated? Pointer to boolean, may b
 		trap = t_at(x, y);
 
 		if (trap && trap->ttyp == STATUE_TRAP && weapon != TRIGGER_BEAM)
-			activate_statue_trap(trap, x, y, (obj->otyp == WAN_STRIKING || obj->otyp == SPE_FORCE_BOLT) ? TRUE : FALSE);
+			activate_statue_trap(trap, x, y, (obj->otyp == WAN_STRIKING || obj->otyp == SPE_FORCE_BOLT || obj->otyp == ROD_OF_FORCE) ? TRUE : FALSE);
 		
 	    if(is_pick(obj) && inside_shop(x, y) &&
 					   (mtmp = shkcatch(obj, x, y))) {
@@ -3359,7 +3435,7 @@ boolean *obj_destroyed;/* has object been deallocated? Pointer to boolean, may b
 
 	    typ = levl[bhitpos.x][bhitpos.y].typ;
 	    if (typ == IRONBARS){
-			if ((obj->otyp == SPE_FORCE_BOLT || obj->otyp == WAN_STRIKING)){
+			if ((obj->otyp == SPE_FORCE_BOLT || obj->otyp == ROD_OF_FORCE || obj->otyp == WAN_STRIKING)){
 				break_iron_bars(bhitpos.x, bhitpos.y, TRUE);
 			}
 		}
@@ -3383,6 +3459,7 @@ boolean *obj_destroyed;/* has object been deallocated? Pointer to boolean, may b
 			break;
 		    case WAN_STRIKING:
 		    case SPE_FORCE_BOLT:
+		    case ROD_OF_FORCE:
 			if (typ != DRAWBRIDGE_UP)
 			    destroy_drawbridge(x,y);
 			makeknown(obj->otyp);
@@ -3454,6 +3531,7 @@ boolean *obj_destroyed;/* has object been deallocated? Pointer to boolean, may b
 		case SPE_KNOCK:
 		case SPE_WIZARD_LOCK:
 		case SPE_FORCE_BOLT:
+		case ROD_OF_FORCE:
 		    if (doorlock(obj, bhitpos.x, bhitpos.y)) {
 			if (cansee(bhitpos.x, bhitpos.y) ||
 			    (obj->otyp == WAN_STRIKING))
@@ -3516,8 +3594,8 @@ struct zapdata * zapdata;
 			otmp->oartifact == ART_STAFF_OF_TWELVE_MIRRORS ||
 			otmp->oartifact == ART_DRAGONLANCE ||
 			(youdef && is_lightsaber(otmp) && (
-			(activeFightingForm(FFORM_SHIEN) && (!uarm || is_light_armor(uarm))) ||
-			(activeFightingForm(FFORM_SORESU) && (!uarm || is_light_armor(uarm) || is_medium_armor(uarm)))))
+			(activeFightingForm(FFORM_SHIEN)) ||
+			(activeFightingForm(FFORM_SORESU))))
 			)) ||
 			/* body armor */
 			((otmp = youdef ? uarm : which_armor(mdef, W_ARM)) && (
@@ -4035,8 +4113,8 @@ struct zapdata * zapdata;
 		domsg();
 		golemeffects(mdef, AD_FIRE, svddmg);
 		/* damage inventory */
-		if (!InvFire_res(mdef)) {
-			burnarmor(mdef);
+		if (!UseInvFire_res(mdef)) {
+			burnarmor(mdef, FALSE);
 			if (!rn2(3)) (void)destroy_item(mdef, POTION_CLASS, AD_FIRE);
 			if (!rn2(3)) (void)destroy_item(mdef, SCROLL_CLASS, AD_FIRE);
 			if (!rn2(5)) (void)destroy_item(mdef, SPBOOK_CLASS, AD_FIRE);
@@ -4063,7 +4141,7 @@ struct zapdata * zapdata;
 		domsg();
 		golemeffects(mdef, AD_COLD, svddmg);
 		/* damage inventory */
-		if (!InvCold_res(mdef)) {
+		if (!UseInvCold_res(mdef)) {
 			if (!rn2(3)) (void)destroy_item(mdef, POTION_CLASS, AD_COLD);
 		}
 		/* other */
@@ -4084,7 +4162,7 @@ struct zapdata * zapdata;
 		domsg();
 		golemeffects(mdef, AD_ELEC, svddmg);
 		/* damage inventory */
-		if (!InvShock_res(mdef)) {
+		if (!UseInvShock_res(mdef)) {
 			if (!rn2(3)) (void)destroy_item(mdef, WAND_CLASS, AD_ELEC);
 		}
 		/* deal damage */
@@ -4105,7 +4183,7 @@ struct zapdata * zapdata;
 		}
 		domsg();
 		/* damage inventory */
-		if (!InvAcid_res(mdef)) {
+		if (!UseInvAcid_res(mdef)) {
 			if (!rn2(6)) (void)destroy_item(mdef, POTION_CLASS, AD_FIRE);
 			if (!rn2(6)) erode_obj(youdef ? uwep : MON_WEP(mdef), TRUE, TRUE);
 			if (!rn2(6)) erode_armor(mdef, TRUE);
@@ -4639,6 +4717,8 @@ int blind_duration;
 		blind_duration = (blind_duration + 1) / 2;
 
 	if (mdef == &youmonst) {
+		if (u.uvaul_duration)
+			blind_duration = (blind_duration + 1) / 2;
 		You(are_blinded_by_the_flash);
 		make_blinded(blind_duration, FALSE);
 		if (!Blind) Your1(vision_clears);
@@ -5015,14 +5095,42 @@ boolean *shopdamage;
 #endif /*OVL0*/
 #ifdef OVL3
 
+/*
+ * Wrapper function that correctly handles each type of boulder-like object
+ */
+
+void
+break_boulder(obj)
+struct obj *obj;
+{
+	switch(obj->otyp){
+		case BOULDER:
+			fracture_rock(obj);
+		break;
+		case MASSIVE_STONE_CRATE:
+			break_crate(obj);
+		break;
+		case MASS_OF_STUFF:
+			separate_mass_of_stuff(obj, FALSE);
+		break;
+		case STATUE:
+			break_statue(obj);
+		break;
+		default:
+			impossible("unhandled boulder type being broken!");
+			fracture_rock(obj);
+		break;
+	}
+}
+
 void
 fracture_rock(obj)	/* fractured by pick-axe or wand of striking */
 register struct obj *obj;		   /* no texts here! */
 {
 	int mat = obj->obj_material;
 	/* A little Sokoban guilt... */
-	if (obj->otyp == BOULDER && In_sokoban(&u.uz) && !flags.mon_moving)
-	    change_luck(-1); /*boulders only*/
+	if(In_sokoban(&u.uz) && !flags.mon_moving)
+	    change_luck(-1);
 
 	obj->otyp = ROCK;
 	obj->quan = (long) rn1(60, 7);
@@ -5069,7 +5177,7 @@ register struct obj *obj;
 }
 
 /* handle crate hit by striking/force bolt/pick-axe */
-boolean
+void
 break_crate(obj)
 register struct obj *obj;
 {
@@ -5083,7 +5191,64 @@ register struct obj *obj;
 	}
 	obj->spe = 0;
 	fracture_rock(obj);
-	return TRUE;
+}
+
+/* handle mass of stuff being hit by striking/force bolt/pick-axe or burried */
+void
+separate_mass_of_stuff(obj, burial)
+register struct obj *obj;
+boolean burial;
+{
+	/* [obj is assumed to be on floor, so no get_obj_location() needed] */
+	struct obj *item;
+	int x = obj->ox;
+	int y = obj->oy;
+	int i;
+	struct obj *otmp;
+	int mat = obj->obj_material;
+	mkgold(d(100,9)+rn2(100), x, y);
+	
+	for(i = d(9,3); i > 0; i--){
+		otmp = mkobj_at(WEAPON_CLASS, x, y, NO_MKOBJ_FLAGS);
+		if(otmp){
+			if(is_hard(otmp) && rn2(2))
+				set_material(otmp, mat);
+			if(obj->cursed)
+				curse(otmp);
+			if(obj->blessed)
+				bless(otmp);
+			if(burial)
+				bury_an_obj(otmp);
+			stackobj(otmp);
+		}
+	}
+	for(i = d(9,3); i > 0; i--){
+		otmp = mkobj_at(0, x, y, NO_MKOBJ_FLAGS);
+		if(otmp){
+			if((otmp->oclass == WEAPON_CLASS || otmp->oclass == ARMOR_CLASS || is_weptool(otmp)) && is_hard(otmp) && rn2(2))
+				set_material(otmp, mat);
+			if(obj->cursed)
+				curse(otmp);
+			if(obj->blessed)
+				bless(otmp);
+			if(burial)
+				bury_an_obj(otmp);
+			stackobj(otmp);
+		}
+	}
+	for(i = d(9,3); i > 0; i--){
+		otmp = mkobj_at(GEM_CLASS, x, y, NO_MKOBJ_FLAGS);
+		if(obj->cursed)
+			curse(otmp);
+		if(obj->blessed)
+			bless(otmp);
+		if(otmp && burial)
+			bury_an_obj(otmp);
+		stackobj(otmp);
+	}
+
+	obj->spe = 0;
+	fracture_rock(obj);
 }
 
 #endif /*OVL3*/
@@ -5104,8 +5269,9 @@ int damage, tell;
 	switch (oclass) {
 	    case WAND_CLASS:	
 			alev = 12;	 
-			if(!flags.mon_moving && P_SKILL(P_WAND_POWER) > 1){
-				alev += (P_SKILL(P_WAND_POWER)-1)*2;
+			if(!flags.mon_moving){
+				if(P_SKILL(P_WAND_POWER) > 1)
+					alev += (P_SKILL(P_WAND_POWER)-1)*2;
 				LUCK_MODIFIER
 			}
 		break;
@@ -5147,11 +5313,18 @@ int damage, tell;
 #undef LUCK_MODIFIER
 	/* defense level */
 	dlev = (int)mtmp->m_lev;
+	if(mtmp->mcan)
+		dlev /= 2;
 	if (dlev > 50) dlev = 50;
 	else if (dlev < 1) dlev = 1;
+	
+	int mons_mr = mtmp->data->mr;
+	if(mtmp->mcan){
+			mons_mr /= 2;
+	}
 
 	if(mtmp->mtyp == PM_CHOKHMAH_SEPHIRAH) dlev+=u.chokhmah;
-	resisted = rn2(100 + alev - dlev) < mtmp->data->mr;
+	resisted = rn2(100 + alev - dlev) < mons_mr;
 	if (resisted) {
 	    if (tell) {
 		shieldeff(mtmp->mx, mtmp->my);

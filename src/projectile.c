@@ -202,6 +202,7 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 			thrownobj->oartifact == ART_KHAKKHARA_OF_THE_MONKEY ||
 			thrownobj->oartifact == ART_DART_OF_THE_ASSASSIN ||
 			thrownobj->oartifact == ART_WINDRIDER ||
+			check_oprop(thrownobj, OPROP_RETRW) ||
 			thrownobj->oartifact == ART_AMHIMITL
 		) {
 			returning = TRUE;
@@ -214,13 +215,13 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 			returning = TRUE;
 			range = range/2 + 1;
 			initrange = initrange/2 + 1;
+			impaired = FALSE; //always catch
 		}
 	}
 
 	/* player exercises STR just be throwing heavy things */
 	if (youagr && !launcher && !(hmoncode & HMON_KICKED) && (
-		thrownobj->otyp == BOULDER ||
-		(thrownobj->otyp == STATUE && is_boulder(thrownobj)) ||
+		is_boulder(thrownobj) ||
 		thrownobj->otyp == HEAVY_IRON_BALL
 		))
 	{
@@ -814,7 +815,13 @@ boolean forcedestroy;			/* If TRUE, make sure the projectile is destroyed */
 				return;
 			}
 			else {
-				mpickobj(u.ustuck, thrownobj);
+				if (thrownobj != uball)
+					mpickobj(u.ustuck, thrownobj);
+				else {
+					/* ball-related stuff */
+					thrownobj->owornmask |= (old_wep_mask&(W_CHAIN|W_BALL));
+					drop_ball(u.ux, u.uy);
+				}
 				*thrownobj_p = NULL;
 				return;
 			}
@@ -1015,9 +1022,8 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 	/* train player's Shien skill, if player is defending */
 	if (youdef && uwep && is_lightsaber(uwep) && litsaber(uwep) && P_SKILL(weapon_type(uwep)) >= P_BASIC){
 		if (P_SKILL(P_SHII_CHO) >= P_BASIC){
-			if (activeFightingForm(FFORM_SHII_CHO) ||
-				(activeFightingForm(FFORM_SHIEN) && (!uarm || is_light_armor(uarm)))
-				) use_skill(P_SHIEN, 1);
+			if (activeFightingForm(FFORM_SHII_CHO) ||activeFightingForm(FFORM_SHIEN))
+				use_skill(P_SHIEN, 1);
 		}
 	}
 
@@ -1088,8 +1094,8 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 	/* the player has a chance to burn some projectiles (not blaster bolts or laser beams) out of the air with a lightsaber */
 	else if (!(thrownobj->otyp == LASER_BEAM || thrownobj->otyp == BLASTER_BOLT || thrownobj->otyp == HEAVY_BLASTER_BOLT)
 		&& youdef && uwep && is_lightsaber(uwep) && litsaber(uwep) && (
-			(activeFightingForm(FFORM_SHIEN) && (!uarm || is_light_armor(uarm)) && rnd(3) < FightingFormSkillLevel(FFORM_SHIEN)) ||
-			(activeFightingForm(FFORM_SORESU) && (!uarm || is_light_armor(uarm) || is_medium_armor(uarm)) && rnd(3) < FightingFormSkillLevel(FFORM_SORESU))
+			(activeFightingForm(FFORM_SHIEN) && rnd(3) < FightingFormSkillLevel(FFORM_SHIEN)) ||
+			(activeFightingForm(FFORM_SORESU) && rnd(3) < FightingFormSkillLevel(FFORM_SORESU))
 		)
 	){
 		You("burn %s out of the %s!", doname(thrownobj), (Underwater || Is_waterlevel(&u.uz)) ? "water" : "air");
@@ -1173,9 +1179,9 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 			}
 			obj_extract_self(thrownobj);
 			(void)mpickobj(mdef, thrownobj);
-			if ((attacktype(mdef->data, AT_WEAP) ||
-				attacktype(mdef->data, AT_DEVA) ||
-				attacktype(mdef->data, AT_XWEP)
+			if ((mon_attacktype(mdef, AT_WEAP) ||
+				mon_attacktype(mdef, AT_DEVA) ||
+				mon_attacktype(mdef, AT_XWEP)
 				) &&
 				mdef->weapon_check == NEED_WEAPON) {
 				mdef->weapon_check = NEED_HTH_WEAPON;
@@ -1216,15 +1222,16 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 	dieroll = rnd(20);
 	static struct attack dummy = { AT_WEAP, AD_PHYS, 0, 0 };
 	struct attack * attkp = &dummy;
+	int shield_margin = -1;
 	if (magr && attacktype_fordmg(magr->data, AT_WEAP, AD_PHYS))
 		attkp = attacktype_fordmg(magr->data, AT_WEAP, AD_PHYS);
 
-	accuracy = tohitval(magr, mdef, attkp, thrownobj, vpointer, hmoncode, 0);
+	accuracy = tohitval(magr, mdef, attkp, thrownobj, vpointer, hmoncode, 0, &shield_margin);
 
 	if (miss_via_insubstantial(magr, mdef, attkp, thrownobj, vis)) {
 		/* message already printed by miss_via_insubstantial */;
 	}
-	else if (accuracy > dieroll)
+	else if (accuracy > dieroll || dieroll == 1)
 	{
 		/* hit */
 		/* (player-only) exercise dex */
@@ -1325,6 +1332,9 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 	else
 	{
 		/* miss */
+		/* train player's Shield skill if applicable */
+		if (youdef && uarms && (dieroll-accuracy <= shield_margin))
+			use_skill(P_SHIELD, 1);
 		/* print missmsg */
 		if (vis) {
 			if (youdef) {
@@ -1810,6 +1820,7 @@ int shotlimit;
 	/* For most things, limit multishot to ammo supply */
 	if ((long)multishot > ammo->quan && !(
 		ammo->oartifact == ART_WINDRIDER ||
+		check_oprop(ammo, OPROP_RETRW) ||
 		ammo->oartifact == ART_SICKLE_MOON ||
 		ammo->oartifact == ART_ANNULUS ||
 		ammo->oartifact == ART_AMHIMITL ||
@@ -2024,6 +2035,9 @@ dofire()
 	shotlimit = (multi || save_cm) ? multi + 1 : 0;
 	multi = 0;		/* reset; it's been used up */
 
+	if (u.quivered_spell) {
+		return spelleffects(spellid_to_spellno(u.quivered_spell), FALSE, 0);
+	}
 
 	/* __ You have something ready to fire __ */
 	if (!notake(youracedata)) {
@@ -2103,6 +2117,7 @@ dofire()
 		/* Throw wielded weapon -- mainhand only */
 		if ((uwep && (!uquiver || (is_ammo(uquiver) && !ammo_and_launcher(uquiver, uwep)))) && (
 			(uwep->oartifact == ART_KHAKKHARA_OF_THE_MONKEY) ||
+			check_oprop(uwep, OPROP_RETRW) ||
 			(uwep->oartifact == ART_MJOLLNIR && Role_if(PM_VALKYRIE) && ACURR(A_STR) == STR19(25)) ||
 			(uwep->oartifact == ART_ANNULUS && (uwep->otyp == CHAKRAM || uwep->otyp == LIGHTSABER)) ||
 			(uwep->oartifact == ART_AXE_OF_THE_DWARVISH_LORDS && Race_if(PM_DWARF) && ACURR(A_STR) == STR19(25)) ||
@@ -2875,8 +2890,9 @@ int tary;
 	/* cancelled monsters can't spit */
 	if (!youagr && magr->mcan) {
 		/* except for Zeta metroids, which uncancel themselves */
+		/* Note: this is another case of monsters randomly becoming cancelled */
 		if (magr->mtyp == PM_ZETA_METROID) //|| mtmp->mtyp==PM_CRAZY_CHEMIST) 
-			magr->mcan = FALSE;
+			set_mcan(magr, FALSE);
 		else {
 			if (flags.soundok)
 				pline("A dry rattle comes from %s throat.",
@@ -3126,21 +3142,24 @@ int n;	/* number to try to fire */
 		/* shadow bolts web the target hit */
 		if (typ == AD_SHDW) {
 			struct trap *ttmp2;
-			ttmp2 = maketrap(bhitpos.x, bhitpos.y, WEB);
-			if (bhitpos.x == u.ux && bhitpos.y == u.uy && ttmp2) {
-				pline_The("webbing sticks to you. You're caught!");
-				dotrap(ttmp2, NOWEBMSG);
+			if(!(ttmp2 = t_at(bhitpos.x, bhitpos.y)))
+				ttmp2 = maketrap(bhitpos.x, bhitpos.y, WEB);
+			if (ttmp2 && ttmp2->ttyp == WEB) {
+				if (bhitpos.x == u.ux && bhitpos.y == u.uy && ttmp2 && ttmp2->ttyp == WEB) {
+					pline_The("webbing sticks to you. You're caught!");
+					dotrap(ttmp2, NOWEBMSG);
 #ifdef STEED
-				if (u.usteed && u.utrap) {
-					/* you, not steed, are trapped */
-					dismount_steed(DISMOUNT_FELL);
-				}
+					if (u.usteed && u.utrap) {
+						/* you, not steed, are trapped */
+						dismount_steed(DISMOUNT_FELL);
+					}
 #endif
-			}
-			else if (ttmp2) {
-				struct monst * mdef = m_at(bhitpos.x, bhitpos.y);
-				if (mdef)
-					mintrap(mdef);
+				}
+				else {
+					struct monst * mdef = m_at(bhitpos.x, bhitpos.y);
+					if (mdef)
+						mintrap(mdef);
+				}
 			}
 		}
 	}
