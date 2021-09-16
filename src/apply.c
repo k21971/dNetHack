@@ -1123,7 +1123,7 @@ int spiritseal;
 		    (mtmp = makemon(mkclass(S_NYMPH, Inhell ? G_HELL : G_NOHELL),
 					u.ux, u.uy, NO_MINVENT)) != 0) {
 		You("summon %s!", a_monnam(mtmp));
-		if (!obj_resists(obj, 93, 100)) {
+		if (!obj_resists(obj, 0, 100)) {
 		    pline("%s shattered!", Tobjnam(obj, "have"));
 		    useup(obj);
 		    *optr = 0;
@@ -2699,7 +2699,7 @@ struct obj *tstone;
 
     if (tstone->otyp == TOUCHSTONE && tstone->cursed &&
 	    obj->oclass == GEM_CLASS && !is_graystone(obj) &&
-	    !obj_resists(obj, 80, 100)) {
+	    !obj_resists(obj, 0, 100)) {
 	if (Blind)
 	    pline("You feel something shatter.");
 	else if (Hallucination)
@@ -5911,8 +5911,8 @@ void
 salve_effect(otmp)
 struct obj *otmp;
 {
-	int oerodedLevel = 3;
-	int speLevel = -5;
+	int oerodedLevel = 3;//3, 2, 1
+	int speLevel = -5; //-5, -1, +3
 	
 	for(int i = 0; i < 3; i++){
 		if(otmp->oeroded >= oerodedLevel){
@@ -5928,11 +5928,11 @@ struct obj *otmp;
 			return;
 		}
 		else if((otmp->oclass == ARMOR_CLASS || otmp->oclass == WEAPON_CLASS || is_weptool(otmp)) && otmp->spe <= speLevel){
-			otmp->spe++;
+			otmp->spe = min(3, otmp->spe+2);
 			return;
 		}
 		oerodedLevel--;
-		speLevel /= 2;
+		speLevel += 4;
 	}
 }
 
