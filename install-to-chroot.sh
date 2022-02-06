@@ -17,9 +17,9 @@ USRGRP="games:games"
 NH_GIT="/home/build/dNetHack"
 # HACKDIR from include/config.h; aka nethack subdir inside chroot
 # Make a new one each time save compat is broken
-NHSUBDIR="dnethack-3.21.1"
+NHSUBDIR="dnethack-3.21.2"
 #for combining xlogfile, etc on minor version bump
-#NH_LOG_SYMLINK_TARGET="/dnethack-3.21.1"
+#NH_LOG_SYMLINK_TARGET="/dnethack-3.21.2"
 # END OF CONFIG
 ##############################################################################
 
@@ -44,8 +44,8 @@ set -e
 umask 022
 
 echo "Creating inprogress and userdata directories"
-mkdir -p "$NAO_CHROOT/dgldir/inprogress-dnh3211"
-chown "$USRGRP" "$NAO_CHROOT/dgldir/inprogress-dnh3211"
+mkdir -p "$NAO_CHROOT/dgldir/inprogress-dnh3212"
+chown "$USRGRP" "$NAO_CHROOT/dgldir/inprogress-dnh3212"
 mkdir -p "$NAO_CHROOT/dgldir/extrainfo-dnh"
 chown "$USRGRP" "$NAO_CHROOT/dgldir/extrainfo-dnh"
 
