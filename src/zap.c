@@ -87,6 +87,8 @@ int adtyp, ztyp;
 		case AD_DRST: return "poison spray";
 		case AD_ACID: return "acid splash";
 		case AD_STAR: return "stream of silver stars";
+		case AD_HOLY: return "holy missile";
+		case AD_UNHY: return "unholy missile";
 		case AD_DISN: return "disintegration ray";
 		default:      impossible("unknown spell damage type in flash_type: %d", adtyp);
 			return "cube of questions";
@@ -152,6 +154,7 @@ int adtyp;
 	case AD_DEAD:
 	case AD_DISN:
 	case AD_DARK:
+	case AD_UNHY:
 		return CLR_BLACK;
 	case AD_BLUD:
 		return CLR_RED;
@@ -185,6 +188,7 @@ int adtyp;
 	case AD_EELC:
 	case AD_ELEC:
 	case AD_STAR:
+	case AD_HOLY:
 		return CLR_WHITE;
 	case AD_DRLI:
 		return CLR_MAGENTA;
@@ -233,11 +237,11 @@ struct obj *otmp;
 
 	switch(otyp) {
 	case WAN_STRIKING:
+	case ROD_OF_FORCE:
 		use_skill(P_WAND_POWER, wandlevel(otyp));
-		zap_type_text = "wand";
+		zap_type_text = otyp == ROD_OF_FORCE ? "rod" : "wand";
 		/* fall through */
 	case SPE_FORCE_BOLT:
-	case ROD_OF_FORCE:
 		reveal_invis = TRUE;
 		if (MON_WEP(mtmp) && MON_WEP(mtmp)->otyp == ROD_OF_FORCE) {
 			MON_WEP(mtmp)->age = min(MON_WEP(mtmp)->age+10000, LIGHTSABER_MAX_CHARGE);
@@ -395,16 +399,22 @@ struct obj *otmp;
 		break;
 	case SPE_HEALING:
 	case SPE_EXTRA_HEALING:
+	case SPE_MASS_HEALING:{
+		int delta = mtmp->mhp;
 		reveal_invis = TRUE;
 	    if (mtmp->mtyp != PM_PESTILENCE) {
+		char hurtmonbuf[BUFSZ];
+		Strcpy(hurtmonbuf, Monnam(mtmp));
 		wake = FALSE;		/* wakeup() makes the target angry */
-		mtmp->mhp += d(6, otyp == SPE_EXTRA_HEALING ? 8 : 4);
+		/* skill adjustment ranges from -6 to + 18 (-6 means 0 hp healed minimum)*/
+		mtmp->mhp += d(6, otyp != SPE_HEALING ? 8 : 4) + 6*(P_SKILL(P_HEALING_SPELL)-1);
 		if (mtmp->mhp > mtmp->mhpmax)
 		    mtmp->mhp = mtmp->mhpmax;
 		if (mtmp->mblinded) {
 		    mtmp->mblinded = 0;
 		    mtmp->mcansee = 1;
 		}
+		delta = mtmp->mhp - delta; //Note: final minus initial
 		if (canseemon(mtmp)) {
 		    if (disguised_mimic) {
 			if (mtmp->m_ap_type == M_AP_OBJECT &&
@@ -414,8 +424,25 @@ struct obj *otmp;
 			    newsym(mtmp->mx, mtmp->my);
 			} else
 			    mimic_hit_msg(mtmp, otyp);
-		    } else pline("%s looks%s better.", Monnam(mtmp),
-				 otyp == SPE_EXTRA_HEALING ? " much" : "" );
+		    } else {
+				if (!can_see_hurtnss_of_mon(mtmp)) {
+					pline("%s looks%s better.", Monnam(mtmp),
+						otyp != SPE_HEALING ? " much" : "" );
+				}
+				else {
+					pline("%s %s %s.",
+						hurtmonbuf, 
+						delta != 0 ? "now looks only" : "looks",
+						injury_desc_word(mtmp));
+				}
+			}
+		}
+
+		if(mtmp->mtame && Role_if(PM_HEALER)){
+			int xp = (experience(mtmp, 0)/10) * delta / mtmp->mhpmax;
+			if(wizard) pline("%d out of %d XP", xp, experience(mtmp, 0));
+			if(xp)
+				more_experienced(xp, 0);
 		}
 		if (mtmp->mtame || mtmp->mpeaceful) {
 		    adjalign(Role_if(PM_HEALER) ? 1 : sgn(u.ualign.type));
@@ -423,9 +450,9 @@ struct obj *otmp;
 	    } else {	/* Pestilence */
 		/* Pestilence will always resist; damage is half of 3d{4,8} */
 		(void) resist(mtmp, otmp->oclass,
-			      d(3, otyp == SPE_EXTRA_HEALING ? 8 : 4), TELL);
+			      d(3, otyp != SPE_HEALING ? 8 : 4), TELL);
 	    }
-		break;
+	}break;
 	case WAN_LIGHT:	/* (broken wand) */
 	case WAN_DARKNESS:	/* (broken wand) */
 		if (flash_hits_mon(mtmp, otmp)) {
@@ -658,6 +685,7 @@ coord *cc;
 		if (mtmp->mhpmax > mtmp2->mhpmax && is_rider(mtmp2->data))
 			mtmp2->mhpmax = mtmp->mhpmax;
 		mtmp2->mhp = mtmp2->mhpmax;
+		mtmp2->deadmonster = FALSE;
 		/* Get these ones from mtmp */
 		mtmp2->minvent = mtmp->minvent; /*redundant*/
 		/* monster ID is available if the monster died in the current
@@ -692,15 +720,14 @@ coord *cc;
         mtmp2->mcanmove=0;
       else
 		mtmp2->mcanmove = 1;
-		/* most cancelled monsters return to normal,
-		   but some need to stay cancelled */
-		if (!dmgtype(mtmp2->data, AD_SEDU)
-#ifdef SEDUCE
-				&& !dmgtype(mtmp2->data, AD_SSEX)
-#endif
-		    ) set_mcan(mtmp2, FALSE);
-		mtmp2->mcansee = 1;	/* set like in makemon */
-		mtmp2->mblinded = 0;
+		if(mtmp2->mblinded){
+			mtmp2->mblinded = 0;
+			mtmp2->mcansee = 1;	/* set like in makemon */
+		}
+		if(mtmp2->mdeafened){
+			mtmp2->mdeafened = 0;
+			mtmp2->mcanhear = 1;	/* set like in makemon */
+		}
 		mtmp2->mstun = 0;
 		mtmp2->mconf = 0;
 		replmon(mtmp,mtmp2);
@@ -1042,6 +1069,8 @@ register struct obj *obj;
 {
 	boolean	u_ring = (obj == uleft) || (obj == uright);
 	register boolean holy = (obj->otyp == POT_WATER && obj->blessed);
+	
+	adj_abon(obj, -obj->spe);
 
 	switch(obj->otyp) {
 		case RIN_GAIN_STRENGTH:
@@ -1069,19 +1098,6 @@ register struct obj *obj;
 		case RIN_INCREASE_DAMAGE:
 			if ((obj->owornmask & W_RING) && u_ring)
 				u.udaminc -= obj->spe;
-			break;
-		case GAUNTLETS_OF_DEXTERITY:
-			if ((obj->owornmask & W_ARMG) && (obj == uarmg)) {
-				ABON(A_DEX) -= obj->spe;
-				flags.botl = 1;
-			}
-			break;
-		case HELM_OF_BRILLIANCE:
-			if ((obj->owornmask & W_ARMH) && (obj == uarmh)) {
-				ABON(A_INT) -= obj->spe;
-				ABON(A_WIS) -= obj->spe;
-				flags.botl = 1;
-			}
 			break;
 		/* case RIN_PROTECTION:  not needed */
 	}
@@ -1149,6 +1165,7 @@ register struct obj *obj;
 	       obj->otyp != WAN_CANCELLATION &&
 		 /* can't cancel cancellation */
 		 obj->otyp != MAGIC_LAMP &&
+		 obj->otyp != RIN_WISHES &&
 		 obj->otyp != CANDELABRUM_OF_INVOCATION) {
 		costly_cancel(obj);
 		obj->spe = (obj->oclass == WAND_CLASS) ? -1 : 0;
@@ -1163,7 +1180,9 @@ register struct obj *obj;
 		break;
 	      case SPBOOK_CLASS:
 		if (obj->otyp != SPE_CANCELLATION &&
-			obj->otyp != SPE_BOOK_OF_THE_DEAD) {
+			obj->otyp != SPE_BOOK_OF_THE_DEAD &&
+			!obj->oartifact
+		){
 		    costly_cancel(obj);
 		    obj->otyp = SPE_BLANK_PAPER;
 			obj->obj_color = objects[SPE_BLANK_PAPER].oc_color;
@@ -1223,6 +1242,8 @@ register struct obj *obj;
 	/* Charge for the cost of the object */
 	costly_cancel(obj);	/* The term "cancel" is okay for now */
 
+	adj_abon(obj, -1);
+
 	/* Drain the object and any implied effects */
 	obj->spe--;
 	u_ring = (obj == uleft) || (obj == uright);
@@ -1252,19 +1273,6 @@ register struct obj *obj;
 	case RIN_INCREASE_DAMAGE:
 	    if ((obj->owornmask & W_RING) && u_ring)
 	    	u.udaminc--;
-	    break;
-	case HELM_OF_BRILLIANCE:
-	    if ((obj->owornmask & W_ARMH) && (obj == uarmh)) {
-	    	ABON(A_INT)--;
-	    	ABON(A_WIS)--;
-	    	flags.botl = 1;
-	    }
-	    break;
-	case GAUNTLETS_OF_DEXTERITY:
-	    if ((obj->owornmask & W_ARMG) && (obj == uarmg)) {
-	    	ABON(A_DEX)--;
-	    	flags.botl = 1;
-	    }
 	    break;
 	case RIN_PROTECTION:
 	    flags.botl = 1;
@@ -1293,7 +1301,9 @@ register struct obj *obj;
 
 	/* Charge for the cost of the object */
 	costly_cancel(obj);	/* The term "cancel" is okay for now */
-
+	
+	adj_abon(obj, -1);
+	
 	/* Drain the object and any implied effects */
 	obj->spe--;
 	u_ring = (obj == uleft) || (obj == uright);
@@ -1323,19 +1333,6 @@ register struct obj *obj;
 	case RIN_INCREASE_DAMAGE:
 	    if ((obj->owornmask & W_RING) && u_ring)
 	    	u.udaminc--;
-	    break;
-	case HELM_OF_BRILLIANCE:
-	    if ((obj->owornmask & W_ARMH) && (obj == uarmh)) {
-	    	ABON(A_INT)--;
-	    	ABON(A_WIS)--;
-	    	flags.botl = 1;
-	    }
-	    break;
-	case GAUNTLETS_OF_DEXTERITY:
-	    if ((obj->owornmask & W_ARMG) && (obj == uarmg)) {
-	    	ABON(A_DEX)--;
-	    	flags.botl = 1;
-	    }
 	    break;
 	case RIN_PROTECTION:
 	    flags.botl = 1;
@@ -2398,7 +2395,7 @@ register struct obj *obj;
 			known = TRUE;
 			You_feel("self-knowledgeable...");
 			display_nhwindow(WIN_MESSAGE, FALSE);
-			enlightenment(FALSE);
+			doenlightenment();
 			pline_The("feeling subsides.");
 			exercise(A_WIS, TRUE);
 		break;
@@ -2738,11 +2735,12 @@ boolean ordinary;
 		    break;
 		case SPE_HEALING:
 		case SPE_EXTRA_HEALING:
-		    healup(d((uarmg && uarmg->oartifact == ART_GAUNTLETS_OF_THE_HEALING_H) ?
-                  12 : 6, obj->otyp == SPE_EXTRA_HEALING ? 8 : 4),
-			   0, FALSE, (obj->otyp == SPE_EXTRA_HEALING));
+		case SPE_MASS_HEALING:
+		    healup((d((uarmg && uarmg->oartifact == ART_GAUNTLETS_OF_THE_HEALING_H) ?
+                  12 : 6, obj->otyp != SPE_HEALING ? 8 : 4) + 6*(P_SKILL(P_HEALING_SPELL)-1)),
+			   0, FALSE, (obj->otyp != SPE_HEALING));
 		    You_feel("%sbetter.",
-			obj->otyp == SPE_EXTRA_HEALING ? "much " : "");
+			obj->otyp != SPE_HEALING ? "much " : "");
 		    break;
 		case WAN_DARKNESS:	/* (broken wand) */
 		 /* assert( !ordinary ); */
@@ -4101,6 +4099,38 @@ struct zapdata * zapdata;
 		/* deal damage */
 		return xdamagey(magr, mdef, &attk, dmg);
 
+	case AD_HOLY:
+		/* holy damage */
+		if (hates_holy_mon(mdef)) {
+			if (youdef) {
+				addmsg("The holy missiles sear your flesh!");
+			}
+			dmg *= 2;
+		}
+		else if (hates_unholy_mon(mdef))
+			dmg /= 3;
+		domsg();
+		if (youdef && dmg > 0)
+			exercise(A_WIS, FALSE);
+		/* deal damage */
+		return xdamagey(magr, mdef, &attk, dmg);
+
+	case AD_UNHY:
+		/* holy damage */
+		if (hates_holy_mon(mdef)) {
+			if (youdef) {
+				addmsg("The unholy missiles sear your flesh!");
+			}
+			dmg *= 2;
+		}
+		else if (hates_unholy_mon(mdef))
+			dmg /= 3;
+		domsg();
+		if (youdef && dmg > 0)
+			exercise(A_WIS, FALSE);
+		/* deal damage */
+		return xdamagey(magr, mdef, &attk, dmg);
+
 	case AD_FIRE:
 		/* check resist / weakness */
 		if (Fire_res(mdef)) {
@@ -5322,6 +5352,9 @@ int damage, tell;
 	
 	int mons_mr = mtmp->data->mr;
 	if(mtmp->mcan){
+		if(mtmp->mtyp == PM_ALIDER)
+			mons_mr = 0;
+		else
 			mons_mr /= 2;
 	}
 

@@ -152,22 +152,36 @@ boolean quietly;
 	initedog(mtmp);
 	mtmp->msleeping = 0;
 	if (otmp) { /* figurine; resulting monster might not become a pet */
-	    chance = rn2(10);	/* 0==tame, 1==peaceful, 2==hostile */
-	    if (chance > 2) chance = otmp->blessed ? 0 : !otmp->cursed ? 1 : 2;
-	    /* 0,1,2:  b=80%,10,10; nc=10%,80,10; c=10%,10,80 */
-	    if (chance > 0 && 
-			!(Role_if(PM_BARD) && rnd(20) < ACURR(A_CHA) && 
-				!(is_animal(mtmp->data) || mindless_mon(mtmp)))
-		) {
-
-		untame(mtmp, 1);	/* not tame after all */
-		if (chance == 2) { /* hostile (cursed figurine) */
-		    if (!quietly)
-		       You("get a bad feeling about this.");
-		    mtmp->mpeaceful = 0;
-		    set_malign(mtmp);
+		if(check_fig_template(otmp->spe, FIGURINE_PSEUDO)){
+			set_template(mtmp, PSEUDONATURAL);
 		}
-	    }
+		if(otmp->spe&FIGURINE_MALE){
+			mtmp->female = FALSE;
+		}
+		if(otmp->spe&FIGURINE_FEMALE){
+			mtmp->female = TRUE;
+		}
+
+		if(otmp->spe&FIGURINE_LOYAL){
+			EDOG(mtmp)->loyal = TRUE;
+		}
+		else {
+			chance = rn2(10);	/* 0==tame, 1==peaceful, 2==hostile */
+			if (chance > 2) chance = otmp->blessed ? 0 : !otmp->cursed ? 1 : 2;
+			/* 0,1,2:  b=80%,10,10; nc=10%,80,10; c=10%,10,80 */
+			if (chance > 0 && 
+				!(Role_if(PM_BARD) && rnd(20) < ACURR(A_CHA) && 
+					!(is_animal(mtmp->data) || mindless_mon(mtmp)))
+			){
+				untame(mtmp, 1);	/* not tame after all */
+				if (chance == 2) { /* hostile (cursed figurine) */
+					if (!quietly)
+					   You("get a bad feeling about this.");
+					mtmp->mpeaceful = 0;
+					set_malign(mtmp);
+				}
+			}
+		}
 	    /* if figurine has been named, give same name to the monster */
 	    if (get_ox(otmp, OX_ENAM))
 			mtmp = christen_monst(mtmp, ONAME(otmp));
@@ -256,6 +270,13 @@ makedog()
 	}
 	
 	if(mtmp->m_lev < mtmp->data->mlevel) mtmp->m_lev = mtmp->data->mlevel;
+	
+	if(Role_if(PM_HEALER)){
+		grow_up(mtmp, (struct monst *) 0);
+		//Technically might grow into a genocided form.
+		if(DEADMONSTER(mtmp))
+			return((struct monst *) 0);
+	}
 	
 	if(mtmp->m_lev) mtmp->mhpmax = 8*(mtmp->m_lev-1)+rnd(8);
 	mtmp->mhp = mtmp->mhpmax;
@@ -389,7 +410,6 @@ boolean with_you;
 	 * Its coordinate fields were overloaded for use as flags that
 	 * specify its final destination.
 	 */
-
 	if (mtmp->mlstmv < monstermoves - 1L) {
 	    /* heal monster for time spent in limbo */
 	    long nmv = monstermoves - 1L - mtmp->mlstmv;
@@ -506,6 +526,8 @@ boolean with_you;
 		mongone(mtmp);
 	    }
 	}
+	/* now that it's placed, we can resume timers (which may kill mtmp) */
+	resume_timers(mtmp->timed);
 }
 
 /* heal monster for time spent elsewhere */
@@ -515,8 +537,7 @@ struct monst *mtmp;
 long nmv;		/* number of moves */
 {
 	int imv = 0;	/* avoid zillions of casts and lint warnings */
-	if(mtmp->mtrapped && t_at(mtmp->mx, mtmp->my) && t_at(mtmp->mx, mtmp->my)->ttyp == VIVI_TRAP) return;
-	if(mtmp->entangled == SHACKLES) return;
+	if(imprisoned(mtmp)) return;
 
 #if defined(DEBUG) || defined(BETA)
 	if (nmv < 0L) {			/* crash likely... */
@@ -652,8 +673,10 @@ long nmv;		/* number of moves */
 
 /* called when you move to another level */
 void
-keepdogs(pets_only)
+keepdogs(pets_only, newlev, portal)
 boolean pets_only;	/* true for ascension or final escape */
+d_level *newlev;
+boolean portal;
 {
 	register struct monst *mtmp, *mtmp2;
 	register struct obj *obj;
@@ -705,20 +728,30 @@ boolean pets_only;	/* true for ascension or final escape */
 		&& !(mtmp->mstrategy & STRAT_WAITFORU)) {
 			stay_behind = FALSE;
 			if (mtmp->mtame && mtmp->mwait && u.usteed != mtmp && (mtmp->mwait+100 > monstermoves)) {
-				if (canseemon(mtmp))
+				if (canspotmon(mtmp))
 					pline("%s obediently waits for you to return.", Monnam(mtmp));
 				stay_behind = TRUE;
 			} else if (mtmp->mtame && mtmp->meating && mtmp != u.usteed) {
-				if (canseemon(mtmp))
+				if (canspotmon(mtmp))
 					pline("%s is still eating.", Monnam(mtmp));
 				stay_behind = TRUE;
 			} else if (mon_has_amulet(mtmp)) {
-				if (canseemon(mtmp))
+				if (canspotmon(mtmp))
 					pline("%s seems very disoriented for a moment.",
 					Monnam(mtmp));
 				stay_behind = TRUE;
+			} else if (Role_if(PM_ANACHRONONAUT) && newlev 
+				&& (In_quest(&u.uz) || In_quest(newlev))
+				&& !(In_quest(&u.uz) && In_quest(newlev))
+				&& stuck_in_time(mtmp)
+			) {
+				if (canspotmon(mtmp)){
+					if(portal) pline("%s is unable to touch the portal!", Monnam(mtmp));
+					else pline("%s seems very disoriented for a moment.", Monnam(mtmp));
+				}
+				stay_behind = TRUE;
 			} else if (mtmp->mtame && mtmp->mtrapped && mtmp != u.usteed) {
-				if (canseemon(mtmp))
+				if (canspotmon(mtmp))
 					pline("%s is still trapped.", Monnam(mtmp));
 				stay_behind = TRUE;
 			}
@@ -862,6 +895,9 @@ migrate_to_level(mtmp, tolev, xyloc, cc)
 	}
 	/* likewise, a summoner leaving affects its summons */
 	summoner_gone(mtmp, TRUE);
+
+	/* timers pause processing while mon is migrating */
+	pause_timers(mtmp->timed);
 
 	relmon(mtmp);
 	mtmp->nmon = migrating_mons;
@@ -1095,10 +1131,23 @@ int numdogs;
 			){
 				numdogs++;
 				if(!weakdog) weakdog = curmon;
-				if(weakdog->m_lev > curmon->m_lev) weakdog = curmon;
-				else if(weakdog->mtame > curmon->mtame) weakdog = curmon;
-				else if(weakdog->mtame > curmon->mtame) weakdog = curmon;
-				else if(weakdog->mtame > curmon->mtame) weakdog = curmon;
+				if(weakdog->m_lev > curmon->m_lev)
+					weakdog = curmon; /* The weakest pet is stronger than the current pet */
+				else if(weakdog->m_lev == curmon->m_lev){  /* Do we need tiebreakers? */
+					if(weakdog->mtame > curmon->mtame)
+						weakdog = curmon; /* Tiebreaker 1: the weakest pet is more tame than the current pet */
+					else if(weakdog->mtame == curmon->mtame){ /* Do we need another tiebreaker? */
+						int weakdog_mlev = mon_max_lev(weakdog);
+						int curmon_mlev = mon_max_lev(curmon);
+						if(weakdog_mlev > curmon_mlev)
+							weakdog = curmon; /* Tiebreaker 2: the weakest pet has greater potential than the current pet */
+						else if(weakdog_mlev == curmon_mlev){
+							extern int monstr[];
+							if(monstr[weakdog->mtyp] > monstr[curmon->mtyp])
+								weakdog = curmon; /* Tiebreaker 3: the weakest pet has greater starting strength than the current pet */
+						}
+					}
+				}
 			}
 		}
 
@@ -1273,7 +1322,7 @@ int enhanced;
 		    {
 		        /* You choked your pet, you cruel, cruel person! */
 		        You_feel("guilty about losing your pet like this.");
-				u.ugangr[Align2gangr(u.ualign.type)]++;
+				godlist[u.ualign.god].anger++;
 				adjalign(-15);
 				u.hod += 5;
 		    }
@@ -1353,14 +1402,13 @@ boolean be_peaceful;
 }
 
 struct monst *
-make_pet_minion(mtyp,alignment,ga_num)
+make_pet_minion(mtyp,godnum)
 int mtyp;
-aligntyp alignment;
-int ga_num;
+int godnum;
 {
     register struct monst *mon;
     register struct monst *mtmp2;
-	mon = makemon_full(&mons[mtyp], u.ux, u.uy, NO_MM_FLAGS, -1, get_ga_mfaction(ga_num));
+	mon = makemon_full(&mons[mtyp], u.ux, u.uy, NO_MM_FLAGS, -1, god_faction(godnum));
     if (!mon) return 0;
     /* now tame that puppy... */
 	add_mx(mon, MX_EDOG);
@@ -1372,7 +1420,8 @@ int ga_num;
     /* this section names the creature "of ______" */
 	add_mx(mon, MX_EMIN);
 	mon->isminion = TRUE;
-	EMIN(mon)->min_align = alignment;
+	EMIN(mon)->min_align = galign(godnum);
+	EMIN(mon)->godnum = godnum;
     return mon;
 }
 
