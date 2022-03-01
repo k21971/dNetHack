@@ -5,4 +5,3 @@ CPPFLAGS += -DHACKDIR=\"/dnethack-3.21.2\" -DDUMPMSGS=100
 CPPFLAGS += -DDUMP_FN=\"/dgldir/userdata/%N/%n/dnethack/dumplog/%t.dnh.txt\"
 CPPFLAGS += -DHUPLIST_FN=\"/dgldir/userdata/%N/%n/dnethack/hanguplist.txt\"
 CPPFLAGS += -DEXTRAINFO_FN=\"/dgldir/extrainfo-dnh/%n.extrainfo\"
-CPPFLAGS += -DFCMASK=644
