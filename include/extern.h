@@ -57,6 +57,7 @@ E boolean FDECL(tinnable, (struct obj *));
 E void NDECL(reset_trapset);
 E void FDECL(fig_transform, (genericptr_t, long));
 E int FDECL(use_whip, (struct obj *));
+E int FDECL(use_nunchucks, (struct obj *));
 E int FDECL(use_force_sword, (struct obj *));
 E int FDECL(do_bloodletter, (struct obj *));
 E void FDECL(pyramid_effects, (struct obj *, int, int));
@@ -507,7 +508,8 @@ E struct obj *FDECL(oname, (struct obj *,const char *));
 E int NDECL(ddocall);
 E void FDECL(docall, (struct obj *));
 E const char *NDECL(rndghostname);
-E void FDECL(append_template_desc, (struct monst *, char *, boolean));
+E void FDECL(append_template_desc, (struct monst *, char *, boolean, boolean));
+E void FDECL(adjust_permonst_template_desc, (struct permonst *, char *, int));
 E const char *FDECL(injury_desc_word, (struct monst *));
 E char *FDECL(x_monnam, (struct monst *,int,const char *,int,BOOLEAN_P));
 E char *FDECL(l_monnam, (struct monst *));
@@ -829,6 +831,8 @@ E void FDECL(done_in_by, (struct monst *));
 #endif /* !MAKEDEFS_C && !LEV_LEX_C */
 E void VDECL(panic, (const char *,...)) PRINTF_F(1,2);
 #if !defined(MAKEDEFS_C) && !defined(LEV_LEX_C)
+E const char* NDECL(get_alignment_code);
+E const char* NDECL(get_alignment_adj);
 E void FDECL(done, (int));
 E void FDECL(container_contents, (struct obj *,BOOLEAN_P,BOOLEAN_P));
 #ifdef DUMP_LOG
