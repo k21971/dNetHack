@@ -17,7 +17,7 @@ USRGRP="games:games"
 NH_GIT="/home/build/dNetHack"
 # HACKDIR from include/config.h; aka nethack subdir inside chroot
 # Make a new one each time save compat is broken
-NHSUBDIR="dnethack-3.21.2"
+NHSUBDIR="dnethack-3.21.3"
 #for combining xlogfile, etc on minor version bump
 #NH_LOG_SYMLINK_TARGET="/dnethack-3.21.3"
 # END OF CONFIG
