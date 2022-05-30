@@ -1658,6 +1658,7 @@ static const NEARDATA short hwep[] = {
 	  BROADSWORD/*2d4/1d6+1*/, 
 	  MORNING_STAR/*2d4/1d6+1*/, 
 	  CROW_QUILL/*1d8/1d8*/,
+	  BLADE_OF_MERCY/*1d6+1/1d8+1*/, 
 	  RAKUYO_SABER/*1d8/1d8*/,
 	  SABER/*1d8/1d8*/,
 	  TRIDENT/*1d6+1/3d4*/, 
@@ -1671,11 +1672,13 @@ static const NEARDATA short hwep[] = {
 	  KHOPESH,/*1d8/1d6*/
 	  DROVEN_DAGGER/*1d8/1d6*/, 
 	  MACE/*1d6+1/1d6*/, 
+	  MAGIC_TORCH/*1d8/1d4*/, 
 	  ELVEN_SHORT_SWORD/*1d7/1d7*/, 
 	  ELVEN_MACE/*1d7/1d7*/, 
 	  ELVEN_SPEAR/*1d7/1d7*/, 
 	  DISKOS/*1d6/1d8*/,
 	  SPEAR/*1d6/1d8*/,
+	  BLADE_OF_GRACE/*1d6/1d8*/,
 	  SHORT_SWORD/*1d6/1d8*/,
 	  RAPIER/*1d6/1d4*/, 
 	  AXE/*1d6/1d4*/, 
@@ -1698,6 +1701,7 @@ static const NEARDATA short hwep[] = {
 	  ELVEN_SICKLE/*1d6/1d3*/,
 	  STILETTO/*1d6/1d2*/, 
 	  ELVEN_DAGGER/*1d5/1d3*/, 
+	  BLADE_OF_PITY/*1d4/1d6*/, 
 	  ATHAME/*1d4/1d4*/, 
 	  RAKUYO_DAGGER/*1d4/1d3*/, 
 	  DAGGER/*1d4/1d3*/, 
@@ -1767,6 +1771,7 @@ static const NEARDATA short hpwep[] = {
 	  LUCERN_HAMMER, /*2d4/1d6*/
 	  SPETUM,  /*1d6+1/2d6*/
 	  CROW_QUILL/*1d8/1d8*/,
+	  BLADE_OF_MERCY/*1d6+1/1d8+1*/, 
 	  RAKUYO_SABER/*1d8/1d8*/,
 	  SABER/*1d8/1d8*/,
 	  TRIDENT/*1d6+1/3d4*/, 
@@ -1782,6 +1787,7 @@ static const NEARDATA short hpwep[] = {
 	  BEC_DE_CORBIN, /*1d8/1d6*/
 	  DROVEN_DAGGER/*1d8/1d6*/, 
 	  MACE/*1d6+1/1d6*/, 
+	  MAGIC_TORCH/*1d8/1d4*/, 
 	  GLAIVE, /*1d6/1d10*/
 	  ELVEN_SHORT_SWORD/*1d7/1d7*/, 
 	  ELVEN_MACE/*1d7/1d7*/, 
@@ -1790,6 +1796,7 @@ static const NEARDATA short hpwep[] = {
 	  FAUCHARD, /*1d6/1d8*/
 	  LANCE, /*1d6/1d8*/
 	  SPEAR/*1d6/1d8*/,
+	  BLADE_OF_GRACE/*1d6/1d8*/,
 	  SHORT_SWORD/*1d6/1d8*/,
 	  PARTISAN, /*1d6/1d6*/
 	  RAPIER/*1d6/1d4*/, 
@@ -1813,6 +1820,7 @@ static const NEARDATA short hpwep[] = {
 	  ELVEN_SICKLE/*1d6/1d3*/,
 	  STILETTO/*1d6/1d2*/, 
 	  ELVEN_DAGGER/*1d5/1d3*/, 
+	  BLADE_OF_PITY/*1d4/1d6*/, 
 	  ATHAME/*1d4/1d4*/, 
 	  RAKUYO_DAGGER/*1d4/1d3*/, 
 	  DAGGER/*1d4/1d3*/, 
@@ -2548,6 +2556,7 @@ struct obj *otmp;
 			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1 == 0)
 			|| otmp->otyp == SET_OF_CROW_TALONS
 			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
+			|| is_mercy_blade(otmp)
 		)){
 			if(is_rakuyo(otmp))
 				bonus = 0;
@@ -2597,6 +2606,13 @@ struct obj *otmp;
 			arm = which_armor(mon, W_ARMH);
 			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
 				bonus += (arm->spe)/2;
+		}
+
+		if(is_mercy_blade(otmp)){
+			//Int only
+			arm = which_armor(mon, W_ARMH);
+			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
+				bonus += (arm->spe)/4;
 		}
 
 		if(check_oprop(otmp, OPROP_OCLTW)){
@@ -2649,6 +2665,7 @@ struct obj *otmp;
 			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1 == 0)
 			|| otmp->otyp == SET_OF_CROW_TALONS
 			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
+			|| is_mercy_blade(otmp)
 		)){
 			if(is_rakuyo(otmp))
 				bonus = 0;
@@ -2682,6 +2699,10 @@ struct obj *otmp;
 			bonus /= 2;
 			if(ACURR(A_INT) == 25) bonus += 8;
 			else bonus += (ACURR(A_INT)-10)/2;
+		}
+		if(is_mercy_blade(otmp)){
+			if(ACURR(A_INT) == 25) bonus += 4;
+			else bonus += (ACURR(A_INT)-10)/4;
 		}
 		if(check_oprop(otmp, OPROP_OCLTW)){
 			bonus /= 2;
@@ -3259,6 +3280,11 @@ struct obj *obj;
 			CHECK_ALTERNATE_SKILL(P_TWO_HANDED_SWORD)
 	}
 	else if(obj->otyp == KHOPESH){
+		CHECK_ALTERNATE_SKILL(P_AXE)
+	}
+	else if(obj->otyp == BLADE_OF_MERCY || obj->otyp == BLADE_OF_GRACE){
+		if(obj->otyp == BLADE_OF_GRACE)
+			CHECK_ALTERNATE_SKILL(P_DAGGER)
 		CHECK_ALTERNATE_SKILL(P_AXE)
 	}
 	else if(obj->otyp == DISKOS){

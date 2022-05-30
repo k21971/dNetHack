@@ -1628,6 +1628,9 @@ moveloop()
 				/* Loyal monsters slowly recover tameness */
 				if(mtmp->mtame && mtmp->mtame < 5 && get_mx(mtmp, MX_EDOG) && EDOG(mtmp)->loyal && (!moves%100))
 					mtmp->mtame++;
+				/* Dominated monsters stay tame */
+				if(mtmp->mtame && get_mx(mtmp, MX_EDOG) && EDOG(mtmp)->dominated)
+					mtmp->mtame = 100;
 				/*Tannin eggs may hatch, monster may die*/
 				if(mtmp->mtaneggs){
 					for(int i = mtmp->mtaneggs; i > 0; i--) if(!rn2(6)){
@@ -1995,6 +1998,10 @@ karemade:
 					LBperim = TRUE;
 				} else if(!mtmp) LBperim = FALSE;
 			}
+			//Center of All may show up
+			if(!Infuture && !mvitals[PM_CENTER_OF_ALL].died && !rn2(COA_PROB)){
+				coa_arrive();
+			}
 			//Random monster generation block
 			if(In_mithardir_terminus(&u.uz) &&
 				mvitals[PM_ASPECT_OF_THE_SILENCE].born == 0 &&
@@ -2003,9 +2010,6 @@ karemade:
 				|| (u.ufirst_sky && u.ufirst_life)
 			)){
 				makemon(&mons[PM_ASPECT_OF_THE_SILENCE], 0, 0, NO_MM_FLAGS);
-			}
-			else if(!Infuture && !mvitals[PM_CENTER_OF_ALL].died && !rn2(COA_PROB)){
-				coa_arrive();
 			}
 		    else if(!(Is_illregrd(&u.uz) && u.ualign.type == A_LAWFUL && !u.uevent.uaxus_foe) && /*Turn off random generation on axus's level if lawful*/
 				!rn2(u.uevent.udemigod ? 25 :
@@ -2027,15 +2031,6 @@ karemade:
 						if(tries >= 0)
 							makemon(ford_montype(-1), x, y, MM_ADJACENTOK);
 					}
-				} else if(!(mvitals[PM_HOUND_OF_TINDALOS].mvflags&G_GONE && !In_quest(&u.uz)) && (level_difficulty()+u.ulevel)/2+5 > monstr[PM_HOUND_OF_TINDALOS] && !DimensionalLock && check_insight()){
-					int x, y;
-					for(x = 1; x < COLNO; x++)
-						for(y = 0; y < ROWNO; y++){
-							if(IS_CORNER(levl[x][y].typ) && couldsee(x, y) && rn2(45) < u.ulevel){
-								create_gas_cloud(x, y, 4, 30, FALSE);
-								makemon(&mons[PM_HOUND_OF_TINDALOS], x, y, MM_ADJACENTOK);
-							}
-						}
 				} else {
 					if (u.uevent.invoked && xupstair && rn2(10)) {
 						(void) makemon((struct permonst *)0, xupstair, yupstair, MM_ADJACENTOK);
@@ -2049,6 +2044,32 @@ karemade:
 						if(ANA_SPAWN_FOUR) (void) makemon((struct permonst *)0, xdnstair, ydnstair, MM_ADJACENTOK);
 					}
 					else (void) makemon((struct permonst *)0, 0, 0, NO_MM_FLAGS);
+				}
+				if(!(mvitals[PM_HOUND_OF_TINDALOS].mvflags&G_GONE && !In_quest(&u.uz))
+					&& (level_difficulty()+u.ulevel)/2+5 > monstr[PM_HOUND_OF_TINDALOS]
+					&& !DimensionalLock
+					&& check_insight()
+				){
+					int x, y;
+					int cx, cy;
+					char messaged = FALSE;
+					for(x = 1; x < COLNO; x++)
+						for(y = 0; y < ROWNO; y++){
+							if(IS_CORNER(levl[x][y].typ) && rn2(20) < u.ulevel){
+								//x,y is an angle, but we want to place the *monster* on a floor space NEXT to the corner.
+								for(cx = x-1; cx < x+2; cx+=2)
+									for(cy = y-1; cy < y+2; cy+=2){
+										//If this "corner" is off map, continue
+										if(!isok(cx,cy) || !IS_ROOM(levl[cx][cy].typ) || !couldsee(cx, cy))
+											continue;
+										//Is this not a corner?
+										if(!IS_WALL(levl[x][cy].typ) || !IS_WALL(levl[cx][y].typ))
+											continue;
+										create_fog_cloud(cx, cy, 2, 30, FALSE);
+										makemon(&mons[PM_HOUND_OF_TINDALOS], cx, cy, MM_ADJACENTOK);
+									}
+							}
+						}
 				}
 			}
 			if(Infuture && !(Is_qstart(&u.uz) && !Race_if(PM_ANDROID)) && !rn2(35)){
@@ -2110,8 +2131,8 @@ karemade:
 				for(i = rn2(4); i > 0 && u.ulevel > 2; i--){
 					losexp("mind dissolution",FALSE,TRUE,TRUE);
 				}
-				forget((pre_drain - u.ulevel) * 100/(pre_drain)); //drain some proportion of your memory
 				losexp("mind dissolution",TRUE,TRUE,TRUE);
+				forget((pre_drain - u.ulevel) * 100/(pre_drain)); //drain some proportion of your memory
 			}
 			
 			if(mad_turn(MAD_HOST)){
@@ -2302,7 +2323,10 @@ karemade:
 			/* Unseen monsters may take action */
 			for(mtmp = migrating_mons; mtmp; mtmp = nxtmon){
 				nxtmon = mtmp->nmon;
-				unseen_actions(mtmp); //May cause mtmp to be removed from the migrating chain
+				if(mtmp->mux == u.uz.dnum && mtmp->muy == u.uz.dlevel && mtmp->marriving)
+					mon_arrive_on_level(mtmp);
+				else
+					unseen_actions(mtmp); //May cause mtmp to be removed from the migrating chain
 			}
 			
 			/* Item attacks */
@@ -3954,6 +3978,7 @@ printAttacks(buf, ptr)
 		"silver moonlight",		/*144*/
 		"holy energy",			/*145*/
 		"unholy energy",		/*146*/
+		"level-based damage",	/*147*/
 		// "[[ahazu abduction]]",	/**/
 		"[[stone choir]]",		/* */
 		"[[water vampire]]",	/* */
@@ -4027,10 +4052,10 @@ cthulhu_mind_blast()
 	int nd = 1;
 	if(on_level(&rlyeh_level,&u.uz))
 		nd = 5;
-	if (Unblind_telepat || (Blind_telepat && rn2(2)) || !rn2(10)) {
+	if (Unblind_telepat || (Blind_telepat && Blind) || (Blind_telepat && rn2(2)) || !rn2(10)) {
 		int dmg;
 		pline("It locks on to your %s!",
-			Unblind_telepat ? "telepathy" :
+			(Unblind_telepat || (Blind_telepat && Blind)) ? "telepathy" :
 			Blind_telepat ? "latent telepathy" : "mind");
 		dmg = d(nd,15);
 		if(Half_spell_damage) dmg = (dmg+1) / 2;
@@ -4612,7 +4637,7 @@ struct monst *mon;
 				for(mtmp = migrating_mons; mtmp; mtmp = mtmp2) {
 					mtmp2 = mtmp->nmon;
 					if (mtmp == mon) {
-						if(mtmp == migrating_mons)
+						if(!mtmp0)
 							migrating_mons = mtmp->nmon;
 						else
 							mtmp0->nmon = mtmp->nmon;
@@ -4647,7 +4672,7 @@ goat_sacrifice(mon)
 struct monst *mon;
 {
 	struct obj *otmp, *otmp2;
-	register struct monst *mtmp, *mtmp0 = 0, *mtmp2;
+	struct monst *mtmp, *mtmp0 = 0, *mtmp2;
 	xchar xlocale, ylocale, xyloc;
 	xyloc	= mon->mtrack[0].x;
 	xlocale = mon->mtrack[1].x;
@@ -4744,7 +4769,7 @@ palid_stranger(mon)
 struct monst *mon;
 {
 	struct obj *otmp, *otmp2;
-	register struct monst *mtmp, *mtmp0 = 0, *mtmp2;
+	struct monst *mtmp, *mtmp0 = 0, *mtmp2;
 	xchar xlocale, ylocale, xyloc;
 	xyloc	= mon->mtrack[0].x;
 	xlocale = mon->mtrack[1].x;
@@ -4773,7 +4798,7 @@ struct monst *mon;
 				mtmp2 = mtmp->nmon;
 				if (mtmp == mon) {
 					mtmp->mtrack[0].x = MIGR_RANDOM;
-					if(mtmp == migrating_mons)
+					if(!mtmp0)
 						migrating_mons = mtmp->nmon;
 					else
 						mtmp0->nmon = mtmp->nmon;

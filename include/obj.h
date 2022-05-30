@@ -481,6 +481,9 @@ struct obj {
 #define is_rakuyo(otmp)	(otmp->otyp == RAKUYO || \
 			 otmp->otyp == RAKUYO_SABER || \
 			 otmp->otyp == RAKUYO_DAGGER)
+#define is_mercy_blade(otmp)	(otmp->otyp == BLADE_OF_MERCY || \
+			 otmp->otyp == BLADE_OF_GRACE || \
+			 otmp->otyp == BLADE_OF_PITY)
 #define rakuyo_prop(otmp)	(check_oprop(otmp, OPROP_RAKUW))
 #define is_insight_weapon(otmp) (check_oprop(otmp, OPROP_CCLAW) || \
 			 rakuyo_prop(otmp) || \
@@ -489,9 +492,28 @@ struct obj {
 			 otmp->oartifact == ART_BLOODLETTER || \
 			 otmp->oartifact == ART_LASH_OF_THE_COLD_WASTE || \
 			 otmp->obj_material == MERCURIAL || \
+			 is_mercy_blade(otmp) || \
 			 otmp->otyp == ISAMUSEI ||\
 			 otmp->otyp == DISKOS ||\
 			 otmp->otyp == BESTIAL_CLAW)
+#define ensouled_item(otmp)	(((otmp)->otyp >= WAGE_OF_SLOTH && (otmp)->otyp <= WAGE_OF_PRIDE)\
+			 || (otmp)->otyp == VITAL_SOULSTONE\
+			 || (otmp)->otyp == SPIRITUAL_SOULSTONE\
+			 || ((otmp)->otyp >= EFFIGY && (otmp)->otyp <= DOLL_S_TEAR)\
+			 || (otmp)->otyp == HOLY_SYMBOL_OF_THE_BLACK_MOTHE\
+			 || (otmp)->otyp == MAGIC_LAMP\
+			 || (otmp)->otyp == CANDLE_OF_INVOCATION\
+			 || (otmp)->otyp == RIN_WISHES\
+			 || (otmp)->otyp == MISOTHEISTIC_PYRAMID\
+			 || (otmp)->otyp == MISOTHEISTIC_FRAGMENT\
+			 || (otmp)->otyp == DIMENSIONAL_LOCK\
+			 || (otmp)->otyp == PRESERVATIVE_ENGINE\
+			 || (otmp)->otyp == ARMOR_SALVE\
+			 || (otmp)->otyp == LIVING_MASK\
+			 || (otmp)->oclass == TILE_CLASS\
+			 || (otmp)->otyp == ANTIMAGIC_RIFT\
+			 || (otmp)->otyp == CATAPSI_VORTEX\
+			)
 #define is_pole(otmp)	((otmp->oclass == WEAPON_CLASS || \
 			otmp->oclass == TOOL_CLASS) && \
 			 (objects[otmp->otyp].oc_skill == P_POLEARMS || \
@@ -623,11 +645,13 @@ struct obj {
 #define spec_prop_otyp(otmp)	((pure_weapon(otmp) || dark_weapon(otmp) || force_weapon(otmp)) || \
 						  (otmp)->otyp == SUNROD || \
 						  (otmp)->otyp == TORCH || \
+						  (otmp)->otyp == MAGIC_TORCH || \
 						  (otmp)->otyp == SHADOWLANDER_S_TORCH || \
 						  (otmp)->otyp == CROW_QUILL || \
 						  (otmp)->otyp == SET_OF_CROW_TALONS || \
 						  (otmp)->otyp == ISAMUSEI || \
 						  (otmp)->otyp == DISKOS || \
+						  is_mercy_blade(otmp) || \
 						  (otmp)->otyp == KAMEREL_VAJRA)
 #define spec_prop_material(otmp)	(otmp->obj_material == MERCURIAL)
 #define is_multigen(otmp)	((otmp->oclass == WEAPON_CLASS && \
@@ -766,7 +790,11 @@ struct obj {
 				|| (otmp)->otyp == WITCH_HAT)
 
 #define is_plusten(otmp)	(arti_plusten(otmp)\
-								|| is_rakuyo(otmp))
+								|| is_rakuyo(otmp)\
+								|| is_mercy_blade(otmp)\
+								|| otmp->otyp == ISAMUSEI\
+								|| otmp->otyp == BESTIAL_CLAW\
+								)
 #define is_plussev_armor(otmp)	(is_elven_armor((otmp))\
 								|| arti_plussev((otmp))\
 								|| ((otmp)->otyp == CORNUTHAUM && Role_if(PM_WIZARD))\
@@ -956,6 +984,7 @@ struct obj {
 				|| (otmp)->otyp == TALLOW_CANDLE\
 				|| (otmp)->otyp == WAX_CANDLE\
 				|| (otmp)->otyp == TORCH\
+				|| (otmp)->otyp == MAGIC_TORCH\
 				|| (otmp)->otyp == SHADOWLANDER_S_TORCH\
 				|| (otmp)->otyp == CANDLE_OF_INVOCATION\
 				|| (otmp)->otyp == POT_OIL)

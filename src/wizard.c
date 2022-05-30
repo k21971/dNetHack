@@ -40,7 +40,7 @@ static NEARDATA const int nasties[] = {
 	
 	/* chaotic */
 	PM_RED_DRAGON, PM_BLACK_DRAGON, PM_ROCK_TROLL, PM_GREMLIN, 
-	PM_VAMPIRE_LORD, PM_WINGED_GARGOYLE, PM_ARCH_LICH, PM_SON_OF_TYPHON, 
+	PM_VAMPIRE_LORD, PM_VAMPIRE_LADY, PM_WINGED_GARGOYLE, PM_ARCH_LICH, PM_SON_OF_TYPHON, 
 	PM_OGRE_KING, PM_OLOG_HAI, PM_DISENCHANTER, PM_DISPLACER_BEAST, 
 	PM_MANTICORE, PM_GNOLL, PM_SCRAP_TITAN, PM_GUG, 
 	PM_ANUBAN_JACKAL, PM_BEBELITH, PM_WEREWOLF, PM_WERERAT,
@@ -726,7 +726,7 @@ yellow_nasty()
 		}
 		mtmp->msleeping = 0;
 		untame(mtmp, 0);
-		mtmp->mfaction = YELLOW_FACTION;
+		set_faction(mtmp, YELLOW_FACTION);
 		set_malign(mtmp);
 	}
 }
@@ -778,7 +778,7 @@ yellow_dead()
 	}
 	mtmp->msleeping = 0;
 	mtmp->mpeaceful = 0;
-	mtmp->mfaction = YELLOW_FACTION;
+	set_faction(mtmp, YELLOW_FACTION);
 	set_malign(mtmp);
 }
 

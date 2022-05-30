@@ -48,7 +48,7 @@ dodrop()
 
 	if(result && roll_madness(MAD_TALONS)){
 		You("panic after giving up a belonging!");
-		nomul(-1*rnd(6),"panic");
+		HPanicking += 1+rnd(6);
 	}
 	
 	return result;
@@ -730,7 +730,30 @@ struct obj *obj;
 		obj->oerodeproof = 0;
 	    }
 	    break;
+	case CRYSTAL_SKULL:{
+		struct monst *nmon;
+		for(struct monst *mtmp = fmon; mtmp; mtmp = nmon){
+			nmon = mtmp->nmon;
+			if(get_mx(mtmp, MX_ESUM)){
+				if(mtmp->mextra_p->esum_p->sm_o_id == obj->o_id){
+					monvanished(mtmp);
+				}
+			}
+		}
+		}break;
 	}
+}
+
+boolean
+obj_summon_out(obj)
+struct obj *obj;
+{
+	for(struct monst *mtmp = fmon; mtmp; mtmp = mtmp->nmon)
+		if(get_mx(mtmp, MX_ESUM))
+			if(mtmp->mextra_p->esum_p->sm_o_id == obj->o_id)
+				return TRUE;
+	//Else
+	return FALSE;
 }
 
 /* 'D' command: drop several things */
@@ -749,7 +772,7 @@ doddrop()
 
 	if(result && roll_madness(MAD_TALONS)){
 		You("panic after giving up your property!");
-		nomul(-1*rnd(6),"panic");
+		HPanicking += 1+rnd(6);
 	}
 	return result;
 }
@@ -1528,10 +1551,13 @@ misc_levelport:
 		   with the situation, so only say something when debugging */
 		if (wizard) pline("(monster in hero's way)");
 #endif
-		if (!rloc(mtmp, TRUE))
+		if (!rloc(mtmp, TRUE)){
+			if(wizard) pline("arriving later.");
 		    /* no room to move it; send it away, to return later */
 		    migrate_to_level(mtmp, ledger_no(&u.uz),
 				     MIGR_RANDOM, (coord *)0);
+			mtmp->marriving = TRUE;
+		}
 	    }
 	}
 
@@ -1848,7 +1874,7 @@ int different;
 	if(different==REVIVE_YELLOW){
 		set_template(mtmp, YELLOW_TEMPLATE);
 		mtmp->zombify = 0;
-		mtmp->mfaction = YELLOW_FACTION;
+		set_faction(mtmp, YELLOW_FACTION);
 		mtmp->mcrazed = 0;
 		if(mtmp->mpeaceful && !mtmp->mtame){
 			mtmp->mpeaceful = 0;

@@ -330,7 +330,9 @@ static struct trobj Knight[] = {
 	{ KITE_SHIELD, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
 	{ GLOVES, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
 	{ HIGH_BOOTS, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
+#define K_APPLES 7
 	{ APPLE, 0, FOOD_CLASS, 10, 0 },
+#define K_CARROTS 8
 	{ CARROT, 0, FOOD_CLASS, 10, 0 },
 	{ 0, 0, 0, 0, 0 }
 };
@@ -1526,12 +1528,12 @@ register char sym;
    which appear to be more than enough tools.
    We might also add GEM_CLASS with oc_material != GLASS 
 *** Contributed by Johanna Ploog */
-STATIC_OVL void
-know_random_obj()
+void
+know_random_obj(count)
+int count;
 {
-        register int obj, count, ct;
+        register int obj, ct;
 
-        count = rn1(11,5);
         for (ct = 500; ct > 0 && count > 0; ct--) {
            obj = rn2(NUM_OBJECTS);
            if (objects[obj].oc_magic &&
@@ -1969,7 +1971,7 @@ u_init()
 		knows_object(SPE_CAUSE_FEAR);
 		knows_object(SPE_CHARM_MONSTER);
 		/* Bards also know a lot about legendary & magical stuff. */
-		know_random_obj();
+		know_random_obj(rn1(11,5));
 		/* Bards also know all the basic wards. */
 		u.wardsknown = WARD_ACHERON|WARD_HAMSA|WARD_ELDER_SIGN|WARD_EYE|WARD_QUEEN|WARD_CAT_LORD|WARD_GARUDA;
 		u.wardsknown |= WARD_TOUSTEFNA;
@@ -2100,7 +2102,11 @@ u_init()
 		break;
 	case PM_KNIGHT:
 		if(Race_if(PM_DWARF)) ini_inv(DwarfNoble);
-		else ini_inv(Knight);
+		else if(Race_if(PM_HALF_DRAGON)){
+			Knight[K_APPLES].trquan = rn1(9, 5);
+			Knight[K_CARROTS].trquan = 1;
+			ini_inv(Knight);
+		} else ini_inv(Knight);
 		knows_class(WEAPON_CLASS);
 		knows_class(ARMOR_CLASS);
 		/* give knights chess-like mobility
@@ -2390,6 +2396,8 @@ u_init()
 				u.ualign.god = u.ugodbase[UGOD_CURRENT] = u.ugodbase[UGOD_ORIGINAL] = align_to_god(u.ualign.type);
 				flags.initalign = 1; // 1 == neutral
 			}
+		} else if(Role_if(PM_ANACHRONONAUT)){
+			u.umartial = TRUE;
 		} else if(!Role_if(PM_EXILE) && !Role_if(PM_CONVICT) && !Role_if(PM_MADMAN)){
 			ini_inv(DrovenCloak);
 			if(!flags.female){
@@ -2398,8 +2406,6 @@ u_init()
 				u.ualign.god = u.ugodbase[UGOD_CURRENT] = u.ugodbase[UGOD_ORIGINAL] = align_to_god(u.ualign.type);
 				flags.initalign = 1; // 1 == neutral
 			}
-		} else if(Role_if(PM_ANACHRONONAUT)){
-			u.umartial = TRUE;
 		}
 	    /* Drow can recognize all droven objects */
 		if(!Role_if(PM_MADMAN)){ /*Madmen have been amnesticized*/

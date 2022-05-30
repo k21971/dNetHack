@@ -1195,6 +1195,7 @@ register const char *let,*word;
 		    ((otmp->oclass == TOOL_CLASS && !is_weptool(otmp)) ||
 			(otmp->oclass == CHAIN_CLASS && otmp->otyp != CHAIN)))
 		|| (!strcmp(word, "resize") && !(otmp->oclass == ARMOR_CLASS || otmp->otyp == LENSES || otmp->otyp == SUNGLASSES))
+		|| (!strcmp(word, "trephinate") && !(otmp->otyp == CRYSTAL_SKULL))
 		|| (!strcmp(word, "eat") && !is_edible(otmp))
 		|| (!strcmp(word, "zap") &&
 		    (otmp->oclass == TOOL_CLASS && otmp->otyp != ROD_OF_FORCE))
@@ -1261,6 +1262,7 @@ register const char *let,*word;
 			  !is_knife(otmp) && otmp->oartifact != ART_SILVER_STARLIGHT &&
 			  !(otmp->oartifact == ART_HOLY_MOONLIGHT_SWORD && !u.veil) &&
 			  otmp->otyp != RAKUYO && otmp->otyp != RAKUYO_SABER && 
+			  otmp->otyp != BLADE_OF_MERCY && otmp->otyp != BLADE_OF_GRACE && 
 			  otmp->otyp != DOUBLE_FORCE_BLADE && otmp->otyp != FORCE_BLADE &&
 			  otmp->otyp != MASS_SHADOW_PISTOL
 			 ) ||
@@ -2228,6 +2230,9 @@ struct obj *obj;
 	else if (obj->otyp == FIGURINE)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Make this figurine transform", MENU_UNSELECTED);
+	else if (obj->otyp == CRYSTAL_SKULL)
+		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
+				"Use this crystal skull", MENU_UNSELECTED);
 	else if (obj->otyp == UNICORN_HORN)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Squeeze the unicorn horn tightly", MENU_UNSELECTED);
@@ -2262,13 +2267,16 @@ struct obj *obj;
 	else if (obj->otyp == RAKUYO || obj->otyp == RAKUYO_SABER)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Latch or unlatch your rakuyo", MENU_UNSELECTED);
+	else if (obj->otyp == BLADE_OF_MERCY || obj->otyp == BLADE_OF_MERCY)
+		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
+				"Latch or unlatch your blade of mercy", MENU_UNSELECTED);
 	else if (obj->otyp == DOUBLE_FORCE_BLADE || obj->otyp == FORCE_BLADE)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Latch or unlatch your force blade", MENU_UNSELECTED);
 	else if (obj->otyp == FORCE_SWORD)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Unlock your force whip", MENU_UNSELECTED);
-	else if (obj->otyp == TORCH || obj->otyp == SHADOWLANDER_S_TORCH)
+	else if (obj->otyp == TORCH || obj->otyp == SHADOWLANDER_S_TORCH || obj->otyp == MAGIC_TORCH)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Light or snuff this torch", MENU_UNSELECTED);
 	else if (obj->otyp == SUNROD && !obj->lamplit)
@@ -2362,9 +2370,20 @@ struct obj *obj;
 	else if (obj->oclass == SCROLL_CLASS)
 		add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
 				"Cast the spell on this scroll", MENU_UNSELECTED);
-	else if (obj->oclass == TILE_CLASS)
-		add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
-				"Speak the glyph on this tile", MENU_UNSELECTED);
+	else if (obj->oclass == TILE_CLASS){
+		if(obj->otyp >= SYLLABLE_OF_STRENGTH__AESH && obj->otyp <= SYLLABLE_OF_SPIRIT__VAUL)
+			add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
+					"Speak the glyph on this tile", MENU_UNSELECTED);
+		else if(obj->otyp >= ANTI_CLOCKWISE_METAMORPHOSIS_G && obj->otyp <= ORRERY_GLYPH)
+			add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
+					"Study the glyph on this shard", MENU_UNSELECTED);
+		else if(obj->otyp >= APHANACTONAN_RECORD && obj->otyp <= APHANACTONAN_ARCHIVE)
+			add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
+					"Study the glyphs on this disk", MENU_UNSELECTED);
+		else if(obj->otyp >= FIRST_WORD && obj->otyp <= WORD_OF_KNOWLEDGE)
+			add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
+					"Study the glyph on this slab", MENU_UNSELECTED);
+	}
 	else if (obj->oclass == SPBOOK_CLASS)
 		add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
 				"Study this spellbook", MENU_UNSELECTED);
@@ -3075,11 +3094,15 @@ winid *datawin;
 		/* other weapon special effects */
 		if(obj){
 			if(obj->otyp == TORCH){
-				Sprintf(buf2, "Deals 1d6 bonus fire damage when lit.");
+				Sprintf(buf2, "Deals 1d6 + enchantment bonus fire damage when lit.");
+				OBJPUTSTR(buf2);
+			}
+			if(obj->otyp == MAGIC_TORCH){
+				Sprintf(buf2, "Deals 1d4 + double enchantment bonus fire damage when lit.");
 				OBJPUTSTR(buf2);
 			}
 			if(obj->otyp == SHADOWLANDER_S_TORCH){
-				Sprintf(buf2, "Deals 1d6 bonus cold damage when lit.");
+				Sprintf(buf2, "Deals 1d6 + enchantment bonus cold damage when lit.");
 				OBJPUTSTR(buf2);
 			}
 			if(obj->otyp == SUNROD){
@@ -3399,6 +3422,15 @@ winid *datawin;
 			OBJPUTSTR("Adds a new ability to the #monster powers menu.");
 			OBJPUTSTR("Permanently grants plus three to pet cap.");
 		break;
+		case APHANACTONAN_RECORD:
+			OBJPUTSTR("Read to identify some random item types.");
+		break;
+		case APHANACTONAN_ARCHIVE:
+			OBJPUTSTR("Read to identify some random item types and other knowledge.");
+		break;
+		default:
+			OBJPUTSTR("Read to acquire the thought symbolized by this glyph.");
+		break;
 		}
 	}
 	if (olet == SPBOOK_CLASS) {
@@ -3536,6 +3568,7 @@ winid *datawin;
 		case CANDLE_OF_INVOCATION:
 		case TORCH: //actually over-ridden by being a weapon-tool
 		case SUNROD: //actually over-ridden by being a weapon-tool
+		case MAGIC_TORCH: //actually over-ridden by being a weapon-tool
 		case LANTERN:
 		case OIL_LAMP:
 		case MAGIC_LAMP:

@@ -214,6 +214,15 @@ struct monst * mdef;
 	
 	/* Do the attacks */
 	bhitpos.x = u.ux + u.dx; bhitpos.y = u.uy + u.dy;
+	if (!isok(bhitpos.x, bhitpos.y)) {
+		if (u.uswallow) {
+			bhitpos.x = u.ux;
+			bhitpos.y = u.uy;
+		}
+		else {
+			return TRUE;
+		}
+	}
 	notonhead = (bhitpos.x != x(mdef) || bhitpos.y != y(mdef));
 	if (attack_type == ATTACKCHECK_BLDTHRST) {
 		/* unintentional attacks only cause the one hit, no follow-ups */
@@ -561,7 +570,7 @@ int tary;
 			|| mdef == u.usteed
 #endif
 			) ? (!missedyou && (tarx != u.ux || tary != u.uy))
-			: (!missedother && m_at(tarx, tary) != mdef)
+			: (!missedother && m_at(tarx, tary) != mdef && !(youagr && u.uswallow && mdef == u.ustuck))
 		){
 			result = MM_AGR_STOP;
 			continue;
@@ -3076,12 +3085,23 @@ int vis;
 			case 2:/* Craze */
 				if (youdef) {
 					You("go insane!");
-					make_confused(10000, FALSE); //very large value representing insanity
+					make_confused(100, FALSE);
+					change_usanity(-1*d(10,6), TRUE);
 				}
-				else {
+				else if(!mindless_mon(mdef)){
 					if (canseemon(mdef))
 						pline("%s goes insane!", Monnam(mdef));
 					mdef->mcrazed = 1;
+					mdef->mberserk = 1;
+					(void) set_apparxy(mdef);
+					if(!rn2(4)){
+						mdef->mconf = 1;
+						(void) set_apparxy(mdef);
+					}
+					if(!rn2(10)){
+						mdef->mnotlaugh=0;
+						mdef->mlaughing=rnd(5);
+					}
 				}
 				break;
 			}
@@ -4016,6 +4036,9 @@ boolean ranged;
 	else {
 		dmg = 0;
 	}
+	if(attk->adtyp == AD_PERH){
+		dmg *= youdef ? u.ulevel : mdef->m_lev;
+	}
 	/* worms get increased damage on their bite if they are lined up with momentum */
 	if(!youagr && pa->mtyp == PM_LONG_WORM && magr->wormno && attk->aatyp == AT_BITE){
 		if(wormline(magr, bhitpos.x, bhitpos.y))
@@ -4207,6 +4230,7 @@ boolean ranged;
 	case AD_BLUD:	/* bloodied, phases (blade of blood) */
 	case AD_MERC:	/* poisoned, cold, phases (blade of mercury) */
 	case AD_GLSS:	/* silvered (mirror-shards) */
+	case AD_PERH:	/* physical damage */
 
 		/* abort if called with AT_NONE -- the attack was meant to only do special effects of the adtype. */
 		if (attk->aatyp == AT_NONE)
@@ -12316,6 +12340,7 @@ int vis;						/* True if action is at all visible to the player */
 
 	boolean hittxt = FALSE;
 	boolean lethaldamage = FALSE;
+	boolean mercy_blade = FALSE;
 
 	boolean melee = (hmoncode & HMON_WHACK);
 	boolean thrust = (hmoncode & HMON_THRUST);
@@ -12359,6 +12384,8 @@ int vis;						/* True if action is at all visible to the player */
 	int elemdmg = 0;	/* artifacts, objproperties, and clockwork heat */
 	int specdmg = 0;	/* sword of blood; sword of mercury */
 	int totldmg = 0;	/* total of subtotal and below */
+	
+	int wepspe = weapon ? weapon->spe : 0;		/* enchantment of weapon, saved in case it goes poof. */
 
 	int result;	/* value to return */
 
@@ -12824,6 +12851,9 @@ int vis;						/* True if action is at all visible to the player */
 			}
 		}
 	}
+	/* Will eventually do a mercy blade attack after all messages are printed */
+	if(valid_weapon_attack && (melee || thrust) && !recursed && is_mercy_blade(weapon))
+		mercy_blade = TRUE;
 	/* X-hating */
 	/* note: setting holyobj/etc affects messages later, but damage happens regardless of whether holyobj/etc is set correctly here */
 	if (weapon)
@@ -14540,6 +14570,7 @@ int vis;						/* True if action is at all visible to the player */
 	 *  - iron/silver/holy/unholy hating
 	 *  - poison (if vs player, NOW call poisoned() since it will print messages)
 	 *  - sword of blood
+	 *  - blade of mercy conflict
 	 */
 
 	/* sneak attack messages only if the player is attacking */
@@ -15281,7 +15312,20 @@ int vis;						/* True if action is at all visible to the player */
 			*weapon_p = NULL;
 		}
 	}
-	
+
+	/* Use the mercy blade */
+	/* this can print a message, can possibly kill monster, returning immediately */
+	if(mercy_blade){
+		if(u.uinsight >= 50 && (youdef || lethaldamage || !resist(mdef, youagr ? SPBOOK_CLASS : WEAPON_CLASS, 0, TRUE))){
+			mercy_blade_conflict(mdef, magr, wepspe, lethaldamage);
+		}
+		//Might have died in mvm combat, for example, attacking a cockatrice.
+		if(DEADMONSTER(mdef))
+			return MM_DEF_DIED;
+		//Don't think this can happen, but better safe than sorry.
+		if(MIGRATINGMONSTER(mdef))
+			return MM_AGR_STOP;
+	}
 	/* Deal Damage */
 	/* this can possibly kill, returning immediately */
 	result = xdamagey(magr, mdef, attk, totldmg);
