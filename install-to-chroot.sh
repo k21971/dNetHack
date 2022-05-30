@@ -19,7 +19,6 @@ NH_GIT="/home/build/dNetHack"
 # Make a new one each time save compat is broken
 NHSUBDIR="dnethack-3.21.3"
 #for combining xlogfile, etc on minor version bump
-#NH_LOG_SYMLINK_TARGET="/dnethack-3.21.3"
 # END OF CONFIG
 ##############################################################################
 
