@@ -19,7 +19,7 @@ NH_GIT="/home/build/dNetHack"
 # Make a new one each time save compat is broken
 NHSUBDIR="dnethack-3.21.2"
 #for combining xlogfile, etc on minor version bump
-#NH_LOG_SYMLINK_TARGET="/dnethack-3.21.2"
+#NH_LOG_SYMLINK_TARGET="/dnethack-3.21.3"
 # END OF CONFIG
 ##############################################################################
 
@@ -44,8 +44,8 @@ set -e
 umask 022
 
 echo "Creating inprogress and userdata directories"
-mkdir -p "$NAO_CHROOT/dgldir/inprogress-dnh3212"
-chown "$USRGRP" "$NAO_CHROOT/dgldir/inprogress-dnh3212"
+mkdir -p "$NAO_CHROOT/dgldir/inprogress-dnh3213"
+chown "$USRGRP" "$NAO_CHROOT/dgldir/inprogress-dnh3213"
 mkdir -p "$NAO_CHROOT/dgldir/extrainfo-dnh"
 chown "$USRGRP" "$NAO_CHROOT/dgldir/extrainfo-dnh"
 
