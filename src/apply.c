@@ -1964,18 +1964,17 @@ dorub()
 	    }
 	}
 
-	if (!obj || !wield_tool(obj, "rub")) return 0;
+	if (!obj) return 0;
 
-	/* now uwep is obj */
-	if (uwep->otyp == MAGIC_LAMP) {
-	    if (uwep->spe > 0 && !rn2(3)) {
-		check_unpaid_usage(uwep, TRUE);		/* unusual item use */
-		djinni_from_bottle(uwep);
+	if (obj->otyp == MAGIC_LAMP) {
+	    if (obj->spe > 0 && !rn2(3)) {
+		check_unpaid_usage(obj, TRUE);		/* unusual item use */
+		djinni_from_bottle(obj);
 		makeknown(MAGIC_LAMP);
-		uwep->otyp = OIL_LAMP;
-		uwep->spe = 0; /* for safety */
-		uwep->age = rn1(500,1000);
-		if (uwep->lamplit) begin_burn(uwep);
+		obj->otyp = OIL_LAMP;
+		obj->spe = 0; /* for safety */
+		obj->age = rn1(500,1000);
+		if (obj->lamplit) begin_burn(obj);
 		update_inventory();
 	    } else if (rn2(2) && !Blind)
 		You("see a puff of smoke.");
@@ -4572,8 +4571,9 @@ use_grapple (obj)
 	    end_menu(tmpwin, "Aim for what?");
 	    tohit = rn2(4);
 	    if (select_menu(tmpwin, PICK_ONE, &selected) > 0 &&
-			rn2(P_SKILL(typ) > P_SKILLED ? 20 : 2))
-		tohit = selected[0].item.a_int - 1;
+			rn2(P_SKILL(typ) > P_SKILLED ? 20 : 2)
+		)
+			tohit = selected[0].item.a_int - 1;
 	    free((genericptr_t)selected);
 	    destroy_nhwindow(tmpwin);
 	}
@@ -4671,7 +4671,11 @@ use_crook (obj)
 	    end_menu(tmpwin, "Aim for what?");
 	    if (select_menu(tmpwin, PICK_ONE, &selected) > 0)
 			tohit = selected[0].item.a_int - 1;
-		else return 0;
+		else {
+			free((genericptr_t)selected);
+			destroy_nhwindow(tmpwin);
+			return 0;
+		}
 	    free((genericptr_t)selected);
 	    destroy_nhwindow(tmpwin);
 	}
