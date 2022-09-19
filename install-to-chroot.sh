@@ -76,6 +76,8 @@ echo "Creating NetHack variable dir stuff."
 # chown -R "$USRGRP" "$NAO_CHROOT/$NHSUBDIR/var"
 mkdir -p "$NAO_CHROOT/$NHSUBDIR/save"
 chown -R "$USRGRP" "$NAO_CHROOT/$NHSUBDIR/save"
+mkdir -p "$NAO_CHROOT/$NHSUBDIR/save/backup"
+chown -R "$USRGRP" "$NAO_CHROOT/$NHSUBDIR/save/backup"
 mkdir -p "$NAO_CHROOT/$NHSUBDIR/whereis"
 chown -R "$USRGRP" "$NAO_CHROOT/$NHSUBDIR/whereis"
 
