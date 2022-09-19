@@ -5,6 +5,7 @@
 #include "hack.h"
 #include "mfndpos.h"
 #include "artifact.h"
+#include "xhity.h"
 
 extern boolean notonhead;
 extern struct attack noattack;
@@ -113,7 +114,7 @@ dochugw(mtmp)
 	     * which the weapon does extra damage, as there is no "monster
 	     * which the weapon warns against" field.
 	     */
-	    if (spec_ability(uwep, SPFX_WARN) && spec_dbon(uwep, mtmp, 1, (int *)0, (int *)0))
+	    if (spec_ability(uwep, SPFX_WARN) && spec_dbon(uwep, &youmonst, mtmp, 1, (int *)0, (int *)0))
 		warnlevel = 100;
 	    else if ((int) (mtmp->m_lev / 4) > warnlevel)
 		warnlevel = (mtmp->m_lev / 4);
@@ -156,15 +157,41 @@ struct monst *mtmp;
 	if(mtmp == &youmonst)
 		return FALSE;
 	
-	if(no_upos(mtmp))
-		return FALSE;
-	
 	/* Nitocris's wrappings are especially warded against Nyarlathotep, and accidently work vs. summons generally */
 	if(u.ux == x && u.uy == y && !mtmp->mpeaceful && (get_mx(mtmp, MX_ESUM) || is_mask_of_nyarlathotep(mtmp->data)) && uarmc && uarmc->oartifact == ART_SPELL_WARDED_WRAPPINGS_OF_)
 		return TRUE;
-	else if(mat && (get_mx(mtmp, MX_ESUM) || is_mask_of_nyarlathotep(mtmp->data)) && which_armor(mat, W_ARMC) && which_armor(mat, W_ARMC)->oartifact == ART_SPELL_WARDED_WRAPPINGS_OF_)
+	if(!no_upos(mtmp) && mtmp->mux == x && mtmp->muy == y && !mtmp->mpeaceful && (get_mx(mtmp, MX_ESUM) || is_mask_of_nyarlathotep(mtmp->data)) && uarmc && uarmc->oartifact == ART_SPELL_WARDED_WRAPPINGS_OF_)
 		return TRUE;
+	if(mat && (get_mx(mtmp, MX_ESUM) || is_mask_of_nyarlathotep(mtmp->data)) && which_armor(mat, W_ARMC) && which_armor(mat, W_ARMC)->oartifact == ART_SPELL_WARDED_WRAPPINGS_OF_)
+		return TRUE;
+
+	if(no_upos(mtmp) && !mat)
+		return FALSE;
 	
+	if(mat && rn2(100) < (80-mtmp->m_lev)){
+		if(mtmp->msanctity && gender(mat) == 1){
+			return TRUE;
+		}
+		if(mtmp->marachno && humanoid_upperbody(mat->data) && gender(mat) == 1){
+			return TRUE;
+		}
+		if(mtmp->margent && gender(mat) == 0){
+			return TRUE;
+		}
+	}
+	if(!no_upos(mtmp) && mtmp->mux == x && mtmp->muy == y && rn2(100) < (80-mtmp->m_lev)){
+		char curgen = is_neuter(youracedata) ? 2 : Upolyd ? u.mfemale : flags.female;
+		if(mtmp->msanctity && curgen == 1){
+			return TRUE;
+		}
+		if(mtmp->marachno && humanoid_upperbody(youracedata) && curgen == 1){
+			return TRUE;
+		}
+		if(mtmp->margent && curgen == 0){
+			return TRUE;
+		}
+	}
+
 	return (boolean)(
 				((
 					sobj_at(SCR_SCARE_MONSTER, x, y)
@@ -251,6 +278,7 @@ struct monst *mtmp;
 	return 	mtmp->data->mlet == S_DOG ||
 			mtmp->data->mlet == S_FELINE;
 }
+
 boolean
 scaryDre(mtmp)
 struct monst *mtmp;
@@ -776,22 +804,57 @@ boolean digest_meal;
 			}
 		}
 	}
-	if(is_uvuudaum(mon->data)){
-		mon->mhp += 25; //Fast healing
-	} else {
-		if(mon->mhp < mon->mhpmax && mon_resistance(mon,REGENERATION)) mon->mhp++;
+	/*Cthulhu's mind blast*/
+	if(mon->mdreams && (mon->msleeping || !rn2(70)) && !rn2(5)){
+		int dmg;
+		int nd = 1;
+		if(on_level(&rlyeh_level,&u.uz))
+			nd = 5;
+		dmg = d(nd,15);
+		if(Half_spel(mon))
+			dmg = (dmg+1) / 2;
+		if(m_losehp(mon, dmg, FALSE, "fevered dreams"))
+			return; //Died.
+		if(!mon->msleeping && !resists_sleep(mon)){
+			mon->msleeping = 1;
+			slept_monst(mon);
+		}
+		
+	}
+	if(mon->mhp < mon->mhpmax){
+		int perX = 0;
+		if(is_uvuudaum(mon->data)){
+			perX += 25*HEALCYCLE; //Fast healing
+		} else {
+			perX += mon->m_lev;
+		}
+		//Worn Vilya bonus ranges from (penalty) to +7 HP per 10 turns
+		if(uring_art(ART_VILYA)){
+			perX += heal_vilya()*HEALCYCLE/10;
+		}
 		if(!nonliving(mon->data)){
+			if(perX < 1)
+				perX = 1;
 			if (mon->mhp < mon->mhpmax){
 				//recover 1/HEALCYCLEth hp per turn:
-				mon->mhp += (mon->m_lev)/HEALCYCLE;
+				mon->mhp += perX/HEALCYCLE;
 				//Now deal with any remainder
-				if(((moves)*((mon->m_lev)%HEALCYCLE))/HEALCYCLE > ((moves-1)*((mon->m_lev)%HEALCYCLE))/HEALCYCLE) mon->mhp += 1;
+				if(((moves)*(perX%HEALCYCLE))/HEALCYCLE > ((moves-1)*(perX%HEALCYCLE))/HEALCYCLE)
+					mon->mhp += 1;
 			}
 		}
+		if(mon_resistance(mon,REGENERATION))
+			mon->mhp+=1;
+		if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING && !mindless_mon(mon) && !is_deaf(mon) && mon->mtame)
+			mon->mhp += 1;
+		if (mon->mhp > mon->mhpmax)
+			mon->mhp = mon->mhpmax;
 	}
-	if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING && !mindless_mon(mon) && !is_deaf(mon) && mon->mtame) mon->mhp += 1;
-	if (mon->mhp > mon->mhpmax) mon->mhp = mon->mhpmax;
 	if (mon->mspec_used) mon->mspec_used--;
+
+	if(mon->mspec_used && uring_art(ART_LOMYA)){
+		mon->mspec_used--;
+	}
 	if (digest_meal) {
 	    if (mon->meating) mon->meating--;
 	}
@@ -1112,9 +1175,20 @@ register struct monst *mtmp;
 			mtmp->mlaughing=rnd(5);
 		}
 	}
+	if(mtmp->mrage){
+		extern const int monstr[];
+		if(!rn2(4)){
+			mtmp->mberserk = 1;
+			(void) set_apparxy(mtmp);
+		}
+		mtmp->encouraged = max(mtmp->encouraged, min(20, monstr[mtmp->mtyp]));
+	}
 	
 	if(mtmp->mdisrobe){
-		if(mon_remove_armor(mtmp))
+		if(mon_throw_armor(mtmp))
+			return 0;
+	} else if(mtmp->mnudist){
+		if(mon_strip_armor(mtmp))
 			return 0;
 	}
 	
@@ -1170,7 +1244,7 @@ register struct monst *mtmp;
 				int type = mtmp->mvar_dracaePreg;
 				mtmp->mvar_dracaePreg = 0;
 				mtmp->mvar_dracaePregTimer = 0;
-				mtmp = makemon(&mons[type], ox, oy, NO_MINVENT);
+				mtmp = makemon(&mons[type], ox, oy, NO_MINVENT|MM_NOCOUNTBIRTH);
 				if(mtmp){
 					struct obj *otmp;
 					otmp = mksobj(LONG_SWORD, MKOBJ_NOINIT);
@@ -1195,6 +1269,7 @@ register struct monst *mtmp;
 					fix_object(otmp);
 					(void) mpickobj(mtmp, otmp);
 					m_dowear(mtmp, TRUE);
+					m_level_up_intrinsic(mtmp);
 				}
 			}
 			return 0;
@@ -1217,7 +1292,7 @@ register struct monst *mtmp;
 			mtmp->mvar_dracaePregTimer = 0;
 			for(i = rnd(4); i; i--){
 				if(etyp)
-					mtmp = makemon(&mons[etyp], ox, oy, NO_MINVENT|MM_ADJACENTOK|MM_ADJACENTSTRICT);
+					mtmp = makemon(&mons[etyp], ox, oy, NO_MINVENT|MM_ADJACENTOK|MM_ADJACENTSTRICT|MM_NOCOUNTBIRTH);
 				else return 0;
 				if(mtmp){
 					struct obj *otmp;
@@ -1243,6 +1318,61 @@ register struct monst *mtmp;
 					fix_object(otmp);
 					(void) mpickobj(mtmp, otmp);
 				}
+			}
+			return 0;
+		}
+	}
+	if(mtmp->mtyp == PM_JRT_NETJER && !mtmp->mpeaceful && !mtmp->mcan && !rn2(3)){
+		int type;
+		int ox = mtmp->mx, oy = mtmp->my;
+		struct monst *tmpm;
+		boolean printed = FALSE;
+		if(canseemon(mtmp)){
+			pline("Stars twinkle around %s.", mon_nam(mtmp));
+			printed = TRUE;
+		}
+		rloc(mtmp, TRUE);
+		if(mtmp->mx != ox || mtmp->my != oy){
+			if(rn2(3)){
+				type = PM_COURE_ELADRIN;
+			}
+			else {
+				if(dungeon_topology.alt_tulani == CAILLEA_CASTE)
+					type = PM_CAILLEA_ELADRIN;
+				else
+					type = PM_TULANI_ELADRIN;
+			}
+			tmpm = makemon(&mons[type], ox, oy, NO_MINVENT|MM_NOCOUNTBIRTH);
+			if(tmpm){
+				struct obj *otmp;
+				if(canseemon(tmpm))
+					pline("%stars coalesce into %s!", printed ? "The s" : "S", an(mons[type].mname));
+				otmp = mongets(tmpm, KHOPESH, MKOBJ_NOINIT);
+				set_material_gm(otmp, COPPER);
+				add_oprop(otmp, OPROP_HOLYW);
+				if(type != PM_TULANI_ELADRIN){
+					otmp = mongets(tmpm, KHOPESH, MKOBJ_NOINIT);
+					set_material_gm(otmp, COPPER);
+					add_oprop(otmp, OPROP_HOLYW);
+				}
+				otmp = mongets(tmpm, ARCHAIC_HELM, MKOBJ_NOINIT);
+				set_material_gm(otmp, COPPER);
+				add_oprop(otmp, OPROP_HOLY);
+				
+				otmp = mongets(tmpm, WAISTCLOTH, MKOBJ_NOINIT);
+				set_material_gm(otmp, CLOTH);
+				add_oprop(otmp, OPROP_HOLY);
+				otmp->obj_color = CLR_WHITE;
+				tmpm->mpeaceful = mtmp->mpeaceful;
+				set_malign(tmpm);
+				if(has_template(mtmp, POISON_TEMPLATE))
+					set_template(tmpm, POISON_TEMPLATE);
+				else if(has_template(mtmp, MAD_TEMPLATE))
+					set_template(tmpm, FALLEN_TEMPLATE);
+				else if(has_template(mtmp, FALLEN_TEMPLATE))
+					set_template(tmpm, FALLEN_TEMPLATE);
+				if(mtmp->mfaction)
+					set_faction(tmpm, mtmp->mfaction);
 			}
 			return 0;
 		}
@@ -1593,7 +1723,7 @@ register struct monst *mtmp;
 	/* the watch will look around and see if you are up to no good :-) */
 	if (mdat->mtyp == PM_WATCHMAN || mdat->mtyp == PM_WATCH_CAPTAIN)
 		watch_on_duty(mtmp);
-	if(mdat->mtyp == PM_NURSE || mdat->mtyp == PM_HEALER || mdat->mtyp == PM_CLAIRVOYANT_CHANGED){
+	if(mdat->mtyp == PM_NURSE || mdat->mtyp == PM_HEALER || mdat->mtyp == PM_CLAIRVOYANT_CHANGED || mdat->mtyp == PM_VEIL_RENDER){
 		int i, j;
 		struct trap *ttmp;
 		struct monst *tmon;
@@ -1602,20 +1732,42 @@ register struct monst *mtmp;
 				if(isok(mtmp->mx+i,mtmp->my+j)){
 					ttmp = t_at(mtmp->mx+i,mtmp->my+j);
 					tmon = m_at(mtmp->mx+i,mtmp->my+j);
-					if(ttmp && ttmp->ttyp == VIVI_TRAP && tmon && tmon->mtrapped){
-						if(canspotmon(mtmp))
-							pline("%s frees a vivisected prisoner from an essence trap!", Monnam(mtmp));
-						tmon->mpeaceful = mtmp->mpeaceful;
-						tmon->mtrapped = 0;
-						if(mtmp->mtame){
-							reward_untrap(ttmp, tmon);
-							u.uevent.uaxus_foe = 1;
-							pline("An alarm sounds!");
-							aggravate();
+					if(tmon){
+						if(tmon->mtrapped && ttmp && ttmp->ttyp == VIVI_TRAP){
+							if(canspotmon(mtmp))
+								pline("%s frees a vivisected prisoner from an essence trap!", Monnam(mtmp));
+							tmon->mpeaceful = mtmp->mpeaceful;
+							tmon->mtrapped = 0;
+							if(mtmp->mtame){
+								reward_untrap(ttmp, tmon);
+								u.uevent.uaxus_foe = 1;
+								pline("An alarm sounds!");
+								aggravate();
+							}
+							deltrap(ttmp);
+							newsym(mtmp->mx+i,mtmp->my+j);
+							return 1;
 						}
-						deltrap(ttmp);
-						newsym(mtmp->mx+i,mtmp->my+j);
-						return 1;
+						else if(tmon->mtyp == PM_JRT_NETJER && has_template(tmon, POISON_TEMPLATE) && mon_can_see_mon(mtmp, tmon)){
+							struct obj *armor = which_armor(tmon, W_ARM);
+							struct obj *under = which_armor(tmon, W_ARMU);
+							if((!armor || !arm_blocks_upper_body(armor->otyp)) && (!under || !arm_blocks_upper_body(under->otyp)) && helpless_still(tmon)){
+								pline("%s extracts the fang from %s heart!", Monnam(mtmp), s_suffix(mon_nam(tmon)));
+								set_template(tmon, 0);
+								struct monst *newmon = tamedog_core(tmon, (struct obj *)0, TRUE);
+								if(newmon){
+									tmon = newmon;
+									newsym(tmon->mx, tmon->my);
+									tmon->mpeaceful = mtmp->mpeaceful;
+									if(mtmp->mtame){
+										pline("%s comes to %s senses, and is incredibly grateful for the aid!", Monnam(tmon), mhis(tmon));
+										if(get_mx(tmon, MX_EDOG)){
+											EDOG(tmon)->loyal = 1;
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 	}
@@ -1650,7 +1802,9 @@ register struct monst *mtmp;
 				pline("%s gyres and gimbles into the %s.", Monnam(mtmp),surface(mtmp->mx,mtmp->my));
 			if (typ != ROOM) {
 				lev->typ = typ;
-				if (ttmp) (void) delfloortrap(ttmp);
+				if (ttmp) {
+					if (delfloortrap(ttmp)) ttmp = (struct trap *)0;
+				}
 				/* if any objects were frozen here, they're released now */
 				unearth_objs(mtmp->mx, mtmp->my);
 
@@ -1756,19 +1910,19 @@ register struct monst *mtmp;
 					}
 					if(power >= 4 && !Babble && !Screaming){
 						if(rn2(3)){
-							if(!ClearThoughts)
+							if(!BlockableClearThoughts)
 								You("scream in pain!");
 							HScreaming = 2;
 						}
 						else if(rn2(2)){
-							if(ClearThoughts)
+							if(BlockableClearThoughts)
 								You_feel("a little frightened.");
 							else
 								You("begin screaming in terror and madness!");
 							HScreaming = 1+rnd((dmg)/5+1)+rnd((dmg)/5+1);
 						}
 						else {
-							if(ClearThoughts)
+							if(BlockableClearThoughts)
 								You_feel("a little incoherent.");
 							else
 								You("begin babbling incoherently!");
@@ -1842,74 +1996,76 @@ register struct monst *mtmp;
 					m2->mhp -= dmg;
 					if (m2->mhp <= 0)
 						monkilled(m2, "", AD_DRIN);
-					else
+					else {
 						m2->msleeping = 0;
-					if(mdat->mtyp == PM_GREAT_CTHULHU) 
-						m2->mconf=TRUE;
-					else if(mdat->mtyp == PM_CLAIRVOYANT_CHANGED){
-						if(power >= 3){
-							m2->mconf=TRUE;
-						}
-						if(power >= 4){
-							if(rn2(3)){
-								//Scream in pain
-								if (!is_silent_mon(m2)){
-									if (canseemon(m2))
-										pline("%s %s in pain!", Monnam(m2), humanoid_torso(m2->data) ? "screams" : "shrieks");
-									else You_hear("%s %s in pain!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2), humanoid_torso(m2->data) ? "screaming" : "shrieking");
-								}
-								else {
-									if (canseemon(m2))
-										pline("%s writhes in pain!", Monnam(m2));
-								}
-								m2->movement = max(m2->movement - 12, -12);
-							}
-							else if(rn2(2)){
-								//Laugh in madness
-								if (!is_silent_mon(m2)){
-									if (canseemon(m2))
-										pline("%s begins laughing hysterically!", Monnam(m2));
-									else You_hear("%s begin laughing hysterically!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2));
-								}
-								else {
-									if (canseemon(m2))
-										pline("%s begins tembling hysterically!", Monnam(m2));
-								}
-								mtmp->mlaughing = dmg;
-								m2->mnotlaugh = FALSE;
-							}
-							else {
-								//Babble (set cooldown)
-								if (!is_silent_mon(m2)){
-									if (canseemon(m2))
-										pline("%s %s!", Monnam(m2), humanoid_torso(m2->data) ? "babbles incoherently" : "makes confused noises");
-									else You_hear("%s %s in!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2), humanoid_torso(m2->data) ? "babbling incoherently" : "making confused noises");
-									m2->mspec_used += 2*dmg;
-								}
-							}
-							if(power >= 7){
-								if(canseemon(m2))
-									pline("%s vomits!", Monnam(m2));
-								m2->mcanmove = 0;
-								if ((m2->mfrozen + 3) > 127)
-									m2->mfrozen = 127;
-								else m2->mfrozen += 3;
-								if (get_mx(m2, MX_EDOG)) {
-									EDOG(m2)->hungrytime = max(0, EDOG(m2)->hungrytime-20);
-								}
-							}
-						}
-					} else if(mdat->mtyp == PM_ELDER_BRAIN){
-						m2->mhp -= dmg;
-						m2->mstdy = max(dmg, m2->mstdy);
-					} else {
-						if(mdat->mtyp == PM_SEMBLANCE) 
-							m2->mconf=TRUE;
 					}
-					if(has_template(mtmp, DREAM_LEECH)){
-						if (!resists_sleep(m2)){
-							m2->msleeping = 1;
-							slept_monst(m2);
+					if(!DEADMONSTER(m2)){
+						if(mdat->mtyp == PM_GREAT_CTHULHU) 
+							m2->mconf=TRUE;
+						else if(mdat->mtyp == PM_CLAIRVOYANT_CHANGED){
+							if(power >= 3){
+								m2->mconf=TRUE;
+							}
+							if(power >= 4){
+								if(rn2(3)){
+									//Scream in pain
+									if (!is_silent_mon(m2)){
+										if (canseemon(m2))
+											pline("%s %s in pain!", Monnam(m2), humanoid_torso(m2->data) ? "screams" : "shrieks");
+										else You_hear("%s %s in pain!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2), humanoid_torso(m2->data) ? "screaming" : "shrieking");
+									}
+									else {
+										if (canseemon(m2))
+											pline("%s writhes in pain!", Monnam(m2));
+									}
+									m2->movement = max(m2->movement - 12, -12);
+								}
+								else if(rn2(2)){
+									//Laugh in madness
+									if (!is_silent_mon(m2)){
+										if (canseemon(m2))
+											pline("%s begins laughing hysterically!", Monnam(m2));
+										else You_hear("%s begin laughing hysterically!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2));
+									}
+									else {
+										if (canseemon(m2))
+											pline("%s begins tembling hysterically!", Monnam(m2));
+									}
+									m2->mlaughing = min(100, dmg);
+									m2->mnotlaugh = FALSE;
+								}
+								else {
+									//Babble (set cooldown)
+									if (!is_silent_mon(m2)){
+										if (canseemon(m2))
+											pline("%s %s!", Monnam(m2), humanoid_torso(m2->data) ? "babbles incoherently" : "makes confused noises");
+										else You_hear("%s %s in!", m2->mtame ? noit_mon_nam(m2) : mon_nam(m2), humanoid_torso(m2->data) ? "babbling incoherently" : "making confused noises");
+										m2->mspec_used += 2*dmg;
+									}
+								}
+								if(power >= 7){
+									if(canseemon(m2))
+										pline("%s vomits!", Monnam(m2));
+									m2->mcanmove = 0;
+									if ((m2->mfrozen + 3) > 127)
+										m2->mfrozen = 127;
+									else m2->mfrozen += 3;
+									if (get_mx(m2, MX_EDOG)) {
+										EDOG(m2)->hungrytime = max(0, EDOG(m2)->hungrytime-20);
+									}
+								}
+							}
+						} else if(mdat->mtyp == PM_ELDER_BRAIN){
+							m2->mstdy = max(dmg, m2->mstdy);
+						} else {
+							if(mdat->mtyp == PM_SEMBLANCE) 
+								m2->mconf=TRUE;
+						}
+						if(has_template(mtmp, DREAM_LEECH)){
+							if (!resists_sleep(m2)){
+								m2->msleeping = 1;
+								slept_monst(m2);
+							}
 						}
 					}
 				}
@@ -2060,6 +2216,7 @@ static NEARDATA const char magical[] = {
 static NEARDATA const char indigestion[] = { BALL_CLASS, ROCK_CLASS, 0 };
 static NEARDATA const char boulder_class[] = { ROCK_CLASS, 0 };
 static NEARDATA const char gem_class[] = { GEM_CLASS, 0 };
+static NEARDATA const char tool_class[] = { TOOL_CLASS, 0 };
 
 boolean
 itsstuck(mtmp)
@@ -2086,7 +2243,7 @@ register int after;
 	int appr;
 	xchar gx,gy,nix,niy,chcnt;
 	int chi;	/* could be schar except for stupid Sun-2 compiler */
-	boolean likegold=0, likegems=0, likeobjs=0, likemagic=0, conceals=0;
+	boolean likegold=0, likegems=0, likeobjs=0, likemagic=0, likefood=0, likemirrors=0, conceals=0;
 	boolean likerock=0, can_tunnel=0;
 	boolean can_open=0, can_unlock=0, doorbuster=0;
 	boolean uses_items=0, setlikes=0;
@@ -2134,7 +2291,7 @@ register int after;
 	can_open = !(nohands(ptr) || verysmall(ptr) || straitjacketed_mon(mtmp));
 	can_unlock = ((can_open && (m_carrying(mtmp, SKELETON_KEY)||m_carrying(mtmp, UNIVERSAL_KEY))) ||
 		      mtmp->iswiz || is_rider(ptr) || ptr->mtyp==PM_DREAD_SERAPH);
-	doorbuster = is_giant(ptr);
+	doorbuster = species_busts_doors(ptr);
 	if(mtmp->wormno) goto not_special;
 	/* my dog gets special treatment */
 	if(mtmp->mtame) {
@@ -2170,7 +2327,7 @@ register int after;
 	    if((dist2(mtmp->mx, mtmp->my, tx, ty) < 2) &&
 	       intruder && (intruder != mtmp)) {
 			notonhead = (intruder->mx != tx || intruder->my != ty);
-			if(mattackm(mtmp, intruder) == 2) return(2);
+			if(mattackm(mtmp, intruder)&(MM_AGR_DIED)) return(2);
 			mmoved = 1;
 			goto postmov;
 		} else if(mtmp->mtyp != PM_DEMOGORGON 
@@ -2286,9 +2443,11 @@ not_special:
 				likegems = (likes_gems(ptr) && pctload < 85);
 				uses_items = (!mindless_mon(mtmp) && !is_animal(ptr)
 					&& pctload < 75);
-				likeobjs = (!mtmp->mdisrobe && likes_objs(ptr) && pctload < 75);
+				likeobjs = (!mad_no_armor(mtmp) && likes_objs(ptr) && pctload < 75);
 				likemagic = (likes_magic(ptr) && pctload < 85);
 				likerock = (throws_rocks(ptr) && pctload < 50 && !In_sokoban(&u.uz));
+				likefood = mtmp->mgluttony;
+				likemirrors = (mtmp->margent && pctload < 100);
 				conceals = hides_under(ptr);
 				setlikes = TRUE;
 			}
@@ -2310,7 +2469,7 @@ not_special:
 	/* guards shouldn't get too distracted */
 	if(!mtmp->mpeaceful && is_mercenary(ptr)) minr = 1;
 
-	if((likegold || likegems || likeobjs || likemagic || likerock || conceals)
+	if((likegold || likegems || likeobjs || likemagic || likerock || likefood || likemirrors || conceals)
 	      && (!*in_rooms(omx, omy, SHOPBASE) || (!rn2(25) && !mtmp->isshk))) {
 	look_for_obj:
 	    oomx = min(COLNO-1, omx+minr);
@@ -2354,6 +2513,10 @@ not_special:
 					is_boulder(otmp))) ||
 				(likegems && (
 					otmp->oclass == GEM_CLASS && otmp->obj_material != MINERAL)) ||
+				(likefood && (
+					otmp->oclass == FOOD_CLASS || (otmp->obj_material == VEGGY && herbivorous(ptr)) || (otmp->obj_material == FLESH && carnivorous(ptr)) )) ||
+				(likemirrors && (
+					otmp->otyp == MIRROR || item_has_property(otmp, REFLECTING) )) ||
 				(conceals && (
 					!cansee(otmp->ox, otmp->oy))) ||
 				((ptr->mtyp == PM_GELATINOUS_CUBE || ptr->mtyp == PM_ANCIENT_OF_CORRUPTION) && (
@@ -2394,7 +2557,7 @@ not_special:
 	} else if(likegold) {
 	    /* don't try to pick up anything else, but use the same loop */
 	    uses_items = 0;
-	    likegems = likeobjs = likemagic = likerock = conceals = 0;
+	    likegems = likeobjs = likemagic = likerock = likefood = likemirrors = conceals = 0;
 	    goto look_for_obj;
 	}
 
@@ -2716,7 +2879,9 @@ not_special:
 		
 		if(mtmp->mtyp == PM_SURYA_DEVA){
 			struct monst *blade;
-			for(blade = fmon; blade; blade = blade->nmon) if(blade->mtyp == PM_DANCING_BLADE && mtmp->m_id == blade->mvar_suryaID) break;
+			for(blade = fmon; blade; blade = blade->nmon)
+				if(blade->mtyp == PM_DANCING_BLADE && mtmp->m_id == blade->mvar_suryaID && !DEADMONSTER(blade))
+					break;
 			if(blade){
 				int bx = blade->mx, by = blade->my;
 				remove_monster(bx, by);
@@ -2865,28 +3030,31 @@ postmov:
 		    likegems = (likes_gems(ptr) && pctload < 85);
 		    uses_items = (!mindless_mon(mtmp) && !is_animal(ptr)
 				  && pctload < 75);
-		    likeobjs = (!mtmp->mdisrobe && likes_objs(ptr) && pctload < 75);
+		    likeobjs = (!mad_no_armor(mtmp) && likes_objs(ptr) && pctload < 75);
 		    likemagic = (likes_magic(ptr) && pctload < 85);
 		    likerock = (throws_rocks(ptr) && pctload < 50 &&
 				!In_sokoban(&u.uz));
 		    conceals = hides_under(ptr);
 		}
 
-		/* Maybe a rock mole just ate some metal object */
-		if (metallivorous(ptr)) {
-		    if (meatmetal(mtmp) == 2) return 2;	/* it died */
+		if(ptr->mtyp == PM_NACHASH_TANNIN){
+			mvanishobj(mtmp, mtmp->mx, mtmp->my);
 		}
-
-		if(g_at(mtmp->mx,mtmp->my) && likegold) mpickgold(mtmp);
 
 		/* Maybe a cube ate just about anything */
 		if (ptr->mtyp == PM_GELATINOUS_CUBE || ptr->mtyp == PM_ANCIENT_OF_CORRUPTION) {
 		    if (meatobj(mtmp) == 2) return 2;	/* it died */
 		}
-		
-		if(ptr->mtyp == PM_NACHASH_TANNIN){
-			mvanishobj(mtmp, mtmp->mx, mtmp->my);
+		/* Maybe a rock mole just ate some metal object */
+		else if (metallivorous(ptr)) {
+		    if (meatmetal(mtmp) == 2) return 2;	/* it died */
 		}
+		/* Maybe a gluttonous monster just ate some food */
+		else if (mtmp->mgluttony || mtmp->mcannibal) {
+		    if (meatgluttony(mtmp) == 2) return 2;	/* it died */
+		}
+
+		if(g_at(mtmp->mx,mtmp->my) && likegold) mpickgold(mtmp);
 
 		if(!*in_rooms(mtmp->mx, mtmp->my, SHOPBASE) || !rn2(25)) {
 		    boolean picked = FALSE;
@@ -2895,6 +3063,7 @@ postmov:
 		    if(likemagic) picked |= mpickstuff(mtmp, magical);
 		    if(likerock) picked |= mpickstuff(mtmp, boulder_class);
 		    if(likegems) picked |= mpickstuff(mtmp, gem_class);
+		    if(likemirrors) picked |= mpickstuff(mtmp, tool_class);
 		    if(uses_items) picked |= mpickstuff(mtmp, (char *)0);
 		    if(picked) mmoved = 3;
 		}

@@ -54,8 +54,7 @@ struct flag {
 	boolean  mon_moving;	/* monsters' turn to move */
 	boolean  run_timers;	/* run timers as soon as possible (probably to desummon items) */
 	boolean  drgn_brth;		/* for use with breath weapons, indicates that a dragon is breathing */
-	boolean  move;
-	boolean  mv;
+	boolean  mv;		/* player is doing a multi-tile movement */
 	boolean  bypasses;	/* bypass flag is set on at least one fobj */
 	boolean  nap;		/* `timed_delay' option for display effects */
 	boolean  nopick;	/* do not pickup objects (as when running) */
@@ -91,6 +90,25 @@ struct flag {
 	boolean  toptenwin;	/* ending list in window instead of stdout */
 	boolean  verbose;	/* max battle info */
 	boolean  prayconfirm;	/* confirm before praying */
+
+	int move;	/* type[s] of action taken by player's last input/action */
+	int movetoprint;
+	int movetoprintcost;
+#define MOVE_DEFAULT				0x04000	/* equivalent to Standard unless another move is layered overtop, in which case it is ignored */
+#define MOVE_CANCELLED				0x08000	/* Like move instant, but does not update the bottom line. Use for cancelled actions and non-functional menus, etc */
+#define MOVE_FINISHED_OCCUPATION	0x10000	/* finished an occupation; does not affect action time */
+#define MOVE_STANDARD				0x00001	/* player did a general action -- takes 1 standard turn */
+#define MOVE_INSTANT				0x00002	/* player did an action that should take no time */
+#define MOVE_PARTIAL				0x00004	/* player did a general action -- takes no time for the first instance, 1 standard turn after, resets on non-instant action */ 
+#define MOVE_MOVED					0x00008	/* player moved */
+#define MOVE_ATTACKED				0x00010	/* player made a weapon attack */
+#define MOVE_QUAFFED				0x00020	/* player quaffed a potion (or sink/fountain) */
+#define MOVE_ZAPPED					0x00040	/* player zapped a wand */
+#define MOVE_READ					0x00080	/* player read a book, scroll, or other readable */
+#define MOVE_CASTSPELL				0x00100	/* player cast a spell */
+#define MOVE_ATE					0x00200	/* player ate food */
+#define MOVE_FIRED					0x00400	/* player properly fired ammo, using a launcher or intrinsic launching means, NOT a standard thrown object. */
+
 	int	 end_top, end_around;	/* describe desired score list */
 	unsigned ident;		/* social security number for each monster */
 	unsigned moonphase;
@@ -343,6 +361,7 @@ struct instance_flags {
     boolean artifact_descriptors;
 	boolean force_artifact_names;
     boolean dnethack_dungeon_colors;
+    boolean invweight;
 	boolean quick_m_abilities;
 
 	int pokedex;	/* default monster stats to show in the pokedex */
@@ -421,6 +440,7 @@ struct instance_flags {
 	int	 runmode;	/* update screen display during run moves */
 	int delay_length;	/* length of delay for delay_output */
 	int wizlevelport;	/* options for ^V in wizmode */
+	int wizcombatdebug;	/* options for combat debug messages (damage, accuracy) */
 #ifdef AUTOPICKUP_EXCEPTIONS
 	struct autopickup_exception *autopickup_exceptions[2];
 #define AP_LEAVE 0
@@ -472,4 +492,19 @@ extern NEARDATA struct instance_flags iflags;
 #define WIZLVLPORT_TWOMENU			1	/* Select a branch, then a level in that branch */
 #define WIZLVLPORT_BRANCHES_FIRST	2	/* With TWOMENU, don't show levels in each branch during 1st selection */
 #define WIZLVLPORT_SELECTED_DUNGEON	4	/* With TWOMENU, only show the levels of the selected branch during 2nd selection */
+
+/* wizcombatdebug options */
+#define WIZCOMBATDEBUG_NONE		0x00
+#define WIZCOMBATDEBUG_DMG		0x01
+#define WIZCOMBATDEBUG_FULLDMG	0x02
+#define WIZCOMBATDEBUG_ACCURACY	0x04
+#define WIZCOMBATDEBUG_UVM		0x08
+#define WIZCOMBATDEBUG_MVU		0x10
+#define WIZCOMBATDEBUG_MVM		0x20
+#define WIZCOMBATDEBUG_APPLIES(magr, mdef)	\
+	(iflags.wizcombatdebug & ( WIZCOMBATDEBUG_MVM |    \
+	(((magr) == &youmonst) ? WIZCOMBATDEBUG_UVM : 0) | \
+	(((mdef) == &youmonst) ? WIZCOMBATDEBUG_MVU : 0)   \
+	))
+
 #endif /* FLAG_H */

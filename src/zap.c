@@ -90,6 +90,7 @@ int adtyp, ztyp;
 		case AD_STAR: return "stream of silver stars";
 		case AD_HOLY: return "holy missile";
 		case AD_UNHY: return "unholy missile";
+		case AD_HLUH: return "corrupted missile";
 		case AD_DISN: return "disintegration ray";
 		default:      impossible("unknown spell damage type in flash_type: %d", adtyp);
 			return "cube of questions";
@@ -170,7 +171,8 @@ int adtyp;
 	case AD_DISE:
 		return CLR_MAGENTA;
 		//	return CLR_CYAN;
-		//	return CLR_GRAY;
+	case AD_HLUH:
+		return CLR_GRAY;
 		//	return NO_COLOR;
 	case AD_EFIR:
 	case AD_FIRE:
@@ -403,7 +405,7 @@ struct obj *otmp;
 	case SPE_FULL_HEALING:
 	case SPE_MASS_HEALING:{
 		int delta = mtmp->mhp;
-		int health = otyp == SPE_MASS_HEALING ? (50*P_SKILL(P_HEALING_SPELL)) : (d(6, otyp != SPE_HEALING ? 8 : 4) + 6*(P_SKILL(P_HEALING_SPELL)-1));
+		int health = otyp == SPE_FULL_HEALING ? (50*P_SKILL(P_HEALING_SPELL)) : (d(6, otyp != SPE_HEALING ? 8 : 4) + 6*(P_SKILL(P_HEALING_SPELL)-1));
 		reveal_invis = TRUE;
 	    if (mtmp->mtyp != PM_PESTILENCE) {
 			char hurtmonbuf[BUFSZ];
@@ -444,8 +446,10 @@ struct obj *otmp;
 			if(mtmp->mtame && Role_if(PM_HEALER)){
 				int xp = (experience(mtmp, 0)/2) * delta / mtmp->mhpmax;
 				if(wizard) pline("%d out of %d XP", xp, experience(mtmp, 0));
-				if(xp)
+				if(xp){
 					more_experienced(xp, 0);
+					newexplevel();
+				}
 			}
 			if (mtmp->mtame || mtmp->mpeaceful) {
 				adjalign(Role_if(PM_HEALER) ? 1 : sgn(u.ualign.type));
@@ -711,6 +715,7 @@ coord *cc;
 		mtmp2->mfleetim = mtmp->mfleetim;
 		mtmp2->mlstmv = mtmp->mlstmv;
 		mtmp2->m_ap_type = mtmp->m_ap_type;
+		mtmp2->mappearance = mtmp->mappearance;
 		/* set these ones explicitly */
 		mtmp2->mavenge = 0;
 		mtmp2->meating = 0;
@@ -1912,6 +1917,9 @@ no_unwear:
 
 	/* copy OX structures */
 	mov_all_ox(obj, otmp);
+	/* copy not otyp-related timers */
+	copy_timer(get_timer(obj->timed, DESUMMON_OBJ), TIMER_OBJECT, (genericptr_t)otmp);
+
 	/* ** we are now done adjusting the object ** */
 
 
@@ -2461,9 +2469,9 @@ dozap()
 	register struct obj *obj;
 	int damage;
 
-	if(check_capacity((char *)0)) return(0);
+	if(check_capacity((char *)0)) return MOVE_CANCELLED;
 	obj = getobj(zap_syms, "zap");
-	if(!obj) return(0);
+	if(!obj) return MOVE_CANCELLED;
 
 	check_unpaid(obj);
 
@@ -2472,7 +2480,7 @@ dozap()
 	else if(obj->cursed && obj->oclass == WAND_CLASS && !obj->oartifact && !rn2(100)) {
 		backfire(obj);	/* the wand blows up in your face! */
 		exercise(A_STR, FALSE);
-		return(1);
+		return MOVE_ZAPPED;
 	} else if(!(objects[obj->otyp].oc_dir == NODIR) && !getdir((char *)0)) {
 		if (!Blind)
 		    pline("%s glows and fades.", The(xname(obj)));
@@ -2500,8 +2508,7 @@ dozap()
 	    useup(obj);
 	}
 	update_inventory();	/* maybe used a charge */
-	if(QuickDraw) return partial_action();
-	return(1);
+	return MOVE_ZAPPED;
 }
 
 int
@@ -3290,7 +3297,9 @@ register struct	obj	*obj;
 int
 spell_damage_bonus()
 {
-    int tmp, intell = ACURR(A_INT);
+    int tmp, intell;
+	
+	intell = ACURR(base_casting_stat());
 
     /* Punish low intellegence before low level else low intellegence
        gets punished only when high level */
@@ -3668,8 +3677,11 @@ struct zapdata * zapdata;
 
 	/* damage bonuses */
 	if (magr && zapdata->ztyp == ZAP_SPELL) {
-		if (youagr)
+		if (youagr){
 			dmg += spell_damage_bonus();
+			if(dmg < 1)
+				dmg = 1;
+		}
 		if (youagr && u.ukrau_duration)
 			dmg *= 1.5;
 		if (youagr ? Spellboost : mon_resistance(magr, SPELLBOOST)
@@ -4163,6 +4175,23 @@ struct zapdata * zapdata;
 		/* deal damage */
 		return xdamagey(magr, mdef, &attk, dmg);
 
+	case AD_HLUH:
+		/* holy damage */
+		if (hates_unholy_mon(mdef) || hates_holy_mon(mdef)) {
+			if (youdef) {
+				addmsg("The corrupted missiles sear your flesh!");
+			}
+			if(hates_unholy_mon(mdef) && hates_holy_mon(mdef))
+				dmg *= 3;
+			else
+				dmg *= 2;
+		}
+		domsg();
+		if (youdef && dmg > 0)
+			exercise(A_WIS, FALSE);
+		/* deal damage */
+		return xdamagey(magr, mdef, &attk, dmg);
+
 	case AD_FIRE:
 	case AD_EFIR:
 		/* check resist / weakness */
@@ -4177,7 +4206,7 @@ struct zapdata * zapdata;
 				dmg = 0;
 			}
 		}
-		else if (Cold_res(mdef)) {
+		else if (species_resists_cold(mdef)) {
 			dmg *= 1.5;
 		}
 		domsg();
@@ -4211,7 +4240,7 @@ struct zapdata * zapdata;
 				dmg = 0;
 			}
 		}
-		else if (Fire_res(mdef)) {
+		else if (species_resists_fire(mdef)) {
 			dmg *= 1.5;
 		}
 		domsg();
@@ -4307,7 +4336,7 @@ struct zapdata * zapdata;
 				if (Poison_res(mdef)) dmg = 0; else dmg = 4;
 				domsg();	/* gotta call before poisoned() */
 				/* poisoned() deals the damage and checks resistance */
-				poisoned("blast", A_DEX, "poisoned blast", 15);
+				poisoned("blast", A_DEX, "poisoned blast", 15, FALSE);
 			}
 			else {
 				if (Poison_res(mdef)) {
@@ -4584,8 +4613,8 @@ struct zapdata * zapdata;
 					/* note: worn amulet of life saving must be preserved in order to operate */
 					for (otmp = mdef->minvent; otmp; otmp = otmp2) {
 						otmp2 = otmp->nobj;
-						if (!(oresist_disintegration(otmp) || obj_resists(otmp, 5, 50) || otmp == m_lsvd)) {
-							obj_extract_self(otmp);
+						if (!(oresist_disintegration(otmp) || obj_resists(otmp, 5, 100) || otmp == m_lsvd)) {
+							obj_extract_and_unequip_self(otmp);
 							obfree(otmp, (struct obj *)0);
 						}
 					}
@@ -4908,6 +4937,8 @@ struct monst *mon;
 			mon->mpeaceful = 1;
 			mon->mcrazed = 1;
 			EDOG(mon)->loyal = TRUE;
+			EDOG(mtmp)->waspeaceful = TRUE;
+			mtmp->mpeacetime = 0;
 			newsym(mon->mx, mon->my);
 		}
 	}

@@ -59,7 +59,12 @@ const char *fmt, *arg;
 		was_mimicking = (youmonst.m_ap_type == M_AP_OBJECT);
 	boolean could_pass_walls = Passes_walls;
 	boolean was_blind = !!Blind;
+	int starting_hungermax;
+	double starting_hungersizemod;
 
+	starting_hungermax = get_uhungermax();
+	starting_hungersizemod = get_uhungersizemod();
+	
 	if (Upolyd) {
 		u.acurr = u.macurr;	/* restore old attribs */
 		u.amax = u.mamax;
@@ -110,6 +115,12 @@ const char *fmt, *arg;
 	if(!Levitation && !u.ustuck &&
 	   (is_pool(u.ux,u.uy, TRUE) || is_lava(u.ux,u.uy)))
 		spoteffects(TRUE);
+
+	int new_hungermax = get_uhungermax();
+	if(starting_hungermax != new_hungermax){
+		u.uhunger = u.uhunger * new_hungermax/starting_hungermax;
+	}
+	newuhs(get_uhungersizemod() < starting_hungersizemod); //May result in a message for gnomes, as the starvation thresholds will move.
 
 	see_monsters();
 }
@@ -197,7 +208,7 @@ newman()
 	if(u.uen < 1) u.uen = 1;
 
 	if(Race_if(PM_INCANTIFIER)) u.uen = min(u.uenmax, rn1(500,500));
-	else u.uhunger = rn1(500,500);
+	else u.uhunger = rn1(500,500) * get_uhungersizemod();
 	if (Sick) make_sick(0L, (char *) 0, FALSE, SICK_ALL);
 	Stoned = 0;
 	Golded = 0;
@@ -378,6 +389,8 @@ int	mntmp;
 		was_blind = !!Blind, dochange = FALSE;
 	boolean could_pass_walls = Passes_walls;
 	int mlvl;
+	int starting_hungermax;
+	double starting_hungersizemod;
 	const char *s;
 
 	if (mvitals[mntmp].mvflags & G_GENOD && !In_quest(&u.uz)) {	/* allow G_EXTINCT */
@@ -388,7 +401,10 @@ int	mntmp;
 
 	/* KMH, conduct */
 	u.uconduct.polyselfs++;
-
+	
+	starting_hungermax = get_uhungermax();
+	starting_hungersizemod = get_uhungersizemod();
+	
 	if (!Upolyd) {
 		/* Human to monster; save human stats */
 		u.macurr = u.acurr;
@@ -661,6 +677,11 @@ int	mntmp;
 	    You("orient yourself on the web.");
 	    u.utrap = 0;
 	}
+	int new_hungermax = get_uhungermax();
+	if(starting_hungermax != new_hungermax){
+		u.uhunger = u.uhunger * new_hungermax/starting_hungermax;
+	}
+	newuhs(get_uhungersizemod() < starting_hungersizemod); //May result in a message for gnomes, as the starvation thresholds will move.
 	flags.botl = 1;
 	vision_full_recalc = 1;
 	see_monsters();
@@ -740,7 +761,7 @@ break_armor()
 		}
     }
 	if ((otmp = uarmg) != 0) {
-		if(nohands(youracedata) || nolimbs(youracedata) || otmp->objsize != youracedata->msize || is_whirly(youracedata) || noncorporeal(youracedata)){
+		if(nogloves(youracedata) || nolimbs(youracedata) || otmp->objsize != youracedata->msize || is_whirly(youracedata) || noncorporeal(youracedata)){
 			if (donning(otmp)) cancel_don();
 			/* Drop weapon along with gloves */
 			You("drop your gloves%s!", uwep ? " and weapon" : "");
@@ -782,7 +803,7 @@ int alone;
 	 * future it might not be so if there are monsters which cannot
 	 * wear gloves but can wield weapons
 	 */
-	if (!alone || cantwield(youracedata)) {
+	if (!alone || you_cantwield(youracedata)) {
 	    struct obj *wep = uwep;
 
 	    if (alone) You("find you must drop your weapon%s!",
@@ -843,7 +864,7 @@ struct permonst *mdat;
 	struct attack mattk;
 	int powermult = 100;
 
-	if (!getdir((char *)0)) return(0);
+	if (!getdir((char *)0)) return MOVE_CANCELLED;
 
 	{
 		struct attack * aptr;
@@ -853,7 +874,7 @@ struct permonst *mdat;
 
 		if (!aptr) {
 			impossible("bad breath attack?");
-			return 0;
+			return MOVE_CANCELLED;
 		}
 		mattk = *aptr;
 	}
@@ -873,7 +894,7 @@ struct permonst *mdat;
 		case AD_RBRE: mtyp = PM_SHIMMERING_DRAGON; break;
 		default:
 			impossible("bad HDbreath %d", flags.HDbreath);
-			return 0;
+			return MOVE_CANCELLED;
 		}
 		if (uarm && Dragon_armor_matches_mtyp(uarm, mtyp))
 			powermult += 50;
@@ -888,7 +909,7 @@ struct permonst *mdat;
 	mattk.damd = (mattk.damd ? mattk.damd : 6) * powermult / 100;
 
 	/* use xbreathey to do the attack */
-	return xbreathey(&youmonst, &mattk, 0, 0);
+	return xbreathey(&youmonst, &mattk, 0, 0) ? MOVE_STANDARD : MOVE_CANCELLED;
 }
 
 int
@@ -899,7 +920,7 @@ domakewhisperer()
 	int duration;
 	if (u.uen < (10+min(u.uinsight, 45))) {
 	    You("concentrate but lack the energy to maintain doing so.");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	
 	duration = ACURR(A_CHA) + 1;
@@ -914,14 +935,14 @@ domakewhisperer()
 	// makedog();
 	mtmp = makemon(&mons[PM_SECRET_WHISPERER], u.ux, u.uy, MM_ADJACENTOK|NO_MINVENT|MM_NOCOUNTBIRTH|MM_EDOG|MM_ESUM);
 
-	if(!mtmp) return 0; /* pets were genocided */
+	if(!mtmp) return MOVE_CANCELLED; /* pets were genocided */
 
 	mark_mon_as_summoned(mtmp, &youmonst, duration, 0);
 	for(int i = min(45, (u.uinsight - mtmp->m_lev)); i > 0; i--){
 		grow_up(mtmp, (struct monst *) 0);
 		//Technically might grow into a genocided form.
 		if(DEADMONSTER(mtmp))
-			return 0;
+			return MOVE_CANCELLED;
 	}
 	mtmp->mspec_used = 0;
 
@@ -934,7 +955,9 @@ domakewhisperer()
 	
 	initedog(mtmp);
 	EDOG(mtmp)->loyal = TRUE;
-	return 1;
+	EDOG(mtmp)->waspeaceful = TRUE;
+	mtmp->mpeacetime = 0;
+	return MOVE_STANDARD;
 }
 
 int
@@ -945,11 +968,11 @@ doelementalbreath()
 	
 	if (Strangled) {
 	    You_cant("breathe.  Sorry.");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	if (u.uen < 45) {
 	    You("don't have enough energy to sing an elemental!");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	losepw(45);
 	flags.botl = 1;
@@ -985,7 +1008,7 @@ doelementalbreath()
 		mon->mhpmax = (mon->m_lev * 8) - 4;
 		mon->mhp =  mon->mhpmax;
 	}
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -994,11 +1017,11 @@ dospit()
 	struct obj *otmp;
 
 	if (!getdir((char *)0))
-		return(0);
+		return MOVE_CANCELLED;
 	else {
 		xspity(&youmonst, attacktype_fordmg(youracedata, AT_SPIT, AD_ANY), 0, 0);
 	}
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1006,10 +1029,10 @@ doremove()
 {
 	if (!Punished) {
 		You("are not chained to anything!");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	unpunish();
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1020,13 +1043,13 @@ dospinweb()
 	if (Levitation || Weightless
 	    || Underwater || Is_waterlevel(&u.uz)) {
 		You("must be on the ground to spin a web.");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	if (u.uswallow) {
 		You("release web fluid inside %s.", mon_nam(u.ustuck));
 		if (is_animal(u.ustuck->data)) {
 			expels(u.ustuck, u.ustuck->data, TRUE);
-			return(0);
+			return MOVE_INSTANT;
 		}
 		if (is_whirly(u.ustuck->data)) {
 			int i;
@@ -1054,14 +1077,14 @@ dospinweb()
 				}
 				pline_The("web %sis swept away!", sweep);
 			}
-			return(0);
+			return MOVE_INSTANT;
 		}		     /* default: a nasty jelly-like creature */
 		pline_The("web dissolves into %s.", mon_nam(u.ustuck));
-		return(0);
+		return MOVE_INSTANT;
 	}
 	if (u.utrap) {
 		You("cannot spin webs while stuck in a trap.");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	exercise(A_DEX, TRUE);
 	if (ttmp) switch (ttmp->ttyp) {
@@ -1070,35 +1093,35 @@ dospinweb()
 			deltrap(ttmp);
 			bury_objs(u.ux, u.uy);
 			newsym(u.ux, u.uy);
-			return(1);
+			return MOVE_STANDARD;
 		case SQKY_BOARD: pline_The("squeaky board is muffled.");
 			deltrap(ttmp);
 			newsym(u.ux, u.uy);
-			return(1);
+			return MOVE_STANDARD;
 		case TELEP_TRAP:
 		case LEVEL_TELEP:
 		case MAGIC_PORTAL:
 			Your("webbing vanishes!");
-			return(0);
+			return MOVE_INSTANT;
 		case WEB: You("make the web thicker.");
-			return(1);
+			return MOVE_STANDARD;
 		case HOLE:
 		case TRAPDOOR:
 			You("web over the %s.",
 			    (ttmp->ttyp == TRAPDOOR) ? "trap door" : "hole");
 			deltrap(ttmp);
 			newsym(u.ux, u.uy);
-			return 1;
+			return MOVE_STANDARD;
 		case ROLLING_BOULDER_TRAP:
 			You("spin a web, jamming the trigger.");
 			deltrap(ttmp);
 			newsym(u.ux, u.uy);
-			return(1);
+			return MOVE_STANDARD;
 		case VIVI_TRAP:
 			You("spin a web, ruining the delicate machinery.");
 			deltrap(ttmp);
 			newsym(u.ux, u.uy);
-			return(1);
+			return MOVE_STANDARD;
 		case ARROW_TRAP:
 		case DART_TRAP:
 		case BEAR_TRAP:
@@ -1111,18 +1134,19 @@ dospinweb()
 		case MAGIC_TRAP:
 		case ANTI_MAGIC:
 		case POLY_TRAP:
+		case MUMMY_TRAP:
 			You("have triggered a trap!");
 			dotrap(ttmp, 0);
-			return(1);
+			return MOVE_STANDARD;
 		default:
 			impossible("Webbing over trap type %d?", ttmp->ttyp);
-			return(0);
+			return MOVE_CANCELLED;
 		}
 	else if (On_stairs(u.ux, u.uy)) {
 	    /* cop out: don't let them hide the stairs */
 	    Your("web fails to impede access to the %s.",
 		 (levl[u.ux][u.uy].typ == STAIRS) ? "stairs" : "ladder");
-	    return(1);
+	    return MOVE_STANDARD;
 		 
 	}
 	ttmp = maketrap(u.ux, u.uy, WEB);
@@ -1131,7 +1155,7 @@ dospinweb()
 		ttmp->madeby_u = 1;
 	}
 	newsym(u.ux, u.uy);
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1140,7 +1164,7 @@ dosummon()
 	int placeholder;
 	if (u.uen < 10) {
 	    You("lack the energy to send forth a call for help!");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	losepw(10);
 	flags.botl = 1;
@@ -1149,7 +1173,7 @@ dosummon()
 	exercise(A_WIS, TRUE);
 	if (!were_summon(&youmonst, &placeholder, (char *)0))
 		pline("But none arrive.");
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1161,11 +1185,11 @@ dodemonpet()
 
 	if (u.uen < 10) {
 		You("lack the energy to call for help!");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	else if (youmonst.summonpwr >= youmonst.data->mlevel) {
 		You("don't have the authority to call for any more help!");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	losepw(10);
 	flags.botl = 1;
@@ -1188,7 +1212,7 @@ dodemonpet()
 	else {
 		pline("No help arrived.");
 	}
-	return(1);
+	return MOVE_STANDARD;
 }
 
 static NEARDATA const char food_types[] = { FOOD_CLASS, 0 };
@@ -1220,15 +1244,12 @@ dovampminion()
 		}
 	}
 	if (!corpse) corpse = getobj(food_types, "feed blood to");
-	if (!corpse) return(0);
+	if (!corpse) return MOVE_CANCELLED;
 
 	struct permonst *pm = &mons[corpse->corpsenm];
 	if (!has_blood(pm)){
 		pline("You can't put blood in a monster that didn't start with blood!");
-		return(0);
-	} else if (is_untamable(pm) || (pm->geno & G_UNIQ)){
-		pline("You can't create a minion of that type of monster!");
-		return(0);
+		return MOVE_CANCELLED;
 	} else {
 		struct monst * mtmp = revive(corpse, FALSE);
 		if (mtmp) {
@@ -1241,7 +1262,7 @@ dovampminion()
 		}
 	}
 	
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1249,7 +1270,7 @@ dotinker()
 {
 	if (u.uen < 10) {
 	    You("lack the energy to tinker.");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	losepw(10);
 	flags.botl = 1;
@@ -1272,34 +1293,38 @@ dotinker()
 		mlocal->mpeaceful = 1;
 		newsym(mlocal->mx,mlocal->my);
 	}
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
 dogaze()
 {
 	register struct monst *mtmp;
-	struct attack * attk = attacktype_fordmg(youracedata, AT_GAZE, AD_ANY);
-	int result;
+	int result = 0;
 
 	if (Blind) {
 		You_cant("see anything to gaze at.");
-		return 0;
+		return MOVE_CANCELLED;
 	}
 	if (u.uen < 15) {
 		You("lack the energy to use your special gaze!");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	if (!throwgaze()) {
 		/* player cancelled targetting or picked a not-allowed location */
-		return 0;
+		return MOVE_CANCELLED;
 	}
 	else {
 		losepw(15);
 		flags.botl = 1;
 
 		if ((mtmp = m_at(u.dx, u.dy)) && canseemon(mtmp)) {
-			result = xgazey(&youmonst, mtmp, attk, -1);
+			struct attack *a;
+
+			for (a = &youracedata->mattk[0]; a < &youracedata->mattk[NATTK]; a++){
+				if (a->aatyp == AT_GAZE) 
+					result |= xgazey(&youmonst, mtmp, a, -1);
+			}
 
 			if (!result) {
 				pline("%s seemed not to notice.", Monnam(mtmp));
@@ -1320,7 +1345,7 @@ dogaze()
 						-d((int)mtmp->m_lev + 1,
 						(int)mtmp->data->mattk[0].damd)
 						: -200, "frozen by a monster's gaze");
-					return 1;
+					return MOVE_STANDARD;
 				}
 				else
 					You("stiffen momentarily under %s gaze.",
@@ -1347,7 +1372,7 @@ dogaze()
 			You("gaze at empty space.");
 		}
 	}
-	return(1);
+	return MOVE_STANDARD;
 }
 #if 0
 {
@@ -1589,7 +1614,7 @@ dohide()
 
 	if (u.uundetected || (ismimic && youmonst.m_ap_type != M_AP_NOTHING)) {
 		You("are already hiding.");
-		return(0);
+		return MOVE_CANCELLED;
 	}
 	if (ismimic) {
 		/* should bring up a dialog "what would you like to imitate?" */
@@ -1598,7 +1623,7 @@ dohide()
 	} else
 		u.uundetected = 1;
 	newsym(u.ux,u.uy);
-	return(1);
+	return MOVE_STANDARD;
 }
 
 int
@@ -1609,7 +1634,7 @@ domindblast()
 
 	if (u.uen < 10) {
 	    You("concentrate but lack the energy to maintain doing so.");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	losepw(10);
 	flags.botl = 1;
@@ -1655,7 +1680,7 @@ domindblast()
 			}
 		}
 	}
-	return 1;
+	return MOVE_STANDARD;
 }
 
 void
@@ -1696,14 +1721,14 @@ dodarken()
 
 	if (u.uen < 10 && u.uen<u.uenmax) {
 	    You("lack the energy to invoke the darkness.");
-	    return(0);
+	    return MOVE_CANCELLED;
 	}
 	u.uen = max(u.uen-10,0);
 	flags.botl = 1;
 	You("invoke the darkness.");
 	litroom(FALSE,NULL);
 	
-	return 1;
+	return MOVE_STANDARD;
 }
 
 int
@@ -1743,13 +1768,13 @@ doclockspeed()
 			break;
 			}
 		}
-		if(u.clockworkUpgrades&FAST_SWITCH) return 0;
-		else return 1;
+		if(u.clockworkUpgrades&FAST_SWITCH) return MOVE_INSTANT;
+		else return MOVE_STANDARD;
 	} else{
 		You("leave your clock at its current speed.");
-		return 0;
+		return MOVE_CANCELLED;
 	}
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 int
@@ -1764,15 +1789,15 @@ doandroid()
 			u.phasengn = 1;
 			You("activate your phase engine.");
 		}
-		return 0;
+		return MOVE_INSTANT;
 	} else if(newspeed == HIGH_CLOCKSPEED){
 		You("activate emergency high speed.");
 		u.ucspeed = HIGH_CLOCKSPEED;
-		return 0;
+		return MOVE_INSTANT;
 	} else if(newspeed == NORM_CLOCKSPEED){
 		You("reduce speed to normal.");
 		u.ucspeed = NORM_CLOCKSPEED;
-		return 1;
+		return MOVE_STANDARD;
 	} else if(newspeed == SLOW_CLOCKSPEED){
 		int mult = HEALCYCLE/u.ulevel;
 		int duration = (u.uenmax - u.uen)*mult*2/3+30, i, lim;
@@ -1789,23 +1814,23 @@ doandroid()
 		u.nextsleep = moves+rnz(350)+duration;
 		u.lastslept = moves;
 		fall_asleep(-rn1(duration+1, duration+1), TRUE);
-		return 1;
+		return MOVE_STANDARD;
 	} else if(newspeed == RECHARGER){
 		static const char recharge_type[] = { ALLOW_COUNT, ALL_CLASSES, 0 };
 	    struct obj *otmp = getobj(recharge_type, "charge");
 
 	    if (!otmp) {
-			return 0;
+			return MOVE_CANCELLED;
 	    }
 	    if(!recharge(otmp, 0))
 			You("recharged %s.", the(xname(otmp)));
 		losepw(10);
 	    update_inventory();
-		return 1;
+		return MOVE_STANDARD;
 	} else if (newspeed == ANDROID_COMBO) {
 		return android_combo();	/* in xhity.c */
 	}
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 int
@@ -1890,12 +1915,13 @@ int splaction;
 
 				} // switch(splaction)
 			} // doing something allowable
+			free(selected);
 		} // menu item was selected
 		/* else end menu, nothing was selected */
 		break;
 	} while (TRUE);
 
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 STATIC_OVL void
@@ -2207,6 +2233,14 @@ int part;
 		"lung",				"forked tongue",	"stomach",		"heart",
 		"scales",			"flesh",			"beat",			"bones",
 		"ear",				"ears",				"creak",		"crack" },
+	*naunet_parts[] = {
+		"watery tentacles", "eye",				"face",			"tentacle",
+		"tentacle tip",		"rear region",		"tentacle",		"tentacled",
+		"head",				"rear region",		"light headed",	"neck",
+		"length",			"rear surface",		"watery surface","blood",
+		"foamy depths",		"forked tongue",	"hungry depths","swirling depths",
+		"watery surface",	"waters",			"flow",			"waters",
+		"ear",				"ears",				"bubble",		"boil" },
 	*fish_parts[] = {
 		"fin",				"eye",				"premaxillary",	"pelvic axillary",
 		"pelvic fin",		"anal fin",			"pectoral fin", "finned",
@@ -2297,6 +2331,8 @@ int part;
 	//PM-based part lists
 	if (mptr->mtyp == PM_RAVEN || mptr->mtyp == PM_CROW)
 	    return bird_parts[part];
+	if (mptr->mtyp == PM_DAUGHTER_OF_NAUNET)
+	    return naunet_parts[part];
 	if (mptr->mtyp == PM_APHANACTONAN_ASSESSOR)
 	    return assessor_parts[part];
 	if (mptr->mtyp == PM_APHANACTONAN_AUDIENT)
@@ -2536,7 +2572,12 @@ doclockmenu()
 	how = PICK_ONE;
 	n = select_menu(tmpwin, how, &selected);
 	destroy_nhwindow(tmpwin);
-	return (n > 0) ? (short)selected[0].item.a_int : (short)u.ucspeed;
+	if(n > 0){
+		int picked = (short) selected[0].item.a_int;
+		free(selected);
+		return picked;
+	}
+	return (short)u.ucspeed;
 }
 
 STATIC_OVL short
@@ -2590,7 +2631,7 @@ dodroidmenu()
 			incntlet, 0, ATR_NONE, buf,
 			MENU_UNSELECTED);
 	}
-	if(((uwep && (!is_lightsaber(uwep) || litsaber(uwep)) && P_SKILL(objects[uwep->otyp].oc_skill) >= P_BASIC) || ((!uwep || (is_lightsaber(uwep) && !litsaber(uwep))) && P_SKILL(P_MARTIAL_ARTS) >= P_BASIC)) && u.uen > 0 && !u.twoweap){
+	if(((uwep && (!is_lightsaber(uwep) || litsaber(uwep)) && P_SKILL(weapon_type(uwep)) >= P_BASIC) || ((!uwep || (is_lightsaber(uwep) && !litsaber(uwep))) && P_SKILL(P_MARTIAL_ARTS) >= P_BASIC)) && u.uen > 0 && !u.twoweap){
 		Sprintf(buf, "Combo");
 		incntlet = 'c';
 		any.a_int = ANDROID_COMBO;	/* must be non-zero */
@@ -2620,7 +2661,12 @@ dodroidmenu()
 	how = PICK_ONE;
 	n = select_menu(tmpwin, how, &selected);
 	destroy_nhwindow(tmpwin);
-	return (n > 0) ? (short)selected[0].item.a_int : 0;
+	if(n > 0){
+		int picked = selected[0].item.a_int;
+		free(selected);
+		return picked;
+	}
+	return 0;
 }
 
 #endif /* OVLB */

@@ -9,6 +9,7 @@
 
 #include "hack.h"
 #include "qtext.h"
+#include "xhity.h"
 
 
 extern const int monstr[];
@@ -44,7 +45,7 @@ static NEARDATA const int nasties[] = {
 	PM_OGRE_KING, PM_OLOG_HAI, PM_DISENCHANTER, PM_DISPLACER_BEAST, 
 	PM_MANTICORE, PM_GNOLL, PM_SCRAP_TITAN, PM_GUG, 
 	PM_ANUBAN_JACKAL, PM_BEBELITH, PM_WEREWOLF, PM_WERERAT,
-	PM_DAUGHTER_OF_BEDLAM, PM_WALKING_DELIRIUM,
+	PM_DAUGHTER_OF_BEDLAM, PM_WALKING_DELIRIUM, PM_DAUGHTER_OF_NAUNET,
 	
 	/* lawful */
 	PM_GREEN_DRAGON, PM_YELLOW_DRAGON, PM_ORANGE_DRAGON, PM_CAPTAIN,
@@ -379,6 +380,69 @@ tactics(mtmp)
 			mtmp->mfleetim = 0;
 			return 1;
 		}
+		else if(mtmp->mtyp == PM_JRT_NETJER && !mtmp->mpeaceful && !mtmp->mcan && distmin(u.ux, u.uy, mtmp->mx, mtmp->my) > 1){
+		// else if(mtmp->mtyp == PM_JRT_NETJER && !mtmp->mpeaceful && !mtmp->mcan && distmin(u.ux, u.uy, mtmp->mx, mtmp->my) > 1 && !rn2(3)){
+			if(!Blind)
+				pline("Stars swirl around you.");
+			int type;
+			int ox = mtmp->mx, oy = mtmp->my;
+			struct monst *tmpm;
+			if(rn2(6)){
+				type = PM_MOTE_OF_LIGHT;
+			}
+			else {
+				if(dungeon_topology.alt_tulani == CAILLEA_CASTE)
+					type = PM_MOONSHADOW;
+				else
+					type = PM_BALL_OF_RADIANCE;
+			}
+			tmpm = makemon(&mons[type], u.ux, u.uy, NO_MINVENT|MM_ADJACENTOK|MM_NOCOUNTBIRTH);
+			if(tmpm){
+				struct obj *otmp;
+				int ctype = counter_were(type);
+				if(canseemon(tmpm))
+					pline("The stars coalesce into %s!", an(mons[type].mname));
+				otmp = mksobj(KHOPESH, MKOBJ_NOINIT);
+				set_material_gm(otmp, COPPER);
+				add_oprop(otmp, OPROP_HOLYW);
+				otmp->objsize = mons[ctype].msize;
+				fix_object(otmp);
+				(void) mpickobj(tmpm, otmp);
+
+
+				if(type != PM_BALL_OF_RADIANCE){
+					otmp = mksobj(KHOPESH, MKOBJ_NOINIT);
+					set_material_gm(otmp, COPPER);
+					add_oprop(otmp, OPROP_HOLYW);
+					otmp->objsize = mons[ctype].msize;
+					fix_object(otmp);
+					(void) mpickobj(tmpm, otmp);
+				}
+				otmp = mksobj(ARCHAIC_HELM, MKOBJ_NOINIT);
+				set_material_gm(otmp, COPPER);
+				add_oprop(otmp, OPROP_HOLY);
+				otmp->objsize = mons[ctype].msize;
+				fix_object(otmp);
+				(void) mpickobj(tmpm, otmp);
+				
+				otmp = mksobj(WAISTCLOTH, MKOBJ_NOINIT);
+				set_material_gm(otmp, CLOTH);
+				otmp->obj_color = CLR_WHITE;
+				add_oprop(otmp, OPROP_HOLY);
+				otmp->objsize = mons[ctype].msize;
+				fix_object(otmp);
+				(void) mpickobj(tmpm, otmp);
+			}
+			if(has_template(mtmp, POISON_TEMPLATE))
+				set_template(tmpm, POISON_TEMPLATE);
+			else if(has_template(mtmp, MAD_TEMPLATE))
+				set_template(tmpm, FALLEN_TEMPLATE);
+			else if(has_template(mtmp, FALLEN_TEMPLATE))
+				set_template(tmpm, FALLEN_TEMPLATE);
+			if(mtmp->mfaction)
+				set_faction(tmpm, mtmp->mfaction);
+			return 1;
+		}
 		/* if wounded, hole up on or near the stairs (to block them) */
 		/* unless, of course, there are no stairs (e.g. endlevel) */
 		mtmp->mavenge = 1; /* covetous monsters attack while fleeing */
@@ -404,7 +468,7 @@ tactics(mtmp)
 			}
 		}
 		/* if you're not around, cast healing spells */
-		if (distu(mtmp->mx,mtmp->my) > (BOLT_LIM * BOLT_LIM))
+		if (distu(mtmp->mx,mtmp->my) > (BOLT_LIM * BOLT_LIM) && !mtmp->mcan)
 		    if(mtmp->mhp <= mtmp->mhpmax - 8) {
 			mtmp->mhp += rnd(8);
 			return(1);
@@ -435,14 +499,44 @@ tactics(mtmp)
 					return(0);
 				}
 			}
-			if((attacktype_fordmg(mtmp->data, AT_BREA, AD_ANY) ||
+			if(mtmp->mtyp == PM_CHAOS){
+				mnexto(mtmp);
+			}
+			else if(mtmp->mtame){
+				mnexto(mtmp);
+			}
+			else if(mtmp->mtyp == PM_GRAND_MASTER
+				|| mtmp->mtyp == PM_MASTER_KAEN
+			){
+				monline(mtmp);
+				if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+			}
+			else if(mtmp->mtyp == PM_JRT_NETJER){
+				if(!mtmp->mcan && !rn2(3))
+					mofflin(mtmp);
+				else if(!mtmp->mcan && rn2(2))
+					mofflin_close(mtmp);
+				else
+					mnexto(mtmp);
+				if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+			}
+			else if((attacktype_fordmg(mtmp->data, AT_BREA, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_SPIT, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_ARRW, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_BEAM, AD_ANY) )
 				&& !mtmp->mcan && !mtmp->mspec_used
 			){
-				monline(mtmp);
-				if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+				if(attacktype_fordmg(mtmp->data, AT_ARRW, AD_SLVR)
+					&& !has_object_type(mtmp->minvent, ARROW)
+					&& !has_object_type(mtmp->minvent, SILVER_ARROW)
+					&& !has_object_type(mtmp->minvent, GOLDEN_ARROW)
+					&& !has_object_type(mtmp->minvent, ANCIENT_ARROW)
+				)
+					mnexto(mtmp);
+				else {
+					monline(mtmp);
+					if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+				}
 			} else if(attacktype_fordmg(mtmp->data, AT_LRCH, AD_ANY)
 				|| attacktype_fordmg(mtmp->data, AT_LNCK, AD_ANY)
 				|| attacktype_fordmg(mtmp->data, AT_BRSH, AD_ANY)
@@ -498,14 +592,44 @@ tactics(mtmp)
 				}
 				return 1;
 			}
-			if((attacktype_fordmg(mtmp->data, AT_BREA, AD_ANY) ||
+			if(mtmp->mtyp == PM_CHAOS){
+				mnexto(mtmp);
+			}
+			else if(mtmp->mtame){
+				mnexto(mtmp);
+			}
+			else if(mtmp->mtyp == PM_GRAND_MASTER
+				|| mtmp->mtyp == PM_MASTER_KAEN
+			){
+				monline(mtmp);
+				if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+			}
+			else if(mtmp->mtyp == PM_JRT_NETJER){
+				if(!mtmp->mcan && !rn2(3))
+					mofflin(mtmp);
+				else if(!mtmp->mcan && rn2(2))
+					mofflin_close(mtmp);
+				else
+					mnexto(mtmp);
+				if(!mon_can_see_you(mtmp) || !couldsee(mtmp->mx, mtmp->my)) mnexto(mtmp);
+			}
+			else if((attacktype_fordmg(mtmp->data, AT_BREA, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_SPIT, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_ARRW, AD_ANY) ||
 				attacktype_fordmg(mtmp->data, AT_BEAM, AD_ANY) )
 				&& !mtmp->mcan && !mtmp->mspec_used
 			){
-				monline(mtmp);
-				if(!mon_can_see_you(mtmp)) mnexto(mtmp);
+				if(attacktype_fordmg(mtmp->data, AT_ARRW, AD_SLVR)
+					&& !has_object_type(mtmp->minvent, ARROW)
+					&& !has_object_type(mtmp->minvent, SILVER_ARROW)
+					&& !has_object_type(mtmp->minvent, GOLDEN_ARROW)
+					&& !has_object_type(mtmp->minvent, ANCIENT_ARROW)
+				)
+					mnexto(mtmp);
+				else {
+					monline(mtmp);
+					if(!mon_can_see_you(mtmp)) mnexto(mtmp);
+				}
 			} else if(attacktype_fordmg(mtmp->data, AT_LRCH, AD_ANY)
 				|| attacktype_fordmg(mtmp->data, AT_LNCK, AD_ANY)
 				|| attacktype_fordmg(mtmp->data, AT_BRSH, AD_ANY)
@@ -782,6 +906,194 @@ yellow_dead()
 	set_malign(mtmp);
 }
 
+boolean
+u_recognize_stars()
+{
+	if(Role_if(PM_MADMAN))
+		return TRUE;
+	// Particularly outdoors roles, those that navigate by the stars, or those that study roles that do.
+	if(Role_if(PM_ARCHEOLOGIST) || Role_if(PM_PIRATE) || Role_if(PM_CAVEMAN) || Role_if(PM_BARBARIAN))
+		return ACURR(A_INT) > 11;
+	// Celestial roles and those that CAN navigate by the stars (asuming that they live above ground).
+	if(Role_if(PM_WIZARD) || Role_if(PM_PRIEST) || Role_if(PM_RANGER))
+		return (Race_if(PM_DROW) || Race_if(PM_DWARF) || Race_if(PM_GNOME)) ? ACURR(A_INT) > 18 : ACURR(A_INT) > 13;
+	// Anas
+	if(Role_if(PM_ANACHRONONAUT))
+		return ACURR(A_INT) > 13;
+
+	// Catch all
+	return (Race_if(PM_DROW) || Race_if(PM_DWARF) || Race_if(PM_GNOME)) ? FALSE : ACURR(A_INT) > 15;
+}
+
+/* The king smites you in one of a variety of ways */
+boolean
+yellow_smite()
+{
+	int dmg;
+	struct monst *magr;
+	struct attack attkbuff = {AT_MAGC, AD_CLRC, 0, 6};
+	for(magr = fmon; magr; magr = magr->nmon){
+		if(magr->mpeaceful
+			|| nonthreat(magr)
+			|| magr->msleeping
+			|| !magr->mcanmove
+			|| (magr->mstrategy & STRAT_WAITMASK)
+		)
+			continue;
+		if(mon_can_see_you(magr))
+			break;
+	}
+	if(!magr){
+		return FALSE;
+	}
+	if(canseemon(magr))
+		You("glimpse %s over %s %s!", 
+			u_recognize_stars() ? "the five flaxen sisters" : "five amber stars", 
+			s_suffix(mon_nam(magr)), 
+			mbodypart(magr, HEAD));
+
+	switch(rnd(11)){
+		case 1:
+			if (!Punished) {
+				punish((struct obj *)0);
+			}
+			else {
+				Your("iron ball gets heavier!");
+				uball->owt += 160;
+			}
+		break;
+		case 2:
+			if (!Sick_resistance && !umechanoid) {
+				if(!Blind)
+					You("are afflicted with jaundice!");
+				else
+					You("are afflicted with disease!");
+				make_sick(Sick ? Sick / 3L + 1L : (long)rn1(ACURR(A_CON), 20),
+					"the king in yellow", TRUE, SICK_NONVOMITABLE);
+			}
+			else {
+				You_feel("slightly infectious.");
+			}
+		break;
+		case 3:
+			cast_spell(magr, &youmonst, &attkbuff, DRAIN_LIFE, u.ux, u.uy);
+		break;
+		case 4:
+			//wounds
+			dmg = d(10,5);
+			if (Antimagic)
+				dmg = (dmg + 1) / 2;
+			if (Half_spell_damage)
+				dmg = (dmg + 1) / 2;
+			if (u.uvaul_duration)
+				dmg = (dmg + 1) / 2;
+			if (dmg >= *hp(&youmonst)) {
+				Your("body is covered with deadly wounds!");
+				dmg = max(*hp(&youmonst) - 5, 0);	/* Cap the damage */
+			}
+			else if (dmg <= 5)
+				Your("skin itches badly for a moment.");
+			else if (dmg <= 15)
+				pline("Wounds appear on your body!");
+			else if (dmg <= 30)
+				pline("Severe wounds appear on your body!");
+			else
+				Your("body is covered with deep, painful wounds!");
+			losehp(dmg, "the king in yellow", KILLED_BY);
+		break;
+		case 5:
+			//nightmare
+			dmg = rnd(d(5,15));
+			if (Antimagic)
+				dmg = (dmg + 1) / 2;
+			if (Half_spell_damage)
+				dmg = (dmg + 1) / 2;
+			if (u.uvaul_duration)
+				dmg = (dmg + 1) / 2;
+			You_hear("Menacing laughter as the world blurs around you...");
+			make_confused(HConfusion + dmg * 10, FALSE);
+			make_stunned(HStun + dmg, FALSE);
+			make_hallucinated(HHallucination + dmg * 15, FALSE, 0L);
+			stop_occupation();
+		break;
+		case 6:
+			//death
+			/* message */
+			You_feel("a yellow death descend upon you!");
+			/* check resistance cases and do effects */
+			if (nonliving(youracedata) || is_demon(youracedata)) {
+				You("seem no deader than before.");
+				dmg = 0;
+			}
+			else if (ward_at(u.ux, u.uy) == CIRCLE_OF_ACHERON) {
+				You("are already beyond Acheron.");
+				dmg = 0; 
+			}
+			else if (u.sealsActive & SEAL_OSE) {
+				shieldeff(u.ux, u.uy);
+				dmg = 0;
+			}
+			else {
+				/* split between vs player and vs monster */
+				if (!Antimagic && (rn2(20) > 12)) {
+					if (Hallucination) {
+						You("have an out of body experience.");
+						dmg = 0;
+					}
+					else if (*hp(&youmonst) >= 100){
+						Your("%s stops!  When it finally beats again, it is weak and thready.", body_part(HEART));
+						dmg = d(8, 8);
+					}
+					else {
+						killer_format = KILLED_BY_AN;
+						killer = "touch of death";
+						dmg = *hp(&youmonst);
+					}
+				}
+				else {
+					if (Antimagic)
+						shieldeff(u.ux, u.uy);
+					Your("%s flutters!", body_part(HEART));
+					dmg = 8; //you still take damage
+				}
+			}
+			losehp(dmg, "the yellow death", KILLED_BY);
+		break;
+		case 7:{
+			//buff monsters
+			for(struct monst *mon = fmon; mon; mon = mon->nmon){
+				if(mon->mpeaceful
+					|| nonthreat(mon)
+					|| mon->msleeping
+					|| !mon->mcanmove
+					|| DEADMONSTER(mon)
+					|| !(mon->mstrategy & STRAT_WAITMASK)
+				)
+					continue;
+				mon->encouraged += 5;
+			}
+		}break;
+		case 8:
+			//poison (Con)
+			cast_spell(magr, &youmonst, &attkbuff, MON_POISON_GAS, u.ux, u.uy);
+		break;
+		case 9:
+			//Acid rain
+			cast_spell(magr, &youmonst, &attkbuff, ACID_RAIN, u.ux, u.uy);
+		break;
+		case 10:
+			//Fire
+			cast_spell(magr, &youmonst, &attkbuff, FIRE_PILLAR, u.ux, u.uy);
+		break;
+		case 11:
+			//Cold
+			cast_spell(magr, &youmonst, &attkbuff, ICE_STORM, u.ux, u.uy);
+		break;
+	}
+	grow_up(magr,(struct monst *)0);
+	return TRUE;
+}
+
 /*	Let's resurrect the wizard, for some unexpected fun.	*/
 void
 resurrect()
@@ -838,6 +1150,13 @@ illur_resurrect()
 	struct monst *mtmp, **mmtmp;
 	long elapsed;
 
+	/* look for a Illurien on the same level */
+	mmtmp = &fmon;
+	while ((mtmp = *mmtmp) != 0) {
+		if (mtmp->mtyp==PM_ILLURIEN_OF_THE_MYRIAD_GLIMPSES)
+			return; /*Illurine is currently here */
+		mmtmp = &mtmp->nmon;
+	}
 	/* look for a migrating Illurien */
 	mmtmp = &migrating_mons;
 	while ((mtmp = *mmtmp) != 0) {
@@ -869,28 +1188,6 @@ illur_resurrect()
 		verbalize("You thought to steal memories from ME, she of the Myriad Glimpses!?");
 	}
 
-}
-
-void
-yello_resurrect()
-{
-	struct monst *mtmp;
-	long elapsed;
-
-	/* look for a migrating Stranger */
-	mtmp = migrating_mons;
-	while (mtmp) {
-		if (mtmp->mtyp==PM_STRANGER)
-			return; /*It's currently making its way over*/
-		mtmp = mtmp->nmon;
-	}
-	
-	if(!mtmp) mtmp = makemon(&mons[PM_STRANGER], 0, 0, MM_NOWAIT|MM_NOCOUNTBIRTH);
-	
-	if (mtmp) {
-		mtmp->msleeping = mtmp->mtame = mtmp->mpeaceful = 0;
-		set_malign(mtmp);
-	}
 }
 
 void
@@ -1062,24 +1359,37 @@ illur_intervene()
 	}
 }
 
-void
+boolean
 yello_intervene()
 {
-	if(Is_astralevel(&u.uz)) return;
-	switch (rnd(4)) {
+	switch (rnd(5)) {
 	    case 1:	
 			You_feel("vaguely nervous.");
-		break;
+			return TRUE;
 	    case 2:
+			if (!resists_blnd(&youmonst)) {
+				You("are momentarily blinded by a flash of lemony light!");
+				make_blinded((long)rn1(6,50),FALSE);
+				if (!Blind) Your1(vision_clears);
+			} else if (!Blind) {
+				You("see a flash of lemony light!");
+			}  else
+				You_hear("a deafening roar!");
 			yellow_nasty();
-		break;
+			return TRUE;
 	    case 3:
 			aggravate();
-		break;
+			return TRUE;
 	    case 4:
-			yello_resurrect();
-		break;
+			if (!Blind)
+			    You("notice a %s glow surrounding you.",
+				  hcolor(NH_YELLOW));
+			rndcurse();
+			return TRUE;
+	    case 5:
+			return yellow_smite();
 	}
+	return FALSE;
 }
 
 void

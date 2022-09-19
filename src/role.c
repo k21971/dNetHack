@@ -248,7 +248,7 @@ struct Role roles[] = {
 	  "the Monastery of the Earth-Lord",
 	PM_MONK, NON_PM, NON_PM,
 	PM_GRAND_MASTER, PM_ABBOT, PM_MASTER_KAEN,
-	PM_EARTH_ELEMENTAL, PM_XORN, S_ELEMENTAL, S_XORN,
+	NON_PM, NON_PM, NON_PM, NON_PM,
 	ART_EYES_OF_THE_OVERWORLD,
 	MA_HUMAN|MA_CLOCK|MA_ANIMAL|MA_DRAGON|MA_FEY, ROLE_MALE|ROLE_FEMALE |
 	  ROLE_LAWFUL|ROLE_NEUTRAL|ROLE_CHAOTIC,
@@ -256,8 +256,8 @@ struct Role roles[] = {
 	{  10,  7,  8,  8,  7,  7 },
 	{  25, 10, 20, 20, 15, 10 },
 	/* Init   Lower  Higher */
-	{ 12, 0,  0, 8,  1, 0 },	/* Hit points */
-	{  2, 2,  0, 2,  0, 2 },10,	/* Energy */
+	{  8, 0,  0, 8,  1, 0 },	/* Hit points */
+	{  8, 0,  0, 2,  0, 2 },10,	/* Energy */
 	10, 8,-2, 2, 20, A_WIS, SPE_RESTORE_ABILITY, -24
 },
 {	{"Madman", "Madwoman"}, {
@@ -756,8 +756,8 @@ const struct Race races[] = {
 	{    3,     3,  3,  3,  3,  3 },
 	{   18,    20, 18, 20, 16, 20 },
 	/* Init   Lower  Higher */
-	{  8, 0,  3, 0,  1, 0 },	/* Hit points */
-	{  8, 0,  3, 0,  3, 0 },	/* Energy */
+	{  8, 0,  0, 4,  1, 0 },	/* Hit points */
+	{  8, 0,  0, 4,  0, 4 },	/* Energy */
 	NO_NIGHTVISION,
 	SPE_SLEEP, -5
 },
@@ -906,8 +906,8 @@ struct Race myrkalfr =
 	{    3,     3,  3,  3,  3,  3 },
 	{   18,    20, 20, 18, 16, 18 },
 	/* Init   Lower  Higher */
-	{  1, 0,  0, 1,  1, 0 },	/* Hit points */
-	{  2, 0,  3, 0,  3, 0 },	/* Energy */
+	{  7, 1,  1, 2,  1, 0 },	/* Hit points */
+	{  7, 1,  1, 2,  3, 0 },	/* Energy */
 	NO_NIGHTVISION
 };
 
@@ -1921,6 +1921,8 @@ int newgame;
 					flags.panNgod == flags.panCgod );
 		}
 	}
+	if((Pantheon_if(PM_NOBLEMAN) || Role_if(PM_NOBLEMAN)) && Race_if(PM_VAMPIRE))
+		urole.questarti = ART_VESTMENT_OF_HELL;
 	
 	if(Role_if(PM_EXILE)){
 		urole.lgod = roles[flags.panLgod].lgod;

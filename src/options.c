@@ -139,10 +139,11 @@ static struct Bool_Opt
 	{"hilite_obj_piles",    &iflags.hilite_obj_piles, FALSE, SET_IN_GAME},	/*WC*/
 	{"dnethack_start_text",    &iflags.dnethack_start_text, TRUE, DISP_IN_GAME},
 	{"artifact_descriptors",    &iflags.artifact_descriptors, FALSE, SET_IN_GAME},
-	{"force_artifact_names",    &iflags.force_artifact_names, FALSE, SET_IN_GAME},
+	{"force_artifact_names",    &iflags.force_artifact_names, TRUE, SET_IN_GAME},
 	{"role_obj_names",    &iflags.role_obj_names, TRUE, SET_IN_GAME},
 	{"obscure_role_obj_names",    &iflags.obscure_role_obj_names, FALSE, SET_IN_GAME},
 	{"dnethack_dungeon_colors",    &iflags.dnethack_dungeon_colors, TRUE, SET_IN_GAME},
+	{"invweight",    &iflags.invweight, TRUE, SET_IN_GAME},
 	{"hitpointbar", &iflags.hitpointbar, FALSE, SET_IN_GAME},
 	{"hp_monitor", (boolean *)0, TRUE, SET_IN_FILE}, /* For backward compat, HP monitor patch */
 	{"hp_notify", &iflags.hp_notify, FALSE, SET_IN_GAME},
@@ -218,7 +219,7 @@ static struct Bool_Opt
 	{"polearm_old_style", &flags.standard_polearms, FALSE, SET_IN_GAME},
 	{"polearm_peace_safe", &flags.peacesafe_polearms, TRUE, SET_IN_GAME},
 	{"polearm_pet_safe", &flags.petsafe_polearms, TRUE, SET_IN_GAME},
-	{"polearm_sequential_letters", &flags.relative_polearms, FALSE, SET_IN_GAME},
+	{"polearm_sequential_letters", &flags.relative_polearms, TRUE, SET_IN_GAME},
 	{"popup_dialog",  &iflags.wc_popup_dialog, FALSE, SET_IN_GAME},	/*WC*/
 	{"prayconfirm", &flags.prayconfirm, TRUE, SET_IN_GAME},
 	{"preload_tiles", &iflags.wc_preload_tiles, TRUE, DISP_IN_GAME},	/*WC*/
@@ -471,6 +472,7 @@ static struct Comp_Opt
 						80, DISP_IN_GAME },
 	{ "windowtype", "windowing system to use", WINTYPELEN, DISP_IN_GAME },
 	{ "wizlevelport", "wiz-mode ^V settings", 3, SET_IN_GAME},
+	{ "wizcombatdebug", "wiz-mode combat debug options", 6, SET_IN_GAME },
 	{ (char *)0, (char *)0, 0, 0 }
 };
 
@@ -650,6 +652,7 @@ initoptions()
         iflags.delay_length = RUN_STEP;
 	iflags.pokedex = POKEDEX_SHOW_DEFAULT;
 	iflags.wizlevelport = WIZLVLPORT_TRADITIONAL;
+	iflags.wizcombatdebug = WIZCOMBATDEBUG_DMG | WIZCOMBATDEBUG_UVM;
 	iflags.msg_history = 20;
 #ifdef TTY_GRAPHICS
 	iflags.prevmsg_window = 's';
@@ -2958,6 +2961,14 @@ goodfruit:
 		} else if (negated) bad_negation(fullname, TRUE);
 		return;
 	}
+	fullname = "wizcombatdebug";
+	if (match_optname(opts, fullname, 14, TRUE)) {
+		op = string_for_opt(opts, negated);
+		if ((negated && !op) || (!negated && op)) {
+			iflags.wizcombatdebug = negated ? 0 : atoi(op);
+		} else if (negated) bad_negation(fullname, TRUE);
+		return;
+	}
 
 	/* WINCAP
 	 * setting window colors
@@ -3488,6 +3499,8 @@ doset()
 		    		continue;
 				else if (!strcmp(compopt[i].name, "wizlevelport") && !wizard)
 					continue;
+				else if (!strcmp(compopt[i].name, "wizcombatdebug") && !wizard)
+					continue;
 		    	else
 				doset_add_menu(tmpwin, compopt[i].name,
 					(pass == DISP_IN_GAME) ? 0 : indexoffset);
@@ -3564,7 +3577,7 @@ doset()
 	    }
  	    (void) doredraw();
 	}
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 STATIC_OVL boolean
@@ -3580,7 +3593,7 @@ boolean setinitial,setfromfile;
     
     /* Special handling of menustyle, pickup_burden, pickup_types,
      * disclose, runmode, msg_window, menu_headings, number_pad and sortloot
-	 * attack_mode, pokedex, wizlevelport
+	 * attack_mode, pokedex, wizlevelport, wizcombatdebug
 #ifdef AUTOPICKUP_EXCEPTIONS
      * Also takes care of interactive autopickup_exception_handling changes.
 #endif
@@ -3781,6 +3794,74 @@ boolean setinitial,setfromfile;
 				}
 				else {
 					iflags.wizlevelport ^= out;
+				}
+			}
+			else
+				done = TRUE;
+			free((genericptr_t) pick);
+			destroy_nhwindow(tmpwin);
+		}
+		retval = TRUE;
+	} else if (!strcmp("wizcombatdebug", optname)) {
+		char buf[BUFSZ];
+		menu_item *pick = (menu_item *) 0;
+		boolean done = FALSE;
+		while (!done) {
+			tmpwin = create_nhwindow(NHW_MENU);
+			start_menu(tmpwin);
+			any = zeroany;
+
+			any.a_int = WIZCOMBATDEBUG_NONE + 1;
+			Sprintf(buf, "%-43s %s", "No extra info.",
+				iflags.wizcombatdebug == WIZLVLPORT_TRADITIONAL ? "(on)" : "(off)");
+			add_menu(tmpwin, NO_GLYPH, &any, 'a', 0, 0, buf, MENU_UNSELECTED);
+
+			any.a_int = WIZCOMBATDEBUG_DMG + 1;
+			Sprintf(buf, "%-43s %s", "Show combat damage dealt.",
+				iflags.wizcombatdebug & WIZCOMBATDEBUG_DMG ? "(on)" : "(off)");
+			add_menu(tmpwin, NO_GLYPH, &any, 'b', 0, 0, buf, MENU_UNSELECTED);
+
+			any.a_int = WIZCOMBATDEBUG_FULLDMG + 1;
+			Sprintf(buf, "%-43s %s", "Show combat damage dealt breakdown.",
+				iflags.wizcombatdebug & WIZCOMBATDEBUG_FULLDMG ? "(on)" : "(off)");
+			add_menu(tmpwin, NO_GLYPH, &any, 'c', 0, 0, buf, MENU_UNSELECTED);
+
+			any.a_int = WIZCOMBATDEBUG_ACCURACY + 1;
+			Sprintf(buf, "%-43s %s", "Show combat accuracy.",
+				iflags.wizcombatdebug & WIZCOMBATDEBUG_ACCURACY ? "(on)" : "(off)");
+			add_menu(tmpwin, NO_GLYPH, &any, 'd', 0, 0, buf, MENU_UNSELECTED);
+
+			if (iflags.wizcombatdebug != WIZCOMBATDEBUG_NONE) {
+				any.a_int = WIZCOMBATDEBUG_UVM + 1;
+				Sprintf(buf, "%-43s %s", "Show combat debug info for you v mon.",
+					iflags.wizcombatdebug & WIZCOMBATDEBUG_UVM ? "(on)" : "(off)");
+				add_menu(tmpwin, NO_GLYPH, &any, 'e', 0, 0, buf, MENU_UNSELECTED);
+				any.a_int = WIZCOMBATDEBUG_MVU + 1;
+				Sprintf(buf, "%-43s %s", "Show combat debug info for mon v you.",
+					iflags.wizcombatdebug & WIZCOMBATDEBUG_MVU ? "(on)" : "(off)");
+				add_menu(tmpwin, NO_GLYPH, &any, 'f', 0, 0, buf, MENU_UNSELECTED);
+				any.a_int = WIZCOMBATDEBUG_MVM + 1;
+				Sprintf(buf, "%-43s %s", "Show combat debug info for mon v mon.",
+					iflags.wizcombatdebug & WIZCOMBATDEBUG_MVM ? "(on)" : "(off)");
+				add_menu(tmpwin, NO_GLYPH, &any, 'g', 0, 0, buf, MENU_UNSELECTED);
+			}
+
+			end_menu(tmpwin, "Select wizcombatdebug:");
+			if (select_menu(tmpwin, PICK_ONE, &pick) > 0) {
+				int out = pick->item.a_int - 1;
+				if (out == WIZCOMBATDEBUG_NONE) {
+					iflags.wizcombatdebug = WIZCOMBATDEBUG_NONE;
+				}
+				else {
+					iflags.wizcombatdebug ^= out;
+
+					if ((iflags.wizcombatdebug ^ out) == WIZCOMBATDEBUG_NONE)
+						iflags.wizcombatdebug |= WIZCOMBATDEBUG_UVM;
+
+					if (!(iflags.wizcombatdebug & (WIZCOMBATDEBUG_UVM|WIZCOMBATDEBUG_MVU|WIZCOMBATDEBUG_MVM)))
+						iflags.wizcombatdebug = WIZCOMBATDEBUG_NONE;
+					if (!(iflags.wizcombatdebug & (WIZCOMBATDEBUG_DMG|WIZCOMBATDEBUG_FULLDMG|WIZCOMBATDEBUG_ACCURACY)))
+						iflags.wizcombatdebug = WIZCOMBATDEBUG_NONE;
 				}
 			}
 			else
@@ -4362,6 +4443,8 @@ char *buf;
 			iflags.wc_backgrnd_text    ? iflags.wc_backgrnd_text : defbrief);
 	else if (!strcmp(optname, "wizlevelport"))
 		Sprintf(buf, "%d", iflags.wizlevelport);
+	else if (!strcmp(optname, "wizcombatdebug"))
+		Sprintf(buf, "%d", iflags.wizcombatdebug);
 #ifdef PREFIXES_IN_USE
 	else {
 	    for (i = 0; i < PREFIX_COUNT; ++i)
@@ -4394,7 +4477,7 @@ dotogglepickup()
 	    Strcpy(buf, "OFF");
 	}
 	pline("Autopickup: %s.", buf);
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 #ifdef AUTOPICKUP_EXCEPTIONS

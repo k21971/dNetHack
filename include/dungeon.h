@@ -161,6 +161,7 @@ typedef struct branch {
 #define Is_bridge_temple(x)		(on_level(x,&bridge_temple))
 #define Is_sumall(x)		(on_level(x,&sum_of_all_level))
 #define Is_rlyeh(x)			(on_level(x, &rlyeh_level))
+#define Is_spire(x)			(on_level(x, &spire_level))
 #define In_nkai(x)	(on_level(x, &nkai_a_level) ||\
 						 on_level(x, &nkai_b_level) ||\
 						 on_level(x, &nkai_c_level) ||\
@@ -217,9 +218,9 @@ typedef struct branch {
 #define Is_minetown_level(x)     (on_level(x, &minetown_level))
 #define Is_mineend_level(x)     (on_level(x, &mineend_level))
 #define Is_sokoend_level(x)     (on_level(x, &sokoend_level))
-#define Is_qtown(x)		((Role_if(PM_NOBLEMAN) && Race_if(PM_HALF_DRAGON) && flags.initgend) ?\
-							(In_quest(&u.uz) && qstart_level.dlevel == (u.uz.dlevel-1)) :\
-							Role_if(PM_MADMAN) ? TRUE : Is_qstart(x))
+#define Is_qtown(x)		(In_quest(&u.uz) && ((Role_if(PM_NOBLEMAN) && Race_if(PM_HALF_DRAGON) && flags.initgend) ?\
+							(qstart_level.dlevel == (u.uz.dlevel-1)) :\
+							Role_if(PM_MADMAN) ? TRUE : Is_qstart(x)) )
 
 #define In_sokoban(x)	((x)->dnum == sokoban_dnum)
 #define In_tower(x)		((x)->dnum == tower_dnum)

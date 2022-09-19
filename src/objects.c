@@ -271,6 +271,9 @@ WEAPON(("worm tooth"),
 WEAPON(("crysknife"),
 	DMG(D(10)), DMG(D(10)),
 	1, 0,  MZ_SMALL,  0, 20,100,  3, P,   P_KNIFE, MINERAL, FALSE, CLR_WHITE),
+WEAPON(("fang of apep"),
+	DMG(D(4)), DMG(D(4)),
+	1, 0,  MZ_MEDIUM,  0, 20,200,  0, P,   P_KNIFE, BONE, FALSE, CLR_BLACK),
 
 WEAPON(("sickle"), /* Vs plants: +6 to hit and double damage */
 	DMG(D(4)), DMG(D(1)),
@@ -331,8 +334,8 @@ WEAPON(("scimitar", "curved sword"),
 	DMG(D(8)), DMG(D(8)),
 	0, 0, MZ_MEDIUM, 14, 40, 15,  0, S,   P_SCIMITAR, IRON, FALSE, HI_METAL),
 WEAPON(("high-elven warsword", "runed curved sword"), /*Needs encyc entry*/
-	DMG(D(10)), DMG(D(10)),
-	0, 0, MZ_MEDIUM,  1, 20,150,  2, S,   P_SCIMITAR, MITHRIL, UNIDED, HI_MITHRIL),
+	DMG(D(10), D(6)), DMG(D(10), D(6)),
+	0, 0, MZ_HUGE,    1, 75,150,  2, S,   P_SCIMITAR, MITHRIL, UNIDED, HI_MITHRIL),
 WEAPON(("rapier"), /*Needs encyc entry*/
 	DMG(D(6)), DMG(D(4)),
 	1, 0, MZ_MEDIUM,  5, 28, 20,  2, P,   P_SABER, METAL, FALSE, HI_METAL),
@@ -525,7 +528,7 @@ WEAPON(("double sword"), /*Needs encyc entry*/
 	1, 0,   MZ_HUGE,  1, 80, 30,  0, S|P, P_QUARTERSTAFF, IRON, FALSE, HI_METAL),
 WEAPON(("kamerel vajra", "short mace"), /*Needs encyc entry*/
 	DMG(D(6)), DMG(D(6)),	/* very different dice for different litness states */
-	0, 0, MZ_MEDIUM,  0, 10,800,  1, S|E, P_MACE, GOLD, UNIDED, HI_GOLD),
+	0, 0, MZ_MEDIUM,  0, 10,800,  1, S|E, P_MACE, GOLD, UNIDED, HI_GOLD, O_NOWISH(1)),
 WEAPON(("bar"),
 	DMG(D(8)), DMG(D(6)),
 	1, 0,   MZ_HUGE, 0, 400, 10,-10, B,   P_QUARTERSTAFF, IRON, IDED|UNIDED, HI_METAL),
@@ -574,10 +577,10 @@ GUN(("grenade launcher", "strange broken crossbow"),  0,   MZ_LARGE, 0,  55, 150
 
 GUN(("BFG", "ovoid device"),                          0,    MZ_HUGE, 0, 100, 3000,100,  3,  0,WP_ROCKET|WP_GRENADE|WP_BULLET|WP_SHELL|WP_ROCKET,
                                                                                                 SILVER, P_FIREARM, HI_SILVER), /*Needs tile*/
-GUN(("handgun", "unfamiliar handgun"),                0,   MZ_SMALL, 0,  12,  100, 15,  1,  0, WP_BULLET, IRON, P_FIREARM, HI_METAL),/*Needs tile*/
-GUN(("gun", "unfamiliar gun"),                        0,  MZ_MEDIUM, 0,  25,  250, 10,  3, -1, WP_BULLET, IRON, P_FIREARM, HI_METAL),/*Needs tile*/
-GUN(("long gun", "unfamiliar long gun"),              0,    MZ_HUGE, 0,  30,  150, 22, -1,  1, WP_BULLET, IRON, P_FIREARM, HI_METAL),/*Needs tile*/
-GUN(("heavy gun", "unfamiliar heavy gun"),            0,    MZ_HUGE, 0, 100, 2000, 20,  8, -4, WP_BULLET, IRON, P_FIREARM, HI_METAL),/*Needs tile*/
+GUN(("handgun", "unfamiliar handgun"),                0,   MZ_SMALL, 0,  12,  100, 15,  1,  0, WP_BULLET, IRON, P_FIREARM, HI_METAL, O_NOWISH(1)),/*Needs tile*/
+GUN(("gun", "unfamiliar gun"),                        0,  MZ_MEDIUM, 0,  25,  250, 10,  3, -1, WP_BULLET, IRON, P_FIREARM, HI_METAL, O_NOWISH(1)),/*Needs tile*/
+GUN(("long gun", "unfamiliar long gun"),              0,    MZ_HUGE, 0,  30,  150, 22, -1,  1, WP_BULLET, IRON, P_FIREARM, HI_METAL, O_NOWISH(1)),/*Needs tile*/
+GUN(("heavy gun", "unfamiliar heavy gun"),            0,    MZ_HUGE, 0, 100, 2000, 20,  8, -4, WP_BULLET, IRON, P_FIREARM, HI_METAL, O_NOWISH(1)),/*Needs tile*/
 GUN(("hand blaster", "hard black handmirror", "hard handmirror"), 0,  MZ_MEDIUM, 0,   2, 1000, 10,  1,  0,WP_BLASTER, PLASTIC, P_FIREARM, CLR_BLACK, O_MAGIC(1)), /*Needs tile*/
 GUN(("arm blaster",  "hard white bracer", "hard bracer"),         0,   MZ_LARGE, 0,   8, 4500, 15,  6,  0,WP_BLASTER, PLASTIC, P_FIREARM, CLR_WHITE, O_MAGIC(1)), /*Needs tile*/
  /*Needs encyc entry*/
@@ -739,13 +742,13 @@ HELM(("helm of drain resistance", "band"), /*diadem of drain resistance*//*Needs
 DRGN_MAIL(("gray dragon scale mail"),       1, 1200, 7, 5, CLR_GRAY,      O_POWER(ANTIMAGIC, HALF_SPDAM)),
 DRGN_MAIL(("silver dragon scale mail"),     1, 1200, 7, 5, DRAGON_SILVER, O_POWER(REFLECTING)),
 DRGN_MAIL(("shimmering dragon scale mail"), 1, 1200, 7, 5, CLR_CYAN,      O_POWER(DISPLACED, SEE_INVIS)),
-DRGN_MAIL(("red dragon scale mail"),        1,  900, 7, 5, CLR_RED,       O_POWER(FIRE_RES, FLYING)),
-DRGN_MAIL(("deep dragon scale mail"),       1, 1200, 7, 8, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_MAIL(("white dragon scale mail"),      1,  900, 7, 5, CLR_WHITE,     O_POWER(COLD_RES, MAGICAL_BREATHING, SWIMMING, WATERPROOF)),
 DRGN_MAIL(("orange dragon scale mail"),     1,  900, 7, 5, CLR_ORANGE,    O_POWER(FREE_ACTION, SLEEP_RES, HALLUC_RES)),
 DRGN_MAIL(("black dragon scale mail"),      1, 1200, 7, 5, CLR_BLACK,     O_POWER(DISINT_RES, DRAIN_RES)),
 DRGN_MAIL(("blue dragon scale mail"),       1,  900, 7, 5, CLR_BLUE,      O_POWER(SHOCK_RES, FAST)),
 DRGN_MAIL(("green dragon scale mail"),      1,  900, 7, 5, CLR_GREEN,     O_POWER(POISON_RES, SICK_RES)),
+DRGN_MAIL(("red dragon scale mail"),        1,  900, 7, 5, CLR_RED,       O_POWER(FIRE_RES, FLYING)),
+DRGN_MAIL(("deep dragon scale mail"),       1, 1200, 7, 8, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_MAIL(("yellow dragon scale mail"),     1,  900, 7, 5, CLR_YELLOW,    O_POWER(ACID_RES, STONE_RES)),
 #undef DRGN_MAIL
 
@@ -757,13 +760,13 @@ DRGN_MAIL(("yellow dragon scale mail"),     1,  900, 7, 5, CLR_YELLOW,    O_POWE
 DRGN_SCALES(("gray dragon scales"),       1, 700, 9, 2, CLR_GRAY,      O_POWER(ANTIMAGIC, HALF_SPDAM)),
 DRGN_SCALES(("silver dragon scales"),     1, 700, 9, 2, DRAGON_SILVER, O_POWER(REFLECTING)),
 DRGN_SCALES(("shimmering dragon scales"), 1, 700, 9, 2, CLR_CYAN,      O_POWER(DISPLACED, SEE_INVIS)),
-DRGN_SCALES(("red dragon scales"),        1, 500, 9, 2, CLR_RED,       O_POWER(FIRE_RES, FLYING)),
-DRGN_SCALES(("deep dragon scales"),       1, 500, 9, 4, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_SCALES(("white dragon scales"),      1, 500, 9, 2, CLR_WHITE,     O_POWER(COLD_RES, MAGICAL_BREATHING, SWIMMING, WATERPROOF)),
 DRGN_SCALES(("orange dragon scales"),     1, 500, 9, 2, CLR_ORANGE,    O_POWER(FREE_ACTION, SLEEP_RES, HALLUC_RES)),
 DRGN_SCALES(("black dragon scales"),      1, 700, 9, 2, CLR_BLACK,     O_POWER(DISINT_RES, DRAIN_RES)),
 DRGN_SCALES(("blue dragon scales"),       1, 500, 9, 2, CLR_BLUE,      O_POWER(SHOCK_RES, FAST)),
 DRGN_SCALES(("green dragon scales"),      1, 500, 9, 2, CLR_GREEN,     O_POWER(POISON_RES, SICK_RES)),
+DRGN_SCALES(("red dragon scales"),        1, 500, 9, 2, CLR_RED,       O_POWER(FIRE_RES, FLYING)),
+DRGN_SCALES(("deep dragon scales"),       1, 500, 9, 4, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_SCALES(("yellow dragon scales"),     1, 500, 9, 2, CLR_YELLOW,    O_POWER(ACID_RES, STONE_RES)),
 #undef DRGN_SCALES
 
@@ -803,13 +806,13 @@ SUIT(("plasteel armor", "hard white armor", "armor"), /*Needs encyc entry*//*Nee
 SUIT(("splint mail"),
 	1, 0,   MZ_HUGE,  ARMSZ_HEAVY, 62,  5, 200,   80,  6, 5, 2, IRON, HI_METAL),
 SUIT(("barnacle armor", "giant shell armor"),
-	0, 1,   MZ_HUGE,  ARMSZ_HEAVY,  0, 10, 150, 1000,  8, 4, 1, SHELL_MAT, CLR_GRAY),
+	0, 1,   MZ_HUGE,  ARMSZ_HEAVY,  0, 10, 150, 1000,  6, 5, 1, SHELL_MAT, CLR_GRAY),
 SUIT(("banded mail"),
 	1, 0,   MZ_HUGE, ARMSZ_MEDIUM, 72,  5, 175,   90,  7, 3, 1, IRON, HI_METAL),
 SUIT(("dwarvish mithril-coat"),
-	1, 0,  MZ_LARGE,  ARMSZ_LIGHT, 10,  1,  40,  240,  7, 3, 3, MITHRIL, HI_MITHRIL),
+	1, 0,  MZ_LARGE,  ARMSZ_LIGHT, 10,  1,  40,  240,  6, 3, 3, MITHRIL, HI_MITHRIL),
 SUIT(("elven mithril-coat"),
-	1, 0,  MZ_LARGE,  ARMSZ_LIGHT, 15,  1,  20,  240,  7, 2, 3, MITHRIL, HI_MITHRIL),
+	1, 0,  MZ_LARGE,  ARMSZ_LIGHT, 15,  1,  20,  240,  6, 2, 3, MITHRIL, HI_MITHRIL),
 SUIT(("chain mail"),
 	1, 0,  MZ_LARGE,  ARMSZ_HEAVY, 72,  5, 150,   75,  7, 4, 1, IRON, HI_METAL),
 SUIT(("droven chain mail", "crested black mail", "crested mail"), /*Needs encyc entry*/
@@ -913,7 +916,7 @@ CLOAK(("cloak of displacement", "piece of cloth"),
 
 /* shields */
 SHIELD(("buckler"),
-		1, 0,  MZ_SMALL,  6, 0, 30,	3,  9, 0, 0, WOOD, HI_WOOD),
+		1, 0,  MZ_SMALL,  6, 0, 25,	3,  9, 0, 0, WOOD, HI_WOOD),
 SHIELD(("elven shield", "blue and green shield", "shield"),
 		0, 0,  MZ_MEDIUM, 2, 0, 30,	7,  8, 0, 2, WOOD, CLR_GREEN),
 SHIELD(("Uruk-hai shield", "white-handed shield", "shield"),
@@ -941,13 +944,13 @@ SHIELD(("shield of reflection", "polished shield", "smooth shield"),
 DRGN_SHIELD(("gray dragon scale shield"),       1, 1200, 7, 0, CLR_GRAY,      O_POWER(ANTIMAGIC, HALF_SPDAM)),
 DRGN_SHIELD(("silver dragon scale shield"),     1, 1200, 7, 0, DRAGON_SILVER, O_POWER(REFLECTING)),
 DRGN_SHIELD(("shimmering dragon scale shield"), 1, 1200, 7, 0, CLR_CYAN,      O_POWER(DISPLACED, SEE_INVIS)),
-DRGN_SHIELD(("red dragon scale shield"),        1,  900, 7, 0, CLR_RED,       O_POWER(FIRE_RES)), // intentionally does not give flight; wings from armor
-DRGN_SHIELD(("deep dragon scale shield"),       1, 1200, 6, 0, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_SHIELD(("white dragon scale shield"),      1,  900, 7, 0, CLR_WHITE,     O_POWER(COLD_RES, MAGICAL_BREATHING, SWIMMING, WATERPROOF)),
 DRGN_SHIELD(("orange dragon scale shield"),     1,  900, 7, 0, CLR_ORANGE,    O_POWER(FREE_ACTION, SLEEP_RES, HALLUC_RES)),
 DRGN_SHIELD(("black dragon scale shield"),      1, 1200, 7, 0, CLR_BLACK,     O_POWER(DISINT_RES, DRAIN_RES)),
 DRGN_SHIELD(("blue dragon scale shield"),       1,  900, 7, 0, CLR_BLUE,      O_POWER(SHOCK_RES, FAST)),
 DRGN_SHIELD(("green dragon scale shield"),      1,  900, 7, 0, CLR_GREEN,     O_POWER(POISON_RES, SICK_RES)),
+DRGN_SHIELD(("red dragon scale shield"),        1,  900, 7, 0, CLR_RED,       O_POWER(FIRE_RES)), // intentionally does not give flight; wings from armor
+DRGN_SHIELD(("deep dragon scale shield"),       1, 1200, 6, 0, CLR_MAGENTA,   O_POWER(DRAIN_RES, UNCHANGING)),
 DRGN_SHIELD(("yellow dragon scale shield"),     1,  900, 7, 0, CLR_YELLOW,    O_POWER(ACID_RES, STONE_RES)),
 #undef DRGN_SHIELD
 SHIELD(("stone dragon shield"),
@@ -1113,6 +1116,7 @@ AMULET(("Amulet of Yendor", "Amulet of Yendor"), {0}, 0, /* note: description ==
 		wt, cost, sdam, ldam, hitbon, WP_GENERIC, 0, wt, clr, __VA_ARGS__)
 /* containers */
 CONTAINER(("box"),             1,   MZ_HUGE, 0, 0,  30, 350,   8, WOOD, HI_WOOD),
+CONTAINER(("sarcophagus"),             1,   MZ_HUGE, 0, 0,  0, 3500,   8, GOLD, HI_GOLD),
 CONTAINER(("massive stone crate"),
 										1,MZ_GIGANTIC,0, 0,   0,6000,  80, MINERAL,HI_MINERAL),/*Needs tile*/
 CONTAINER(("chest"),           1,   MZ_HUGE, 0, 0,  30, 600,  16, WOOD, HI_WOOD),
@@ -1166,6 +1170,7 @@ TOOL(("mirror", "looking glass"), 0,   MZ_TINY, 0, 0, 0,  45, 13,  10, GLASS, HI
 #else
 TOOL(("mirror", "looking glass"), 0,   MZ_TINY, 0, 0, 0,  60, 13,  10, GLASS, HI_SILVER),
 #endif
+TOOL(("purified mirror", "disk"), 0,   MZ_TINY, 0, 0, 0,  0, 13,1000, SILVER, HI_SILVER, O_MATSPEC(UNIDED)),
 TOOL(("crystal ball", "glass orb"),
 								0,  MZ_SMALL, 0, 1, 1,  15, 50, 200, GLASS, HI_GLASS),
 TOOL(("misotheistic pyramid", "black-stone pyramid"),  /*Needs encyc entry*/
@@ -1309,7 +1314,7 @@ WEPTOOL(("double lightsaber",  "long grip"), /*Needs encyc entry*//*Needs tile*/
 	0,  MZ_SMALL, 1, 1,  0, 30,1000, -6, S|E, P_QUARTERSTAFF, PLATINUM, HI_SILVER, O_MATSPEC(IDED|UNIDED)),
 WEPTOOL(("rod of force", "rod"), /*Needs encyc entry*/
 	DMG(D(8)), DMG(D(12)),
-	0,  MZ_SMALL, 1, 1,  0, 10,1000, 1, S|P|E, P_LONG_SWORD, IRON, CLR_BLACK, O_DIR(IMMEDIATE), O_MATSPEC(UNIDED)),
+	0,  MZ_SMALL, 1, 1,  0, 10,1000, 1, S|P|E, P_LONG_SWORD, IRON, CLR_BLACK, O_DIR(IMMEDIATE), O_MATSPEC(UNIDED), O_NOWISH(1)),
 WEPTOOL(("grappling hook", "hook"),
 	DMG(D(2)), DMG(D(6)),
 	0, MZ_MEDIUM, 0, 0,  4, 30,  50,  0, B,   P_FLAIL, IRON, HI_METAL, O_MATSPEC(UNIDED)),
@@ -1761,6 +1766,8 @@ OBJECT(("statue"), BITS(1,0,0,1,0,0,0,0,    MZ_HUGE,0,0,0,0,P_NONE,MINERAL,0), {
 		ROCK_CLASS,   800, 0, 2500,  0, DMG(D(20)), DMG(D(20)), 2, 0, 2, 2500, CLR_WHITE),
 OBJECT(("fossil"), BITS(1,0,0,0,0,0,0,0,    MZ_HUGE,0,0,0,0,P_NONE,MINERAL,0), {0},	/*Needs encyc entry*/
 		ROCK_CLASS,   100, 0, 2500,  0, DMG(D(20)), DMG(D(20)), 0, 0, 0, 2500, CLR_BROWN),
+OBJECT(("expensive bed"), BITS(1,0,0,0,0,0,0,0,MZ_LARGE,1,0,0,0,P_NONE,WOOD,0), {0},			/*Needs encyc entry*/
+		BED_CLASS,     0, 0, 3000,  5000, DMG(D(20)), DMG(D(20)), 0, 0, 0, 2000, CLR_BRIGHT_MAGENTA),
 OBJECT(("bed"), BITS(1,0,0,0,0,0,0,0,MZ_LARGE,1,0,0,0,P_NONE,WOOD,0), {0},			/*Needs encyc entry*/
 		BED_CLASS,   900, 0, 2000,  1000, DMG(D(20)), DMG(D(20)), 0, 0, 0, 2000, HI_WOOD),
 OBJECT(("bedroll"), BITS(1,0,0,0,0,0,0,0,MZ_SMALL,1,0,0,0,P_NONE,CLOTH,0), {0},		/*Needs encyc entry*/

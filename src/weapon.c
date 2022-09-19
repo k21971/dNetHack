@@ -242,11 +242,11 @@ struct monst *magr;
 	}
 
 	if (is_insight_weapon(otmp)){
-		if(youagr && Role_if(PM_MADMAN)){
+		if(youagr && (Role_if(PM_MADMAN) || u.sealsActive&SEAL_OSE)){
 			if(u.uinsight)
 				tmp += rnd(min(u.uinsight, mlev(magr)));
 		}
-		else if(magr && monsndx(magr->data) == PM_MADMAN){
+		else if(magr && insightful(magr->data)){
 			tmp += rnd(mlev(magr));
 		}
 	}
@@ -1637,6 +1637,7 @@ static const NEARDATA short hwep[] = {
 	  SET_OF_CROW_TALONS/*2d4/2d3/+6 study*/,
 	  TSURUGI/*1d16/1d8+2d6*/, 
 	  MOON_AXE/*variable, 2d6 to 2d12*/,
+	  HIGH_ELVEN_WARSWORD/*1d10+1d6/1d10+1d6*/,
 	  RUNESWORD/*1d10+1d4/1d10+1*/, 
 	  BATTLE_AXE/*1d8+1d4/1d6+2d4*/,
 	  TWO_HANDED_SWORD/*1d12/3d6*/, 
@@ -1647,7 +1648,6 @@ static const NEARDATA short hwep[] = {
 	  RAKUYO/*1d8+1d4/1d8+1d3*/, 
 	  ELVEN_BROADSWORD/*1d6+1d4/1d6+2*/, 
 	  KATANA/*1d10/1d12*/,
-	  HIGH_ELVEN_WARSWORD/*1d10/1d10*/,
 	  CRYSKNIFE/*1d10/1d10*/, 
 	  BESTIAL_CLAW/*1d10/1d8*/, 
 	  VIPERWHIP/*2d4/2d3/poison*/,
@@ -1740,6 +1740,7 @@ static const NEARDATA short hpwep[] = {
 	  SET_OF_CROW_TALONS/*2d4/2d3/+6 study*/,
 	  TSURUGI/*1d16/1d8+2d6*/, 
 	  MOON_AXE/*variable, 2d6 to 2d12*/,
+	  HIGH_ELVEN_WARSWORD/*1d10+1d6/1d10+1d6*/,
 	  RUNESWORD/*1d10+1d4/1d10+1*/, 
 	  BATTLE_AXE/*1d8+1d4/1d6+2d4*/,
 	  TWO_HANDED_SWORD/*1d12/3d6*/, 
@@ -1753,7 +1754,6 @@ static const NEARDATA short hpwep[] = {
 	  HALBERD, /*1d10/2d6*/
 	  KATANA/*1d10/1d12*/,
 	  DROVEN_LANCE, /*1d10/1d10*/
-	  HIGH_ELVEN_WARSWORD/*1d10/1d10*/,
 	  CRYSKNIFE/*1d10/1d10*/, 
 	  BESTIAL_CLAW/*1d10/1d8*/, 
 	  VIPERWHIP/*2d4/2d3/poison*/,
@@ -2544,6 +2544,8 @@ struct obj *otmp;
 			bonus *= 2;
 		else if(otmp->otyp == DISKOS && !arms && !mswp)
 			bonus *= 2;
+		else if(is_spear(otmp) && !arms && !mswp)
+			bonus *= 1.5;
 		else if(otmp->otyp == ISAMUSEI && !arms && !mswp)
 			bonus *= 1.5;
 		else if(otmp->otyp == KATANA && !arms && !mswp)
@@ -2644,7 +2646,7 @@ struct obj *otmp;
 	else if (str < STR19(25)) bonus = 7;
 	else /*  str ==25*/bonus = 8;
 	
-	if(u.umadness&MAD_RAGE && !ClearThoughts){
+	if(u.umadness&MAD_RAGE && !BlockableClearThoughts){
 		bonus += (Insanity)/10;
 	}
 	if(otmp){
@@ -2820,7 +2822,7 @@ could_advance(skill)
 int skill;
 {
     return !P_RESTRICTED(skill)
-	    && P_SKILL(skill) < P_MAX_SKILL(skill) && 
+	    && P_SKILL_CORE(skill, FALSE) < P_MAX_SKILL_CORE(skill, FALSE) && 
 	    P_ADVANCE(skill) >=
 		(unsigned) practice_needed_to_advance(OLD_P_SKILL(skill))
 		&& practice_needed_to_advance(OLD_P_SKILL(skill)) > 0
@@ -2834,7 +2836,7 @@ peaked_skill(skill)
 int skill;
 {
     return !P_RESTRICTED(skill)
-	    && P_SKILL(skill) >= P_MAX_SKILL(skill) && (
+	    && P_SKILL_CORE(skill, FALSE) >= P_MAX_SKILL_CORE(skill, FALSE) && (
 	    (P_ADVANCE(skill) >=
 		(unsigned) practice_needed_to_advance(OLD_P_SKILL(skill))));
 }
@@ -2848,7 +2850,7 @@ int skill;
 	u.skill_record[u.skills_advanced++] = skill;
 	/* subtly change the advance message to indicate no more advancement */
 	You("are now %s skilled in %s.",
-	P_SKILL(skill) >= P_MAX_SKILL(skill) ? "most" : "more",
+	P_SKILL_CORE(skill, FALSE) >= P_MAX_SKILL_CORE(skill, FALSE) ? "most" : "more",
 	P_NAME(skill));
 }
 
@@ -3070,7 +3072,7 @@ int enhance_skill(boolean want_dump)
 	    }
 #endif
 	} while (speedy && n > 0);
-	return 0;
+	return MOVE_CANCELLED;
 }
 
 /*
@@ -3246,9 +3248,8 @@ struct obj *obj;
 		return (P_NONE);
 
 #define CHECK_ALTERNATE_SKILL(alt_skill) {\
-	if(P_SKILL(type) > P_SKILL(alt_skill));\
-	else if(P_MAX_SKILL(type) >= P_MAX_SKILL(alt_skill));\
-	else type = alt_skill;\
+	if(P_SKILL(type) < P_SKILL(alt_skill)) type = alt_skill;\
+	else if(P_SKILL(type) == P_SKILL(alt_skill) && P_MAX_SKILL(type) < P_MAX_SKILL(alt_skill)) type = alt_skill;\
 }
 	type = objects[obj->otyp].oc_skill;
 	
@@ -3269,6 +3270,21 @@ struct obj *obj;
 	}
 	else if(obj->oartifact == ART_WAND_OF_ORCUS){
 		type = P_MACE;
+	}
+	else if(obj->oartifact == ART_MASAMUNE){
+		for(int skl = P_FIRST_WEAPON; skl <= P_LAST_WEAPON; skl++){
+			/* Ranged weapon skills are intermixed with melee skills :( */
+			if(skl == P_BOW
+				|| skl == P_SLING
+				|| skl == P_FIREARM
+				|| skl == P_CROSSBOW
+				|| skl == P_DART
+				|| skl == P_SHURIKEN
+				|| skl == P_BOOMERANG
+			)
+				continue;
+			CHECK_ALTERNATE_SKILL(skl)
+		}
 	}
 
 	if(obj->otyp == DOUBLE_LIGHTSABER){

@@ -131,10 +131,10 @@ doattributes()
 			spirits_enlightenment();
 			break;
 		default:
-			return 0;
+			return MOVE_INSTANT;
 		}
 	}
-	return 0;
+	return MOVE_INSTANT;
 }
 
 /* KMH, #conduct
@@ -144,14 +144,14 @@ int
 doconduct()
 {
 	show_conduct(0, FALSE);
-	return 0;
+	return MOVE_INSTANT;
 }
 
 int
 doenlightenment()
 {
 	show_enlightenment(0, FALSE);
-	return 0;
+	return MOVE_INSTANT;
 }
 
 /*
@@ -333,7 +333,12 @@ minimal_enlightenment()
 	end_menu(tmpwin, "Base Attributes");
 	n = select_menu(tmpwin, PICK_ONE, &selected);
 	destroy_nhwindow(tmpwin);
-	return (n>0 ? selected[0].item.a_int : 0);
+	if(n > 0){
+		int picked = selected[0].item.a_int;
+		free(selected);
+		return picked;
+	}
+	return 0;
 }
 
 
@@ -610,7 +615,7 @@ boolean dumping;
 	if(Doubt)
 		enl_msg("You ", "can't", "couldn't", " pray or use clerical magic");
 	/*** Madnesses ***/
-	if(u.usanity < 100 && !ClearThoughts){
+	if(NightmareAware_Sanity < 100 && !BlockableClearThoughts){
 		if (u.umadness&MAD_DELUSIONS){
 			you_have("a tendency to hallucinate, obscuring some monsters' true forms");
 		}
@@ -831,6 +836,8 @@ boolean dumping;
 		if(flags.warntypeg & MG_PRINCE) you_are("aware of the presence of rulers");
 		if(flags.warntypea & MV_TELEPATHIC) you_are("aware of the presence of telepaths");
 		if(flags.warntypea & MA_WERE) you_are("aware of the presence of werecreatures");
+		if(flags.warntypea & MA_G_O_O) you_are("aware of the presence of great old ones");
+		if(flags.warntypea & MA_XORN) you_are("aware of the presence of xorns");
 	}
 	if (Searching) you_have("automatic searching");
 	if (Clairvoyant) you_are("clairvoyant");
@@ -1215,7 +1222,7 @@ resistances_enlightenment()
 	if(Doubt)
 		putstr(en_win, 0, "You are having a crisis of faith.");
 	/*** Madnesses ***/
-	if(u.usanity < 100 && !ClearThoughts){
+	if(NightmareAware_Sanity < 100 && !BlockableClearThoughts){
 		char messaged = 0;
 		if (u.umadness&MAD_DELUSIONS){
 			putstr(en_win, 0, "You have a tendency to hallucinate.");

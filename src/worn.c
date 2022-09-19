@@ -9,6 +9,9 @@ boolean FDECL(mon_gets_extrinsic, (struct monst *, int, struct obj *));
 STATIC_DCL void FDECL(update_mon_intrinsic, (struct monst *,struct obj *,int,BOOLEAN_P,BOOLEAN_P));
 STATIC_DCL void FDECL(m_dowear_type, (struct monst *,long, BOOLEAN_P, BOOLEAN_P));
 STATIC_DCL int NDECL(def_beastmastery);
+STATIC_DCL int NDECL(def_vilya);
+STATIC_DCL int NDECL(def_narya);
+STATIC_DCL int NDECL(def_lomya);
 STATIC_DCL int NDECL(def_mountedCombat);
 
 const struct worn {
@@ -666,7 +669,10 @@ struct monst *mon;
 		if(mon->mvar2 & 0x4L) base = -125; //Fully Quantum Locked
 		if(mon->mvar2 & 0x2L) base = -20; //Partial Quantum Lock
 	}
-	
+	else if(mon->mtyp == PM_CHAOS && !PURIFIED_WIND){
+		base -= 6;
+	}
+
 	if(is_alabaster_mummy(mon->data) && mon->mvar_syllable == SYLLABLE_OF_GRACE__UUR)
 		base -= 10;
 	
@@ -676,6 +682,12 @@ struct monst *mon;
 			base -= rnd(def_beastmastery()); // the duster doubles for tame animals
 		
 		if(u.usteed && mon==u.usteed) base -= rnd(def_mountedCombat());
+		
+		if(uring_art(ART_VILYA) && def_vilya())
+			base -=  sgn(def_vilya())*rnd(abs(def_vilya()));
+
+		if(uring_art(ART_NARYA) && def_narya())
+			base -= sgn(def_narya())*rnd(abs(def_narya()));
 	}
 
 	monwep = MON_WEP(mon);
@@ -725,7 +737,7 @@ struct monst *mon;
 		}
 	}
 
-	if (helpless(mon))
+	if (helpless(mon) || mon->msuicide)
 		base += 5;
 	else {
 		struct obj * armor = which_armor(mon, W_ARM);
@@ -812,8 +824,9 @@ struct monst *mon;
 	}
 	if(armac > 11) armac = rnd(armac-10) + 10; /* high armor ac values act like player ac values */
 	
-	if (wizard && ublindf && (ublindf->otyp == LENSES || ublindf->otyp == ANDROID_VISOR))
+	if (wizard && (iflags.wizcombatdebug & WIZCOMBATDEBUG_ACCURACY) && WIZCOMBATDEBUG_APPLIES((struct monst *)0, mon)) {
 		pline("base: %d, armac: %d", base, armac);
+	}
 	
 	base -= armac;
 	/* since arm_ac_bonus is positive, subtracting it increases AC */
@@ -857,6 +870,9 @@ struct monst *mon;
 			}
 		}
 	}
+	else if(mon->mtyp == PM_CHAOS && !PURIFIED_WIND){
+		base -= 6;
+	}
 	
 	if(is_alabaster_mummy(mon->data) && mon->mvar_syllable == SYLLABLE_OF_GRACE__UUR)
 		base -= 10;
@@ -868,6 +884,12 @@ struct monst *mon;
 		
 		if (uarm && uarm->oartifact == ART_BEASTMASTER_S_DUSTER && is_animal(mon->data))
 			base -= def_beastmastery(); // the duster doubles for tame animals
+
+		if(uring_art(ART_VILYA))
+			base -= def_vilya();
+
+		if(uring_art(ART_NARYA))
+			base -= def_narya();
 	}
 	
 	if(mon->mtyp == PM_HOD_SEPHIRAH){
@@ -894,7 +916,7 @@ struct monst *mon;
 
 	base -= armac;
 	
-	if (helpless(mon))
+	if (helpless(mon) || mon->msuicide)
 		base += 5;
 	else {
 		struct obj * armor = which_armor(mon, W_ARM);
@@ -983,11 +1005,17 @@ struct monst *mon;
 	if(mon->mtyp == PM_CHOKHMAH_SEPHIRAH){
 		base += u.chokhmah;
 	}
+	else if(mon->mtyp == PM_CHAOS && !PURIFIED_WIND){
+		base += 4;
+	}
 	
 	if(mon->mtame){
 		if(active_glyph(IMPURITY)) base += 3;
 		if(Role_if(PM_HEALER))
 			base += heal_mlevel_bonus();
+
+		if(uring_art(ART_LOMYA))
+			base += def_lomya();
 	}
 	if(is_alabaster_mummy(mon->data) && mon->mvar_syllable == SYLLABLE_OF_SPIRIT__VAUL)
 		base += 10;
@@ -1004,11 +1032,17 @@ struct monst *mon;
 	if(mon->mtyp == PM_CHOKHMAH_SEPHIRAH){
 		base += u.chokhmah;
 	}
+	else if(mon->mtyp == PM_CHAOS && !PURIFIED_WIND){
+		base += 4;
+	}
 	
 	if(mon->mtame){
 		if(active_glyph(IMPURITY)) base += 3;
 		if(Role_if(PM_HEALER))
-			base += def_beastmastery();
+			base += heal_mlevel_bonus();
+
+		if(uring_art(ART_LOMYA))
+			base += def_lomya();
 	}
 	if(is_alabaster_mummy(mon->data) && mon->mvar_syllable == SYLLABLE_OF_SPIRIT__VAUL)
 		base += 10;
@@ -1083,7 +1117,7 @@ int depth;
 	mon_slot_dr(mon, magr, slot, &base, &armac, &nat_dr, depth);
 
 	//Star spawn reach extra-dimensionally past all armor, even bypassing natural armor.
-	if(magr && (magr->mtyp == PM_STAR_SPAWN || magr->mtyp == PM_GREAT_CTHULHU || (magr->mtyp == PM_LADY_CONSTANCE && !rn2(2)) || mad_monster_turn(magr, MAD_NON_EUCLID))){
+	if(magr && (magr->mtyp == PM_STAR_SPAWN || magr->mtyp == PM_GREAT_CTHULHU || magr->mtyp == PM_VEIL_RENDER || (magr->mtyp == PM_LADY_CONSTANCE && !rn2(2)) || mad_monster_turn(magr, MAD_NON_EUCLID))){
 		armac = 0;
 		if(undiffed_innards(mon->data))
 			nat_dr /= 2;
@@ -1342,6 +1376,8 @@ boolean creation;
 	 * Give animals and mindless creatures a chance to wear their initial
 	 * equipment.
 	 */
+	if(mad_no_armor(mon))
+		return;
 	if ((is_animal(mon->data) || mindless_mon(mon)) && !creation)
 		return;
 
@@ -1401,8 +1437,7 @@ boolean racialexception;
 		case W_AMUL:
 		    if (obj->oclass != AMULET_CLASS ||
 				!can_wear_amulet(mon->data) || 
-			    (obj->otyp != AMULET_OF_LIFE_SAVING &&
-				obj->otyp != AMULET_OF_REFLECTION))
+			    !searches_for_item(mon, obj))
 			continue;
 		    best = obj;
 		    goto outer_break; /* no such thing as better amulets */
@@ -1422,7 +1457,7 @@ boolean racialexception;
 		    if (has_horns(mon->data) && obj->otyp != find_gcirclet() && !is_flimsy(obj)) continue;
 		    break;
 		case W_ARMS:
-		    if (cantwield(mon->data) || !is_shield(obj)) continue;
+		    if (noshield(mon->data) || (mon_offhand_attack(mon) && !creation) || !is_shield(obj)) continue;
 		    break;
 		case W_ARMG:
 			if((mon->mtyp == PM_CATHEZAR || mon->mtyp == PM_WARDEN_ARIANNA) && obj->otyp == CHAIN)
@@ -1502,14 +1537,40 @@ outer_break:
 }
 #undef RACE_EXCEPTION
 
+struct obj *
+mon_remove_armor(mon, flag)
+struct monst *mon;
+long flag;
+{
+	struct obj *old;
+	int m_delay = 0;
+
+	old = which_armor(mon, flag);
+
+	if(!old)
+		return (struct obj *)0;
+	
+	if ((flag == W_ARM
+	  || flag == W_ARMU
+	) && (mon->misc_worn_check & W_ARMC))
+	    m_delay += 2;
+	m_delay += objects[old->otyp].oc_delay;
+	old->owornmask = 0L;
+	mon->mfrozen = max(mon->mfrozen, m_delay);
+	if(mon->mfrozen)
+		mon->mcanmove = 0;
+	update_mon_intrinsics(mon, old, FALSE, FALSE);
+	mon->misc_worn_check &= ~flag;
+	return old;
+}
+
 boolean
-mon_remove_armor(mon)
+mon_throw_armor(mon)
 struct monst *mon;
 {
 	struct obj *old;
 	long flag;
-	int m_delay = 0;
-	int unseen = !canseemon(mon);
+	int seen = canseemon(mon);
 	int tarx, tary;
 	int tries = 10;
 	
@@ -1541,22 +1602,67 @@ struct monst *mon;
 
 	if(!old) return FALSE;
 	
-	if ((flag == W_ARM
-	  || flag == W_ARMU
-	) && (mon->misc_worn_check & W_ARMC))
-	    m_delay += 2;
-	m_delay += objects[old->otyp].oc_delay;
-	old->owornmask = 0L;
-	mon->mfrozen = m_delay;
-	if(mon->mfrozen) mon->mcanmove = 0;
-	update_mon_intrinsics(mon, old, FALSE, FALSE);
-	mon->misc_worn_check &= ~flag;
-	pline("%s removes %s.", Monnam(mon), distant_name(old, doname));
-	do{
+	old = mon_remove_armor(mon, flag);
+	
+	if(!old) return FALSE; //Shouldn't occur since we already checked this, but perhaps remove_armor will support welded armor.
+
+	if(seen)
+		pline("%s removes %s.", Monnam(mon), distant_name(old, doname));
+	do {
 		tarx = rn2(17)-8+mon->mx;
 		tary = rn2(17)-8+mon->my;
 	} while((tarx == mon->mx && tary == mon->my) || !isok(tarx, tary));
 	mthrow(mon, old, 0, tarx, tary, FALSE);
+	return TRUE;
+}
+
+boolean
+mon_strip_armor(mon)
+struct monst *mon;
+{
+	struct obj *old;
+	long flag;
+	int seen = canseemon(mon);
+	int i;
+	
+	if (mon->mfrozen) return FALSE;
+	
+	for(i = 1; i<=7;i++){
+		switch(rnd(7)){
+			case 1:
+				flag = W_ARM;
+			break;
+			case 2:
+				flag = W_ARMC;
+			break;
+			case 3:
+				flag = W_ARMH;
+			break;
+			case 4:
+				flag = W_ARMG;
+			break;
+			case 5:
+				flag = W_ARMF;
+			break;
+			case 6:
+				flag = W_ARMU;
+			break;
+			case 7:
+				flag = W_AMUL;
+			break;
+		}
+
+		if(!which_armor(mon, flag)) continue;
+	
+		old = mon_remove_armor(mon, flag);
+
+		if(!old) continue; //Shouldn't occur since we already checked this, but perhaps remove_armor will support welded armor.
+
+		if(seen){
+			seen = FALSE;
+			pline("%s removes %s clothes.", Monnam(mon), mhis(mon));
+		}
+	}
 	return TRUE;
 }
 
@@ -1650,7 +1756,6 @@ boolean polyspot;
 	register struct obj *otmp;
 	struct permonst *mdat = mon->data;
 	boolean vis = cansee(mon->mx, mon->my);
-	boolean handless_or_tiny = (nohands(mdat) || nolimbs(mdat) || verysmall(mdat));
 	const char *pronoun = mhim(mon),
 			*ppronoun = mhis(mon);
 
@@ -1715,7 +1820,7 @@ boolean polyspot;
 		}
 	}
 	if ((otmp = which_armor(mon, W_ARMG)) != 0) {
-		if(nohands(mon->data) || nolimbs(mon->data) || otmp->objsize != mon->data->msize || is_whirly(mon->data) || noncorporeal(mon->data)){
+		if(nogloves(mon->data) || nolimbs(mon->data) || otmp->objsize != mon->data->msize || is_whirly(mon->data) || noncorporeal(mon->data)){
 			if (vis)
 				pline("%s drops %s gloves!", Monnam(mon), ppronoun);
 			if (polyspot) bypass_obj(otmp);
@@ -2252,6 +2357,53 @@ def_beastmastery()
 	if((uwep && uwep->oartifact == ART_CLARENT) || (uswapwep && uswapwep->oartifact == ART_CLARENT))
 		bm *= 2;
 	return bm;
+}
+
+int
+heal_vilya()
+{
+	return (ACURR(A_INT) - 11)/2;
+}
+
+STATIC_OVL int
+def_vilya()
+{
+	return (ACURR(A_INT) - 11)/2;
+}
+
+STATIC_OVL int
+def_lomya()
+{
+	return (ACURR(A_WIS) - 11)/2;
+}
+
+int
+lev_lomya()
+{
+	int bm = 0;
+	switch (P_SKILL(P_BEAST_MASTERY)) {
+		case P_ISRESTRICTED: bm +=  0; break;
+		case P_UNSKILLED:    bm +=  0; break;
+		case P_BASIC:        bm +=  1; break;
+		case P_SKILLED:      bm +=  2; break;
+		case P_EXPERT:       bm +=  5; break;
+		default: impossible(">Expert beast mastery unhandled"); bm += 5; break;
+	}
+	if((uwep && uwep->oartifact == ART_CLARENT) || (uswapwep && uswapwep->oartifact == ART_CLARENT))
+		bm *= 2;
+	return bm + (ACURR(A_WIS) + ACURR(A_CHA) - 18)/4;
+}
+
+int
+en_nenya()
+{
+	return (ACURR(A_WIS) - 11)/2;
+}
+
+STATIC_OVL int
+def_narya()
+{
+	return (ACURR(A_CHA) - 11)/2;
 }
 
 int

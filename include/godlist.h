@@ -66,7 +66,7 @@ GOD_V2("Anu",                   A_LAWFUL, NEUTRAL_HOLINESS,
 	MINIONS(Langels)
 	),
 GOD_V2("_Ishtar",               A_NEUTRAL, HOLY_HOLINESS,
-	MINIONS(NElemen)
+	MINIONS(PM_COURE_ELADRIN, PM_MOVANIC_DEVA, PM_MONADIC_DEVA, PM_ASTRAL_DEVA, PM_SON_OF_TYPHON)
 	),
 GOD_V2("Anshar",                A_CHAOTIC, NEUTRAL_HOLINESS,
 	MINIONS(Cdemons)
@@ -189,7 +189,7 @@ GOD_V2("Lobon",                 A_NEUTRAL, HOLY_HOLINESS,
 	MINIONS(Nangels)
 	),
 GOD_V2("Tamash",                A_CHAOTIC, NEUTRAL_HOLINESS,
-	MINIONS(NElemen)
+	MINIONS(PM_HOMUNCULUS,PM_COURE_ELADRIN,PM_ANGEL,PM_WARDEN_ARCHON,PM_CAILLEA_ELADRIN)
 	),
 /* valkyrie, Norse */
 GOD_V2("Tyr",                   A_LAWFUL, HOLY_HOLINESS,
@@ -393,7 +393,7 @@ GOD_V2("the Silver Flame", A_NONE, HOLY_HOLINESS,
 	MINIONS(Langels)
 	),
 GOD_V2("Nyarlathotep", A_NONE, NEUTRAL_HOLINESS,
-	MINIONS()
+	MINIONS(PM_HUNTING_HORROR)
 	),
 /* the great terminator */
 GOD_V2((const char *)0, 0, 0, MINIONS())

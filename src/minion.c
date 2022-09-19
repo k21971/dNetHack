@@ -141,6 +141,10 @@ struct permonst * ptr;	/* summon as though you were <X> */
 			if (mon && mon->mfaction){
 				set_faction(mtmp, mon->mfaction);
 			}
+			if(!is_lord(mtmp->data) && !is_prince(mtmp->data)){
+				mtmp->mpeaceful = mon->mpeaceful;
+				set_malign(mtmp);
+			}
 	    }
 	    cnt--;
 	}
@@ -207,10 +211,9 @@ boolean talk;
 
     if (mon) {
 		if (talk) {
-			pline_The("voice of %s booms:", godname(godnum));
-			verbalize("Thou shalt pay for thy indiscretion!");
+			godvoice(godnum, "Thou shalt pay for thy indiscretion!");
 			if (!Blind)
-			pline("%s appears before you.", An(Hallucination ? rndmonnam() : mon->data->mname));
+				pline("%s appears before you.", An(Hallucination ? rndmonnam() : mon->data->mname));
 		}
 		mon->mpeaceful = FALSE;
 		/* don't call set_malign(); player was naughty */
@@ -226,7 +229,7 @@ boolean talk;
 				set_faction(mon, faction);
 				
 				for(otmp = mon->minvent; otmp; otmp = otmp->nobj){
-					if(otmp->otyp == find_signet_ring() || otmp->otyp == DROVEN_CHAIN_MAIL || otmp->otyp == DROVEN_PLATE_MAIL || otmp->otyp == NOBLE_S_DRESS){
+					if(otmp->otyp == find_signet_ring() || is_readable_armor_otyp(otmp->otyp)){
 						otmp->oward = faction;
 					}
 				}

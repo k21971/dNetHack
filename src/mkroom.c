@@ -514,6 +514,55 @@ mklolthvaultitem()
 }
 
 struct obj *
+mk_jrt_obj(oclass)
+int oclass;
+{
+	switch(oclass){
+		case WEAPON_CLASS:{
+			const int jrt_weapons[] = {
+						ARROW, ELVEN_ARROW, SILVER_ARROW, GOLDEN_ARROW, CHAKRAM,
+						SPEAR, ELVEN_SPEAR, JAVELIN, TRIDENT,
+						DAGGER, ELVEN_DAGGER, STILETTO, 
+						SICKLE, ELVEN_SICKLE, 
+						AXE, BATTLE_AXE, MOON_AXE,
+						SHORT_SWORD, ELVEN_SHORT_SWORD, KHOPESH, KHOPESH,
+						MACE, ELVEN_MACE, CLUB,
+						BOW, ELVEN_BOW, SLING, ATLATL
+						};
+			return mksobj(ROLL_FROM(jrt_weapons), MKOBJ_ARTIF);
+		}break;
+		case ARMOR_CLASS:{
+			const int jrt_armor[] = {
+						HELMET, ARCHAIC_HELM, HELM_OF_BRILLIANCE, 
+						ARCHAIC_PLATE_MAIL, SCALE_MAIL,
+						ELVEN_TOGA, WAISTCLOTH,
+						CLOAK, ELVEN_CLOAK, LEO_NEMAEUS_HIDE,
+						BUCKLER, ELVEN_SHIELD, ROUNDSHIELD, TOWER_SHIELD, SHIELD_OF_REFLECTION,
+						ARCHAIC_GAUNTLETS, GAUNTLETS_OF_DEXTERITY, GAUNTLETS_OF_POWER,
+						ARCHAIC_BOOTS, HIGH_BOOTS, 
+						FLYING_BOOTS, ELVEN_BOOTS, KICKING_BOOTS
+						};
+			return mksobj(ROLL_FROM(jrt_armor), MKOBJ_ARTIF);
+		}break;
+	}
+	//default
+	return mkobj(oclass, TRUE);
+}
+
+struct obj *
+mk_v_obj(oclass, vn)
+int oclass;
+int vn;
+{
+	if(vn == VN_JRT){
+		return mk_jrt_obj(oclass);
+	}
+	else{
+		return mkobj(oclass, TRUE);
+	}
+}
+
+struct obj *
 mkhellvaultitem(vn)
 int vn;
 {
@@ -539,7 +588,7 @@ int vn;
 		type = RANDOM_CLASS;
 	do {
 		if(otmp) delobj(otmp);
-		otmp = mkobj(type, TRUE);
+		otmp = mk_v_obj(type, vn);
 		if(!rn2(10) || ((objects[otmp->otyp].oc_magic || otmp->oartifact) && !rn2(3))){
 			otmp = mk_vault_special(otmp, vn);
 			if(otmp->oclass == WEAPON_CLASS || is_weptool(otmp) || otmp->oclass == ARMOR_CLASS)
@@ -5014,6 +5063,8 @@ int junked;
 						otmp = mksobj_at(ARCHAIC_PLATE_MAIL, x, y, NO_MKOBJ_FLAGS);
 						if(otmp){
 							otmp->oeroded2 = 3;
+							otmp->objsize = MZ_LARGE;
+							fix_object(otmp);
 						}
 					}
 					if(!rn2(4)){
@@ -6127,32 +6178,36 @@ struct mkroom *sroom;
 		if(type == COURT && IS_THRONE(levl[sx][sy].typ))
 		    continue;
 		if(!(Role_if(PM_NOBLEMAN) && In_quest(&u.uz) )){
-		mon = makemon(
-		    (type == COURT) ? courtmon(ctype) :
-			(type == BARRACKS) ? squadmon(&u.uz) :
-		    (type == MORGUE) ? morguemon() :
-		    (type == BEEHIVE) ?
-			(sx == tx && sy == ty ? &mons[PM_QUEEN_BEE] :
-			 &mons[PM_KILLER_BEE]) :
-		    (type == LEPREHALL) ? &mons[PM_LEPRECHAUN] :
-		    (type == COCKNEST) ? &mons[PM_COCKATRICE] :
-		    (type == ANTHOLE) ? antholemon() :
-		    (struct permonst *) 0,
-		   sx, sy, NO_MM_FLAGS|MM_NOCOUNTBIRTH);
-		if(mon) {
-			mon->msleeping = 1;
-			if (type==COURT) {
-				//Note: court monsters are always part of rodney's forces, even if they are angels.
-				set_faction(mon, YENDORIAN_FACTION);
-				if(mon->mpeaceful){
-					mon->mpeaceful = 0;
-					set_malign(mon);
+			mon = makemon(
+				(type == COURT) ? courtmon(ctype) :
+				(type == BARRACKS) ? squadmon(&u.uz) :
+				(type == MORGUE) ? morguemon() :
+				(type == BEEHIVE) ?
+				(sx == tx && sy == ty ? &mons[PM_QUEEN_BEE] :
+				 &mons[PM_KILLER_BEE]) :
+				(type == LEPREHALL) ? &mons[PM_LEPRECHAUN] :
+				(type == COCKNEST) ? &mons[PM_COCKATRICE] :
+				(type == ANTHOLE) ? antholemon() :
+				(struct permonst *) 0,
+			   sx, sy, NO_MM_FLAGS|MM_NOCOUNTBIRTH);
+			if(mon) {
+				mon->msleeping = 1;
+				if(type == ZOO){
+					//Note: zoo monsters are always part of rodney's forces.
+					set_faction(mon, YENDORIAN_FACTION);
 				}
-				if(ctype == PM_EMBRACED_DROWESS && (mon->mtyp == PM_DROW_CAPTAIN || mon->mtyp == PM_DROW_MATRON)){
-					set_template(mon, M_BLACK_WEB);
+				if (type==COURT) {
+					//Note: court monsters are always part of rodney's forces, even if they are angels.
+					set_faction(mon, YENDORIAN_FACTION);
+					if(mon->mpeaceful){
+						mon->mpeaceful = 0;
+						set_malign(mon);
+					}
+					if(ctype == PM_EMBRACED_DROWESS && (mon->mtyp == PM_DROW_CAPTAIN || mon->mtyp == PM_DROW_MATRON)){
+						set_template(mon, M_BLACK_WEB);
+					}
 				}
 			}
-		}
 		}
 		switch(type) {
 		    case ZOO:
