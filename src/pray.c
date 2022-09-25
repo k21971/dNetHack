@@ -2914,9 +2914,9 @@ int godnum;
 					otmp = uwep;
 				else if (uswapwep && uswapwep->spe < 5 && (uswapwep->oclass == WEAPON_CLASS || is_weptool(uswapwep)))
 					otmp = uswapwep;
-				else if (u.umartial && uarmg && (uarmg->oartifact || !uwep) && uarmg->spe < 5)
+				else if (martial_bonus() && uarmg && (uarmg->oartifact || !uwep) && uarmg->spe < 5)
 					otmp = uarmg;
-				else if (u.umartial && uarmf && (uarmf->oartifact || !uwep) && uarmf->spe < 5)
+				else if (martial_bonus() && uarmf && (uarmf->oartifact || !uwep) && uarmf->spe < 5)
 					otmp = uarmf;
 				else if (uleft && uleft->otyp != RIN_WISHES && objects[uleft->otyp].oc_charged && uleft->spe < 5)
 					otmp = uleft;
@@ -3280,6 +3280,8 @@ commune_with_goat()
 
 	/* if you are devout enough (total accumulated credit), allow selecting permanent boons and boost the power of regular ones */
 	/* devotion required increases as per standard gift giving formula */
+	if(wizard)
+		pline("boon threshold: %d", 25*(10 + (u.uartisval * u.uartisval * 2 / 25)));
 	boolean greater_boon = u.shubbie_devotion > 25*(10 + (u.uartisval * u.uartisval * 2 / 25));
 	struct obj * otmp = (struct obj *)0;
 	int menu_result = dogoat_menu(greater_boon);
@@ -3879,17 +3881,19 @@ int eatflag;
 
 	/* credit gain suffers diminishing returns, less harshly if you are goat-ridden */
 	int dim_return_factor = (u.umadness & MAD_GOAT_RIDDEN) ? 100 : 50;
-	if (wizard) {
-		/* debug */
-		pline("ShubbieCredit = %ld [+%ld base %d]",
-			u.shubbie_credit + max(1, value * dim_return_factor / (dim_return_factor + u.shubbie_credit)),
-			max(1, value * dim_return_factor / (dim_return_factor + u.shubbie_credit)),
-			value
-			);
-	}
+	int full_value = value;
 	value = max(1, value * dim_return_factor / (dim_return_factor + u.shubbie_credit));
 	u.shubbie_credit += value;
-	u.shubbie_devotion += value;
+	u.shubbie_devotion += eatflag == GOAT_EAT_OFFERED ? full_value : value;
+	if (wizard) {
+		/* debug */
+		pline("ShubbieCredit = %ld [+%d base %d], ShubbieDevotion = %ld",
+			u.shubbie_credit,
+			value,
+			full_value,
+			u.shubbie_devotion
+			);
+	}
 	return;
 }
 void
