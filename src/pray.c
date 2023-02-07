@@ -672,7 +672,10 @@ int godnum;
 	    		!(EDisint_resistance & W_ARM) && !uarmc)
 		(void) destroy_arm(uarm);
 #ifdef TOURIST
-	    if (uarmu && !(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc) (void) destroy_arm(uarmu);
+	    if (uarmu && 
+			!(EReflecting & W_ARMU) && !(EDisint_resistance & W_ARMU) &&
+			!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc
+		) (void) destroy_arm(uarmu);
 #endif
 	    if (!Disint_resistance)
 		fry_by_god(godnum);
@@ -1583,6 +1586,7 @@ dosacrifice()
     int pm;
     aligntyp altaralign = (a_align(u.ux,u.uy));
 	int altargod = god_at_altar(u.ux, u.uy);
+	char buf[BUFSZ];
     if (!on_altar() || u.uswallow) {
 		You("are not standing on an altar.");
 		return MOVE_CANCELLED;
@@ -2038,7 +2042,8 @@ dosacrifice()
 				u.lastprayed = moves;
 				u.lastprayresult = PRAY_ANGER;
 				u.reconciled = REC_NONE;
-				pline("%s rejects your sacrifice!", a_gname());
+				Strcpy(buf, a_gname());
+				pline("%s rejects your sacrifice!", upstart(buf));
 				godvoice(altargod, "Suffer, infidel!");
 				change_luck(-5);
 				(void) adjattrib(A_WIS, -2, TRUE);
