@@ -36,6 +36,8 @@ STATIC_DCL boolean FDECL(tool_in_use, (struct obj *));
 STATIC_DCL char FDECL(obj_to_let,(struct obj *));
 STATIC_PTR int FDECL(u_material_next_to_skin,(int));
 STATIC_PTR int FDECL(u_bcu_next_to_skin,(int));
+STATIC_PTR int FDECL(mon_material_next_to_skin,(struct monst *, int));
+STATIC_PTR int FDECL(mon_bcu_next_to_skin,(struct monst *, int));
 STATIC_DCL int FDECL(itemactions,(struct obj *));
 
 #ifdef OVLB
@@ -179,7 +181,7 @@ struct obj **potmp, **pobj;
 		 * to stop the burn on both items, then merge the age,
 		 * then restart the burn.
 		 */
-		if(obj->otyp == CORPSE && otmp->otyp == CORPSE) otmp->ovar1 = max(otmp->ovar1,obj->ovar1);
+		if(obj->otyp == CORPSE && otmp->otyp == CORPSE) otmp->ovar1_corpseRumorCooldown = max(otmp->ovar1_corpseRumorCooldown,obj->ovar1_corpseRumorCooldown);
 		if (!obj->lamplit)
 		    otmp->age = ((otmp->age*otmp->quan) + (obj->age*obj->quan))
 			    / (otmp->quan + obj->quan);
@@ -443,7 +445,7 @@ const char *drop_fmt, *drop_arg, *hold_msg;
 {
 	char buf[BUFSZ];
 
-	if (!Blind) obj->dknown = 1;	/* maximize mergibility */
+	if (!Blind || (obj->oclass == SCROLL_CLASS && check_oprop(obj, OPROP_TACTB))) obj->dknown = 1;	/* maximize mergibility */
 	if (obj->oartifact) {
 	    /* place_object may change these */
 	    boolean crysknife = (obj->otyp == CRYSKNIFE);
@@ -558,6 +560,10 @@ void
 freeinv_core(obj)
 struct obj *obj;
 {
+	if(u.uentangled_oid == obj->o_id){
+		u.uentangled_oid = 0;
+		u.uentangled_otyp = 0;
+	}
 	if (obj->oclass == COIN_CLASS) {
 #ifndef GOLDOBJ
 		u.ugold -= obj->quan;
@@ -629,6 +635,10 @@ void
 m_freeinv(obj)
 struct obj* obj;
 {
+	if(obj->ocarry->entangled_oid == obj->o_id){
+		obj->ocarry->entangled_oid = 0;
+		obj->ocarry->entangled_otyp = 0;
+	}
 	extract_nobj(obj, &obj->ocarry->minvent);
 	update_mon_intrinsics(obj->ocarry, obj, FALSE, FALSE);
 	return;
@@ -859,6 +869,8 @@ carrying_readable_weapon()
 				otmp->oartifact == ART_GUNGNIR ||
 				otmp->oartifact == ART_PEN_OF_THE_VOID ||
 				otmp->oartifact == ART_HOLY_MOONLIGHT_SWORD ||
+				otmp->oartifact == ART_ESSCOOAHLIPBOOURRR ||
+				otmp->oartifact == ART_RED_CORDS_OF_ILMATER ||
 				otmp->oartifact == ART_STAFF_OF_NECROMANCY
 			))
 		)
@@ -890,8 +902,7 @@ carrying_readable_armor()
 	for(otmp = invent; otmp; otmp = otmp->nobj)
 		if(otmp->oclass == ARMOR_CLASS
 			&& ((otmp->ohaluengr
-					&& otmp->oward
-					&& is_readable_armor_otyp(otmp->otyp)
+					&& is_readable_armor(otmp)
 				) || (otmp->oartifact && (
 					otmp->oartifact == ART_ITLACHIAYAQUE
 				 )
@@ -1153,7 +1164,7 @@ register const char *let,*word;
 		|| (usegold && otmp->invlet == GOLD_SYM)
 #endif
 		|| (useboulder && is_boulder(otmp))
-		|| (usethrowing && (otmp->otyp == ROPE_OF_ENTANGLING || otmp->otyp == IRON_BANDS || otmp->otyp == RAZOR_WIRE))
+		|| (usethrowing && (otmp->otyp == ROPE_OF_ENTANGLING || otmp->otyp == BANDS || otmp->otyp == RAZOR_WIRE))
 		|| (usemirror && otmp->otyp == MIRROR)
 		) {
 		register int otyp = otmp->otyp;
@@ -1198,12 +1209,16 @@ register const char *let,*word;
 		|| (!strcmp(word, "trephinate") && !(otmp->otyp == CRYSTAL_SKULL))
 		|| (!strcmp(word, "eat") && !is_edible(otmp))
 		|| (!strcmp(word, "zap") &&
-		    (otmp->oclass == TOOL_CLASS && otmp->otyp != ROD_OF_FORCE))
+		    !(otmp->oclass == WAND_CLASS 
+				|| (otmp->oclass == TOOL_CLASS && otmp->otyp == ROD_OF_FORCE)
+				|| (otmp->oclass == ARMOR_CLASS && otmp->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(otmp, IEA_BOLTS))
+				|| (otmp->oartifact == ART_STAR_EMPEROR_S_RING)
+			))
 		|| (!strcmp(word, "inject") && !(otmp->otyp == HYPOSPRAY_AMPULE && otmp->spe > 0))
 		|| (!strcmp(word, "give the tear to") &&
-			!(otmp->otyp == BROKEN_ANDROID && otmp->ovar1 == 0) &&
-			!(otmp->otyp == BROKEN_GYNOID && otmp->ovar1 == 0) &&
-			!(otmp->otyp == LIFELESS_DOLL && otmp->ovar1 == 0)
+			!(otmp->otyp == BROKEN_ANDROID && otmp->ovar1_insightlevel == 0) &&
+			!(otmp->otyp == BROKEN_GYNOID && otmp->ovar1_insightlevel == 0) &&
+			!(otmp->otyp == LIFELESS_DOLL && otmp->ovar1_insightlevel == 0)
 		)
 		|| (!strcmp(word, "install dilithim in") &&
 			!(otmp->otyp == BROKEN_ANDROID) &&
@@ -1238,8 +1253,9 @@ register const char *let,*word;
 		|| (!strncmp(word, "rub on the stone", 16) &&
 		    *let == GEM_CLASS &&	/* using known touchstone */
 		    otmp->dknown && objects[otyp].oc_name_known)
-		|| (!strncmp(word, "replace with", 12) &&
-		    otmp->otyp != HELLFIRE_COMPONENT)
+		|| (!strncmp(word, "replace with", 12)
+		    && otmp->otyp != HELLFIRE_COMPONENT
+			&& otmp->otyp != CLOCKWORK_COMPONENT)
 		|| (!strncmp(word, "salve", 5) && !salve_target(otmp))
 		|| ((!strcmp(word, "use or apply") ||
 			!strcmp(word, "untrap with")) &&
@@ -1255,6 +1271,8 @@ register const char *let,*word;
 		      otyp != FRAG_GRENADE &&
 		      otyp != GAS_GRENADE &&
 		      otyp != STICK_OF_DYNAMITE &&
+			  otmp->oartifact != ART_STAFF_OF_AESCULAPIUS &&
+			  otmp->oartifact != ART_ESSCOOAHLIPBOOURRR &&
 //endif
 		      !is_axe(otmp) && !is_pole(otmp) && 
 			  otyp != BULLWHIP && otyp != VIPERWHIP && otyp != FORCE_WHIP &&
@@ -1281,10 +1299,13 @@ register const char *let,*word;
 		      otyp != CREAM_PIE && otyp != EUCALYPTUS_LEAF) ||
 		     /* MRKR: mining helmets */
 		     (otmp->oclass == ARMOR_CLASS &&
+		      otyp != LANTERN_PLATE_MAIL &&
+		      otyp != EILISTRAN_ARMOR &&
 		      otyp != DWARVISH_HELM &&
 		      otyp != DROVEN_CLOAK &&
 			  otyp != GNOMISH_POINTY_HAT &&
-			  otmp->oartifact != ART_AEGIS
+			  otmp->oartifact != ART_AEGIS &&
+			  otmp->oartifact != ART_RED_CORDS_OF_ILMATER
 			  ) || 
 		     (otmp->oclass == GEM_CLASS && !is_graystone(otmp)
 				&& otyp != CATAPSI_VORTEX && otyp != ANTIMAGIC_RIFT
@@ -1330,6 +1351,16 @@ register const char *let,*word;
 			!sflm_smeltable_mithril(otmp))
 		|| (!strcmp(word, "burn in the silver flame") && 
 			!(otmp->blessed || otmp->cursed))
+		|| (!strcmp(word, "armor piece to repair") &&
+		    (!is_imperial_elven_armor(otmp)))
+		|| (!strcmp(word, "repair the helm with") &&
+		    (!helm_upgrade_obj(otmp)))
+		|| (!strcmp(word, "repair the gauntlets with") &&
+		    (!gauntlets_upgrade_obj(otmp)))
+		|| (!strcmp(word, "repair the armor with") &&
+		    (!armor_upgrade_obj(otmp)))
+		|| (!strcmp(word, "repair the boots with") &&
+		    (!boots_upgrade_obj(otmp)))
 		|| (!strcmp(word, "upgrade your stove with") &&
 		    (otyp != TINNING_KIT))
 		|| (!strcmp(word, "upgrade your switch with") &&
@@ -1373,8 +1404,8 @@ register const char *let,*word;
 	    }
 		
 		//Make exceptions for gemstone items made of specific gems
-		if (otmp->obj_material == GEMSTONE && otmp->ovar1 && !obj_type_uses_ovar1(otmp) && !obj_art_uses_ovar1(otmp)
-			&& (!objects[otmp->ovar1].oc_name_known || !otmp->dknown)
+		if (otmp->obj_material == GEMSTONE && otmp->sub_material
+			&& (!objects[otmp->sub_material].oc_name_known || !otmp->dknown)
 			&& !strncmp(word, "rub on the stone", 16)) {
 			bp[foo++] = otmp->invlet;
 			allowall = TRUE;
@@ -1924,8 +1955,8 @@ fully_identify_obj(otmp)
 struct obj *otmp;
 {
     makeknown(otmp->otyp);
-	if (otmp->obj_material == GEMSTONE && otmp->ovar1 && !obj_type_uses_ovar1(otmp) && !obj_art_uses_ovar1(otmp))
-		makeknown(otmp->ovar1);
+	if (otmp->obj_material == GEMSTONE && otmp->sub_material)
+		makeknown(otmp->sub_material);
     if (otmp->oartifact) discover_artifact(otmp->oartifact);
     otmp->known = otmp->dknown = otmp->bknown = otmp->rknown = otmp->sknown = 1;
     if (otmp->otyp == EGG && otmp->corpsenm != NON_PM)
@@ -2224,7 +2255,7 @@ struct obj *obj;
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Light or extinguish this candle", MENU_UNSELECTED);
 	else if (obj->otyp == OIL_LAMP || obj->otyp == MAGIC_LAMP ||
-			obj->otyp == LANTERN)
+			obj->otyp == MAGIC_LAMP || obj->otyp == LANTERN_PLATE_MAIL)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Light or extinguish this light source", MENU_UNSELECTED);
 	else if (obj->otyp == POT_OIL && objects[obj->otyp].oc_name_known)
@@ -2285,6 +2316,9 @@ struct obj *obj;
 	else if (obj->otyp == DROVEN_CLOAK)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Spin out or sweep up a web", MENU_UNSELECTED);
+	else if (obj->otyp == EILISTRAN_ARMOR)
+		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
+				"Recharge armor or switch arms on/off", MENU_UNSELECTED);
 	else if (obj->oartifact == ART_AEGIS)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Change Aegis' form", MENU_UNSELECTED);
@@ -2312,7 +2346,7 @@ struct obj *obj;
 	else if (obj->otyp == HYPOSPRAY)
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Inject an ampule with this hypospray", MENU_UNSELECTED);
-	else if ((is_knife(obj) && !(obj->oartifact == ART_PEN_OF_THE_VOID && obj->ovar1&SEAL_MARIONETTE))
+	else if ((is_knife(obj) && !(obj->oartifact == ART_PEN_OF_THE_VOID && obj->ovar1_seals&SEAL_MARIONETTE))
 		&& (u.wardsknown & (WARD_TOUSTEFNA | WARD_DREPRUN | WARD_OTTASTAFUR | WARD_KAUPALOKI | WARD_VEIOISTAFUR | WARD_THJOFASTAFUR)))
 		add_menu(win, NO_GLYPH, &any, 'a', 0, ATR_NONE,
 				"Carve a stave with this knife", MENU_UNSELECTED);
@@ -2426,7 +2460,7 @@ struct obj *obj;
 	else if (obj->oartifact == ART_STAFF_OF_NECROMANCY)
 				add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
 				"Study the forbidden secrets of necromancy", MENU_UNSELECTED);
-	else if (obj->oartifact == ART_STAFF_OF_AESCULAPIUS)
+	else if (obj->oartifact == ART_STAFF_OF_AESCULAPIUS || obj->oartifact == ART_ESSCOOAHLIPBOOURRR)
 				add_menu(win, NO_GLYPH, &any, 'r', 0, ATR_NONE,
 				"Study the grand magic of healing", MENU_UNSELECTED);
 	else if (obj->oartifact == ART_HOLY_MOONLIGHT_SWORD && obj->lamplit)
@@ -2648,7 +2682,7 @@ winid *datawin;
 	/* Object classes currently with no special messages here: amulets. */
 	if (olet == WEAPON_CLASS || (olet == TOOL_CLASS && oc.oc_skill) || otyp == HEAVY_IRON_BALL || olet == GEM_CLASS || oartifact == ART_WAND_OF_ORCUS) {
 		int mask = attack_mask(obj, otyp, oartifact);
-		boolean otyp_is_blaster = (otyp == HAND_BLASTER || otyp == ARM_BLASTER || otyp == MASS_SHADOW_PISTOL || otyp == CUTTING_LASER || otyp == RAYGUN);
+		boolean otyp_is_blaster = (otyp == CARCOSAN_STING || otyp == HAND_BLASTER || otyp == ARM_BLASTER || otyp == MASS_SHADOW_PISTOL || otyp == CUTTING_LASER || otyp == RAYGUN);
 		boolean otyp_is_launcher = (((oc.oc_skill >= P_BOW && oc.oc_skill <= P_CROSSBOW) || otyp == ATLATL) && !otyp_is_blaster);
 
 		/* print type */
@@ -2694,9 +2728,9 @@ winid *datawin;
 				Sprintf(buf, "Thrown %smissile.", buf2);
 			}
 			/* special cases */
-			if (oartifact == ART_PEN_OF_THE_VOID && obj && (obj->ovar1 & SEAL_EVE))
+			if (oartifact == ART_PEN_OF_THE_VOID && obj && (obj->ovar1_seals & SEAL_EVE))
 				Strcpy(eos(buf)-1, ", and launcher.");
-			if (oartifact == ART_LIECLEAVER || oartifact == ART_ROGUE_GEAR_SPIRITS || oartifact == ART_WAND_OF_ORCUS)
+			if (oartifact == ART_LIECLEAVER || oartifact == ART_ROGUE_GEAR_SPIRITS || oartifact == ART_WAND_OF_ORCUS || otyp == CARCOSAN_STING)
 				Sprintf(eos(buf)-1, ", and %smelee weapon.", buf2);
 			OBJPUTSTR(buf);
 			printed_type = TRUE;
@@ -2715,7 +2749,7 @@ winid *datawin;
 						Strcpy(buf2, " at range, and your pickaxe skill in melee.");
 						break;
 					case ART_PEN_OF_THE_VOID:
-						if(obj->ovar1 & SEAL_EVE) {
+						if(obj->ovar1_seals & SEAL_EVE) {
 							Strcpy(buf2, " in melee, and your ammo's skill at range.");
 						}
 						else
@@ -2735,6 +2769,7 @@ winid *datawin;
 		/* Does not apply for launchers. */
 		/* the melee-weapon artifact launchers need obj to exist because dmgval_core needs obj to find artifact. */
 		if ((!otyp_is_launcher && !otyp_is_blaster) || (
+			(otyp == CARCOSAN_STING) ||
 			(obj && oartifact == ART_LIECLEAVER) ||
 			(obj && oartifact == ART_WAND_OF_ORCUS) ||
 			(obj && oartifact == ART_ROGUE_GEAR_SPIRITS)
@@ -2742,8 +2777,8 @@ winid *datawin;
 		{
 			// note: dmgval_core can handle not being given an obj; it will attempt to use otyp instead
 			struct weapon_dice wdice[2];
-			(void)dmgval_core(&wdice[0], FALSE, obj, otyp);	// small dice
-			(void)dmgval_core(&wdice[1], TRUE, obj, otyp);		// large dice
+			(void)dmgval_core(&wdice[0], FALSE, obj, otyp, &youmonst);	// small dice
+			(void)dmgval_core(&wdice[1], TRUE, obj, otyp, &youmonst);		// large dice
 
 			Sprintf(buf, "Damage: ");
 
@@ -2828,14 +2863,14 @@ winid *datawin;
 				if (mvitals[PM_ACERERAK].died > 0)
 				{
 					Sprintf(buf, "Deals double damage");
-					if (obj->ovar1)
+					if (obj->ovar1_seals)
 						Strcat(buf, ", and enhanced spirit bonus damage.");
 					else
 						Strcat(buf, ".");
 				}
 				else
 				{
-					if (obj->ovar1)
+					if (obj->ovar1_seals)
 						Sprintf(buf, "Deals bonus damage from the spirit bound into it.");
 					else
 						buf[0] = '\0';
@@ -2847,6 +2882,9 @@ winid *datawin;
 				break;
 			case ART_GIANTSLAYER:
 				Strcat(buf, "damage to large creatures.");
+				break;
+			case ART_FALLINGSTAR_MANDIBLES:
+				Strcat(buf, "magic damage, doubled against those who came from the stars.");
 				break;
 			default:
 				if (oart->adtyp == AD_PHYS && !(oart->aflags&ARTA_HATES))
@@ -2921,218 +2959,6 @@ winid *datawin;
 			if (buf[0] != '\0')
 				OBJPUTSTR(buf);
 		}
-		/* object properties (objects only) */
-		if(!check_oprop(obj, OPROP_NONE)){
-			/* holy/unholy bonus damage */
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_HOLYW) && obj->blessed, "holy");
-			ADDCLASSPROP(check_oprop(obj, OPROP_UNHYW) && obj->cursed, "unholy");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals double %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_HOLYW) && obj->blessed, "holy");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_UNHYW) && obj->cursed, "unholy");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 2d6 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			/* simple damage properties */
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_FIREW), "fire");
-			ADDCLASSPROP(check_oprop(obj, OPROP_COLDW), "cold");
-			ADDCLASSPROP(check_oprop(obj, OPROP_WATRW), "water");
-			ADDCLASSPROP(check_oprop(obj, OPROP_ELECW), "lightning");
-			ADDCLASSPROP(check_oprop(obj, OPROP_ACIDW) || goatweaponturn == AD_EACD, "acid");
-			ADDCLASSPROP(goatweaponturn == AD_STDY, "study");
-			ADDCLASSPROP(check_oprop(obj, OPROP_MAGCW), "magic");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals double %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			if (goatweaponturn == AD_DRST)
-			{
-				Sprintf(buf2, "Deals double poison damage plus 4d4 physical.");
-				OBJPUTSTR(buf2);
-			}
-			
-			if (check_oprop(obj, OPROP_MORTW))
-			{
-				Sprintf(buf2, "Drains 1d2 levels from living intelligent targets.");
-				OBJPUTSTR(buf2);
-			}
-
-			if (check_oprop(obj, OPROP_TDTHW))
-			{
-				Sprintf(buf2, "Deals double damage plus 2d7 to undead.");
-				OBJPUTSTR(buf2);
-			}
-
-			if (check_oprop(obj, OPROP_SFUWW))
-			{
-				Sprintf(buf2, "Deals double disintegration damage to spiritual beings.");
-				OBJPUTSTR(buf2);
-			}
-
-			ADDCLASSPROP(check_oprop(obj, OPROP_PSIOW), "psionic");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals double-plus-enchantment %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			/* simple lesser damage properties */
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_FIREW), "fire");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_COLDW), "cold");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_WATRW), "water");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ELECW), "lightning");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ACIDW), "acid");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 2d6 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			ADDCLASSPROP(check_oprop(obj, OPROP_OONA_FIREW), "fire");
-			ADDCLASSPROP(check_oprop(obj, OPROP_OONA_COLDW), "cold");
-			ADDCLASSPROP(check_oprop(obj, OPROP_OONA_ELECW), "lightning");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 1d8 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			ADDCLASSPROP(goatweaponturn == AD_COLD, "cold");
-			ADDCLASSPROP(goatweaponturn == AD_ELEC, "lightning");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 3d8 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			ADDCLASSPROP(goatweaponturn == AD_FIRE, "fire");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 3d10 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			ADDCLASSPROP(goatweaponturn == AD_ACID, "acid");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 4d4 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_MAGCW), "magic");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 3d4 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_PSIOW), "psionic");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 2d12 bonus %s damage.", buf);
-				OBJPUTSTR(buf2);
-			}
-			/* alignment damage properties */
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_ANARW), "lawful and neutral creatures");
-			ADDCLASSPROP(check_oprop(obj, OPROP_CONCW), "lawful and chaotic creatures");
-			ADDCLASSPROP(check_oprop(obj, OPROP_AXIOW), "neutral and chaotic creatures");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals double damage to %s.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ANARW), "lawful and neutral creatures");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_CONCW), "lawful and chaotic creatures");
-			ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_AXIOW), "neutral and chaotic creatures");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 2d6 bonus damage to %s.", buf);
-				OBJPUTSTR(buf2);
-			}
-			buf[0] = '\0';
-			ADDCLASSPROP((check_oprop(obj, OPROP_OONA_FIREW) || check_oprop(obj, OPROP_OONA_COLDW) || check_oprop(obj, OPROP_OONA_ELECW)), "neutral and chaotic creatures");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Deals 1d8 bonus damage to %s.", buf);
-				OBJPUTSTR(buf2);
-			}
-			if (check_oprop(obj, OPROP_OCLTW))
-			{
-				Sprintf(buf2, "Deals bonus magic damage and extra damage to divine minions.");
-				OBJPUTSTR(buf2);
-			}
-			/* other stuff
-			 */
-			buf[0] = '\0';
-			ADDCLASSPROP((check_oprop(obj, OPROP_DEEPW) && obj->spe < 8), "telepathically lashes out");
-			ADDCLASSPROP((check_oprop(obj, OPROP_VORPW)), "is vorpal");
-			ADDCLASSPROP((check_oprop(obj, OPROP_MORGW)), "inflicts unhealing wounds while cursed");
-			ADDCLASSPROP((check_oprop(obj, OPROP_FLAYW)), "destroys armor");
-			ADDCLASSPROP((check_oprop(obj, OPROP_RETRW)), "returns when thrown");
-			if (buf[0] != '\0')
-			{
-				buf[0] = buf[0] + 'A' - 'a';
-				Sprintf(buf2, "%s.", buf);
-				OBJPUTSTR(buf2);
-			}
-		}
-		/* other artifact weapon effects */
-		if (oartifact) {
-			register const struct artifact *oart = &artilist[oartifact];
-			buf[0] = '\0';
-			//ADDCLASSPROP((oart->aflags&ARTA_DEXPL), "weapon dice explode");
-			ADDCLASSPROP((oart->aflags&ARTA_DLUCK), "luck-biased");
-			ADDCLASSPROP((oart->aflags&ARTA_POIS), "always poisoned");
-			ADDCLASSPROP((oart->aflags&ARTA_SILVER), "silvered");
-			ADDCLASSPROP((oart->aflags&ARTA_VORPAL), "vorpal");
-			ADDCLASSPROP((oart->aflags&ARTA_CANCEL), "canceling");
-			ADDCLASSPROP((oart->aflags&ARTA_MAGIC), "magic-flourishing");
-			ADDCLASSPROP((oart->aflags&ARTA_DRAIN), "draining");
-			//ADDCLASSPROP((oart->aflags&ARTA_BRIGHT), " /* turns gremlins to dust and trolls to stone */");
-			ADDCLASSPROP((oart->aflags&ARTA_BLIND), "blinding");
-			ADDCLASSPROP((oart->aflags&ARTA_SHINING), "armor-phasing");
-			ADDCLASSPROP((oart->aflags&ARTA_SHATTER), "shattering");
-			ADDCLASSPROP((oart->aflags&ARTA_DISARM), "disarming");
-			ADDCLASSPROP((oart->aflags&ARTA_STEAL), "theiving");
-			ADDCLASSPROP((oart->aflags&(ARTA_EXPLFIRE|ARTA_EXPLFIREX)), "fire exploding");
-			ADDCLASSPROP((oart->aflags&(ARTA_EXPLCOLD|ARTA_EXPLCOLDX)), "cold exploding");
-			ADDCLASSPROP((oart->aflags&(ARTA_EXPLELEC|ARTA_EXPLELECX)), "shock exploding");
-			ADDCLASSPROP((oart->aflags&(ARTA_KNOCKBACK|ARTA_KNOCKBACKX)), "kinetic");
-			if (buf[0] != '\0')
-			{
-				Sprintf(buf2, "Attacks are %s.", buf);
-				OBJPUTSTR(buf2);
-			}
-			/* other stuff
-			 */
-			buf[0] = '\0';
-			ADDCLASSPROP((oart->aflags&ARTA_RETURNING), "returns when thrown");
-			ADDCLASSPROP((oart->aflags&ARTA_HASTE), "hastens the wielder's attacks");
-			if (buf[0] != '\0')
-			{
-				buf[0] = buf[0] + 'A' - 'a';
-				Sprintf(buf2, "%s.", buf);
-				OBJPUTSTR(buf2);
-			}
-		}
 		/* other weapon special effects */
 		if(obj){
 			if(obj->otyp == TORCH){
@@ -3155,8 +2981,8 @@ winid *datawin;
 				Sprintf(buf2, "Deals 2d6 bonus lightning damage, or 6d6 if wielded by an Ara Kamerel.");
 				OBJPUTSTR(buf2);
 			}
-			if(obj->otyp == VIPERWHIP && obj->ovar1 > 1){
-				Sprintf(buf2, "May strike with up to %d heads at once, multiplying the damage accordingly.", (int)(obj->ovar1));
+			if(obj->otyp == VIPERWHIP && obj->ovar1_heads > 1){
+				Sprintf(buf2, "May strike with up to %d heads at once, multiplying the damage accordingly.", (int)(obj->ovar1_heads));
 				OBJPUTSTR(buf2);
 			}
 			if(obj->otyp == MIRRORBLADE){
@@ -3262,6 +3088,218 @@ winid *datawin;
 				sitoa(hitbon),
 				(hitbon >= 0 ? "bonus" : "penalty"));
 			OBJPUTSTR(buf);
+		}
+	}
+	/* object properties (objects only) */
+	if(!check_oprop(obj, OPROP_NONE)){
+		/* holy/unholy bonus damage */
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_HOLYW) && obj->blessed, "holy");
+		ADDCLASSPROP(check_oprop(obj, OPROP_UNHYW) && obj->cursed, "unholy");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals double %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_HOLYW) && obj->blessed, "holy");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_UNHYW) && obj->cursed, "unholy");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 2d6 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		/* simple damage properties */
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_FIREW), "fire");
+		ADDCLASSPROP(check_oprop(obj, OPROP_COLDW), "cold");
+		ADDCLASSPROP(check_oprop(obj, OPROP_WATRW), "water");
+		ADDCLASSPROP(check_oprop(obj, OPROP_ELECW), "lightning");
+		ADDCLASSPROP(check_oprop(obj, OPROP_ACIDW) || goatweaponturn == AD_EACD, "acid");
+		ADDCLASSPROP(goatweaponturn == AD_STDY, "study");
+		ADDCLASSPROP(check_oprop(obj, OPROP_MAGCW), "magic");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals double %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		if (goatweaponturn == AD_DRST)
+		{
+			Sprintf(buf2, "Deals double poison damage plus 4d4 physical.");
+			OBJPUTSTR(buf2);
+		}
+		
+		if (check_oprop(obj, OPROP_MORTW))
+		{
+			Sprintf(buf2, "Drains 1d2 levels from living intelligent targets.");
+			OBJPUTSTR(buf2);
+		}
+
+		if (check_oprop(obj, OPROP_TDTHW))
+		{
+			Sprintf(buf2, "Deals double damage plus 2d7 to undead.");
+			OBJPUTSTR(buf2);
+		}
+
+		if (check_oprop(obj, OPROP_SFUWW))
+		{
+			Sprintf(buf2, "Deals double disintegration damage to spiritual beings.");
+			OBJPUTSTR(buf2);
+		}
+
+		ADDCLASSPROP(check_oprop(obj, OPROP_PSIOW), "psionic");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals double-plus-enchantment %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		/* simple lesser damage properties */
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_FIREW), "fire");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_COLDW), "cold");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_WATRW), "water");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ELECW), "lightning");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ACIDW), "acid");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 2d6 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		ADDCLASSPROP(check_oprop(obj, OPROP_OONA_FIREW), "fire");
+		ADDCLASSPROP(check_oprop(obj, OPROP_OONA_COLDW), "cold");
+		ADDCLASSPROP(check_oprop(obj, OPROP_OONA_ELECW), "lightning");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 1d8 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		ADDCLASSPROP(goatweaponturn == AD_COLD, "cold");
+		ADDCLASSPROP(goatweaponturn == AD_ELEC, "lightning");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 3d8 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		ADDCLASSPROP(goatweaponturn == AD_FIRE, "fire");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 3d10 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		ADDCLASSPROP(goatweaponturn == AD_ACID, "acid");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 4d4 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_MAGCW), "magic");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 3d4 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_PSIOW), "psionic");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 2d12 bonus %s damage.", buf);
+			OBJPUTSTR(buf2);
+		}
+		/* alignment damage properties */
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_ANARW), "lawful and neutral creatures");
+		ADDCLASSPROP(check_oprop(obj, OPROP_CONCW), "lawful and chaotic creatures");
+		ADDCLASSPROP(check_oprop(obj, OPROP_AXIOW), "neutral and chaotic creatures");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals double damage to %s.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_ANARW), "lawful and neutral creatures");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_CONCW), "lawful and chaotic creatures");
+		ADDCLASSPROP(check_oprop(obj, OPROP_LESSER_AXIOW), "neutral and chaotic creatures");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 2d6 bonus damage to %s.", buf);
+			OBJPUTSTR(buf2);
+		}
+		buf[0] = '\0';
+		ADDCLASSPROP((check_oprop(obj, OPROP_OONA_FIREW) || check_oprop(obj, OPROP_OONA_COLDW) || check_oprop(obj, OPROP_OONA_ELECW)), "neutral and chaotic creatures");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Deals 1d8 bonus damage to %s.", buf);
+			OBJPUTSTR(buf2);
+		}
+		if (check_oprop(obj, OPROP_OCLTW))
+		{
+			Sprintf(buf2, "Deals bonus magic damage and extra damage to divine minions.");
+			OBJPUTSTR(buf2);
+		}
+		/* other stuff
+		 */
+		buf[0] = '\0';
+		ADDCLASSPROP((check_oprop(obj, OPROP_DEEPW) && obj->spe < 8), "telepathically lashes out");
+		ADDCLASSPROP((check_oprop(obj, OPROP_VORPW)), "is vorpal");
+		ADDCLASSPROP((check_oprop(obj, OPROP_MORGW)), "inflicts unhealing wounds while cursed");
+		ADDCLASSPROP((check_oprop(obj, OPROP_FLAYW)), "destroys armor");
+		ADDCLASSPROP((check_oprop(obj, OPROP_RETRW)), "returns when thrown");
+		if (buf[0] != '\0')
+		{
+			buf[0] = buf[0] + 'A' - 'a';
+			Sprintf(buf2, "%s.", buf);
+			OBJPUTSTR(buf2);
+		}
+	}
+	/* other artifact weapon effects */
+	if (oartifact) {
+		register const struct artifact *oart = &artilist[oartifact];
+		buf[0] = '\0';
+		//ADDCLASSPROP((oart->aflags&ARTA_DEXPL), "weapon dice explode");
+		ADDCLASSPROP((oart->aflags&ARTA_DLUCK), "luck-biased");
+		ADDCLASSPROP((oart->aflags&ARTA_POIS), "always poisoned");
+		ADDCLASSPROP((oart->aflags&ARTA_SILVER), "silvered");
+		ADDCLASSPROP((oart->aflags&ARTA_VORPAL), "vorpal");
+		ADDCLASSPROP((oart->aflags&ARTA_CANCEL), "canceling");
+		ADDCLASSPROP((oart->aflags&ARTA_MAGIC), "magic-flourishing");
+		ADDCLASSPROP((oart->aflags&ARTA_DRAIN), "draining");
+		//ADDCLASSPROP((oart->aflags&ARTA_BRIGHT), " /* turns gremlins to dust and trolls to stone */");
+		ADDCLASSPROP((oart->aflags&ARTA_BLIND), "blinding");
+		ADDCLASSPROP((oart->aflags&ARTA_SHINING), "armor-phasing");
+		ADDCLASSPROP((oart->aflags&ARTA_SHATTER), "shattering");
+		ADDCLASSPROP((oart->aflags&ARTA_DISARM), "disarming");
+		ADDCLASSPROP((oart->aflags&ARTA_STEAL), "theiving");
+		ADDCLASSPROP((oart->aflags&(ARTA_EXPLFIRE|ARTA_EXPLFIREX)), "fire exploding");
+		ADDCLASSPROP((oart->aflags&(ARTA_EXPLCOLD|ARTA_EXPLCOLDX)), "cold exploding");
+		ADDCLASSPROP((oart->aflags&(ARTA_EXPLELEC|ARTA_EXPLELECX)), "shock exploding");
+		ADDCLASSPROP((oart->aflags&(ARTA_KNOCKBACK|ARTA_KNOCKBACKX)), "kinetic");
+		if (buf[0] != '\0')
+		{
+			Sprintf(buf2, "Attacks are %s.", buf);
+			OBJPUTSTR(buf2);
+		}
+		/* other stuff
+		 */
+		buf[0] = '\0';
+		ADDCLASSPROP((oart->aflags&ARTA_RETURNING), "returns when thrown");
+		ADDCLASSPROP((oart->aflags&ARTA_HASTE), "hastens the wielder's attacks");
+		if (buf[0] != '\0')
+		{
+			buf[0] = buf[0] + 'A' - 'a';
+			Sprintf(buf2, "%s.", buf);
+			OBJPUTSTR(buf2);
 		}
 	}
 	if (olet == ARMOR_CLASS) {
@@ -3816,6 +3854,8 @@ winid *datawin;
 		oartifact == ART_STAFF_OF_NECROMANCY ||
 		oartifact == ART_TREASURY_OF_PROTEUS ||
 		oartifact == ART_TENTACLE_ROD ||
+		oartifact == ART_WRAPPINGS_OF_THE_SACRED_FI ||
+		oartifact == ART_SPELL_WARDED_WRAPPINGS_OF_ ||
 		oartifact == ART_MAGICBANE)			OBJPUTSTR("Protects your inventory from being cursed.");
 
 	/* Effects based on the base description of the item -- only one will apply, so an if-else chain is appropriate */
@@ -3844,6 +3884,7 @@ winid *datawin;
 		otyp == CRYSTAL_HELM ||
 		otyp == PONTIFF_S_CROWN ||
 		otyp == FACELESS_HELM ||
+		otyp == IMPERIAL_ELVEN_HELM ||
 		otyp == WHITE_FACELESS_ROBE ||
 		otyp == BLACK_FACELESS_ROBE ||
 		otyp == SMOKY_VIOLET_FACELESS_ROBE)		OBJPUTSTR("Covers the face entirely.");
@@ -5553,6 +5594,42 @@ boolean as_if_seen;
 }
 
 int
+mon_healing_penalty(mon)
+struct monst *mon;
+{
+	int penalty = 0;
+	if(hates_silver(mon->data)){
+		penalty += (20*mon_material_next_to_skin(mon, SILVER))/2;
+	}
+	if(hates_iron(mon->data)){
+		penalty += (mon->m_lev * mon_material_next_to_skin(mon, IRON)+1)/2;
+		penalty += (mon->m_lev * mon_material_next_to_skin(mon, GREEN_STEEL)+1)/2;
+	}
+	if(hates_unholy_mon(mon)){
+		penalty += (9*mon_bcu_next_to_skin(mon, -1)+1)/2;
+		penalty += 9*mon_material_next_to_skin(mon, GREEN_STEEL);
+	}
+	if(hates_unblessed_mon(mon)){
+		penalty += (8*mon_bcu_next_to_skin(mon, 0)+1)/2;
+	}
+	if(hates_holy_mon(mon)){
+		penalty += (4*mon_bcu_next_to_skin(mon, 1)+1)/2;
+	}
+	if(is_chaotic_mon(mon)){
+		int plat_penalty = 5 * mon_material_next_to_skin(mon, PLATINUM);
+		if(is_minion(mon->data) || is_demon(mon->data))
+			plat_penalty *= 2;
+		/* strongly chaotic beings are hurt more */
+		if(mon->mtyp == PM_ANGEL || mon->data->maligntyp <= -10)
+			plat_penalty *= 2;
+
+		penalty += plat_penalty/2;
+	}
+
+	return penalty;
+}
+
+int
 u_healing_penalty()
 {
 	int penalty = 0;
@@ -5603,9 +5680,10 @@ u_clothing_discomfort()
 	}
 	if(uarm){
 		count++;
-		if(is_medium_armor(uarm))
+		if(is_light_armor(uarm));//+0
+		else if(is_medium_armor(uarm))
 			count++;
-		else if(!is_light_armor(uarm))
+		else
 			count += 2;//Not medium or light, so heavy
 	}
 	else if(uwep && uwep->oartifact == ART_TENSA_ZANGETSU){
@@ -5632,7 +5710,8 @@ u_clothing_discomfort()
 	}
 	if(uarmc){
 		count+=3;
-		if(uarmc->otyp == MUMMY_WRAPPING 
+		if(uarmc->otyp == MUMMY_WRAPPING
+			|| uarmc->otyp == PRAYER_WARDED_WRAPPING
 			|| uarmc->otyp == WHITE_FACELESS_ROBE
 			|| uarmc->otyp == BLACK_FACELESS_ROBE
 			|| uarmc->otyp == SMOKY_VIOLET_FACELESS_ROBE
@@ -5655,6 +5734,131 @@ u_clothing_discomfort()
 			count++;
 	}
 	return count; //0-25
+}
+
+STATIC_OVL int
+mon_material_next_to_skin(mon, material)
+struct monst *mon;
+int material;
+{
+	int count = 0;
+	struct obj *curarm;
+	boolean marm_blocks_ub = FALSE;
+	boolean hasgloves = !!which_armor(mon, W_ARMG);
+	boolean hasshirt = !!which_armor(mon, W_ARMU);
+
+	curarm = which_armor(mon, W_ARMU);
+	if(curarm && curarm->obj_material == material)
+		count += curarm->otyp == BODYGLOVE ? 5 : 1;
+	if(curarm && curarm->otyp == BODYGLOVE)
+		return count;
+
+	if(MON_WEP(mon) && MON_WEP(mon)->obj_material == material && !hasgloves)
+		count++;
+
+	curarm = which_armor(mon, W_ARM);
+	if(curarm && curarm->obj_material == material && !hasshirt)
+		count++;
+	if(curarm && arm_blocks_upper_body(curarm->otyp))
+		marm_blocks_ub = TRUE;
+	
+	curarm = which_armor(mon, W_ARMC);
+	if(curarm && curarm->obj_material == material && !hasshirt && !marm_blocks_ub)
+		count++;
+
+	curarm = which_armor(mon, W_ARMH);
+	if(curarm && curarm->obj_material == material)
+		count++;
+
+	curarm = which_armor(mon, W_ARMS);
+	if(curarm && curarm->obj_material == material && !hasgloves)
+		count++;
+
+	curarm = which_armor(mon, W_ARMG);
+	if(curarm && curarm->obj_material == material)
+		count++;
+
+	curarm = which_armor(mon, W_ARMF);
+	if(curarm && curarm->obj_material == material)
+		count++;
+
+	curarm = which_armor(mon, W_AMUL);
+	if(curarm && curarm->obj_material == material && !hasshirt && !marm_blocks_ub)
+		count++;
+
+	if(mon->entangled_oid && !hasshirt && !marm_blocks_ub && !which_armor(mon, W_ARMC) && entangle_material(mon, material))
+		count++;
+
+	curarm = which_armor(mon, W_TOOL);
+	if(curarm && curarm->obj_material == material)
+		count++;
+
+	if(MON_SWEP(mon) && MON_SWEP(mon)->obj_material == material && !hasgloves)
+		count++;
+	return count;
+}
+
+STATIC_OVL int
+mon_bcu_next_to_skin(mon, bcu)
+struct monst *mon;
+int bcu;
+{
+	#define bcu(otmp) (is_unholy(otmp) ? -1 : otmp->blessed ? 1 : 0)
+	int count = 0;
+	struct obj *curarm;
+	boolean marm_blocks_ub = FALSE;
+	boolean hasgloves = !!which_armor(mon, W_ARMG);
+	boolean hasshirt = !!which_armor(mon, W_ARMU);
+
+	curarm = which_armor(mon, W_ARMU);
+	if(curarm && bcu(curarm) == bcu)
+		count += curarm->otyp == BODYGLOVE ? 5 : 1;
+	if(curarm && curarm->otyp == BODYGLOVE)
+		return count;
+
+	if(MON_WEP(mon) && bcu(MON_WEP(mon)) == bcu && !hasgloves)
+		count++;
+
+	curarm = which_armor(mon, W_ARM);
+	if(curarm && bcu(curarm) == bcu && !hasshirt)
+		count++;
+	if(curarm && arm_blocks_upper_body(curarm->otyp))
+		marm_blocks_ub = TRUE;
+
+	curarm = which_armor(mon, W_ARMC);
+	if(curarm && bcu(curarm) == bcu && !hasshirt && !marm_blocks_ub)
+		count++;
+
+	curarm = which_armor(mon, W_ARMH);
+	if(curarm && bcu(curarm) == bcu)
+		count++;
+
+	curarm = which_armor(mon, W_ARMS);
+	if(curarm && bcu(curarm) == bcu && !hasgloves)
+		count++;
+
+	curarm = which_armor(mon, W_ARMG);
+	if(curarm && bcu(curarm) == bcu)
+		count++;
+
+	curarm = which_armor(mon, W_ARMF);
+	if(curarm && bcu(curarm) == bcu)
+		count++;
+
+	curarm = which_armor(mon, W_AMUL);
+	if(curarm && bcu(curarm) == bcu && !hasshirt && !marm_blocks_ub)
+		count++;
+
+	if(mon->entangled_oid && !hasshirt && !marm_blocks_ub && !which_armor(mon, W_ARMC) && entangle_beatitude(mon, bcu))
+		count++;
+
+	curarm = which_armor(mon, W_TOOL);
+	if(curarm && bcu(curarm) == bcu)
+		count++;
+
+	if(MON_SWEP(mon) && bcu(MON_SWEP(mon)) == bcu && !hasgloves)
+		count++;
+	return count;
 }
 
 STATIC_OVL int
@@ -5686,7 +5890,7 @@ int material;
 		count++;
 	if(uamul && uamul->obj_material == material && !uarmu && !(uarm && arm_blocks_upper_body(uarm->otyp)))
 		count++;
-	if(u.uentangled && !uarmu && !uarm && !(uarm && arm_blocks_upper_body(uarm->otyp)) && entangle_material(&youmonst, material))
+	if(u.uentangled_oid && !uarmu && !uarm && !(uarm && arm_blocks_upper_body(uarm->otyp)) && entangle_material(&youmonst, material))
 		count++;
 	if(ublindf && ublindf->obj_material == material)
 		count++;
@@ -5727,7 +5931,7 @@ int bcu;
 		count++;
 	if(uamul && bcu(uamul) == bcu && !uarmu && !(uarm && arm_blocks_upper_body(uarm->otyp)))
 		count++;
-	if(u.uentangled && !uarmu && !(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc && entangle_beatitude(&youmonst, bcu))
+	if(u.uentangled_oid && !uarmu && !(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc && entangle_beatitude(&youmonst, bcu))
 		count++;
 	if(ublindf && bcu(ublindf) == bcu)
 		count++;

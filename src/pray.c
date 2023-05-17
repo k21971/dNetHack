@@ -9,6 +9,7 @@
 #include "artifact.h"
 
 extern const int monstr[];
+extern void you_aggravate(struct monst *);
 
 STATIC_PTR int NDECL(prayer_done);
 STATIC_DCL struct obj *NDECL(worst_cursed_item);
@@ -932,9 +933,9 @@ int godnum;
 	    if (Luck > 10 && u.ualign.record >= PIOUS && !u.uevent.uhand_of_elbereth && u.uevent.qcompleted){
 			gcrownu();
 		}
-		else if(Pantheon_if(PM_VALKYRIE) && u.ualign.record >= PIOUS 
+		else if((God_if(GOD_ODIN) || God_if(GOD_TYR)) && u.ualign.record >= PIOUS 
 			&& uwep && is_spear(uwep) && !uwep->oartifact && uwep->spe >= 5 
-			&& !art_already_exists(ART_GUNGNIR) && (galign(godnum) == A_LAWFUL || galign(godnum) == A_NEUTRAL)
+			&& !art_already_exists(ART_GUNGNIR)
 		){
 			pline("Secret runes are engraved on your %s.", xname(uwep));
 			oname(uwep, artilist[ART_GUNGNIR].name);
@@ -1102,6 +1103,8 @@ int godnum;
 			otmp->otyp = rnd_class(bases[SPBOOK_CLASS], SPE_BLANK_PAPER);
 			}
 			bless(otmp);
+			if(otmp->otyp != SPE_BLANK_PAPER && (Blind || godnum == GOD_PEN_A))
+				add_oprop(otmp, OPROP_TACTB);
 			place_object(otmp, u.ux, u.uy);
 			break;
 		}
@@ -1585,9 +1588,9 @@ dosacrifice()
     int value = 0;
     int pm;
     aligntyp altaralign = (a_align(u.ux,u.uy));
-	int altargod = god_at_altar(u.ux, u.uy);
 	char buf[BUFSZ];
-    if (!on_altar() || u.uswallow) {
+	int altargod = god_at_altar(u.ux, u.uy);
+    if (!on_altar() || (u.uswallow && u.ustuck->mtyp != PM_MOUTH_OF_THE_GOAT)) {
 		You("are not standing on an altar.");
 		return MOVE_CANCELLED;
     }
@@ -1686,7 +1689,6 @@ dosacrifice()
 				exercise(A_WIS, TRUE);
 			} else if ((u.ualign.type != A_CHAOTIC && u.ualign.type != A_NONE) || altaralign != A_CHAOTIC) {
 				if((u.ualign.record >= 20 || ACURR(A_WIS) >= 20 || u.ualign.record >= rnd(20-ACURR(A_WIS))) && !roll_madness(MAD_CANNIBALISM)){
-					char buf[BUFSZ];
 					Sprintf(buf, "You feel a deep sense of kinship to %s!  Sacrifice %s anyway?",
 						the(xname(otmp)), (otmp->quan == 1L) ? "it" : "one");
 					if (yn_function(buf,ynchars,'n')=='n') return MOVE_CANCELLED;
@@ -2622,6 +2624,108 @@ doturn()
 	return MOVE_STANDARD;
 }
 
+int
+mon_doturn(mon)
+struct monst *mon;
+{	/* Knights & Priest(esse)s only please */
+	struct monst *mtmp, *mtmp2;
+	int once, range, xlev;
+	short fast = 0;
+
+	if(mon_healing_turn(mon)){
+		if(canseemon(mon))
+			pline("%s shines with holy light!", Monnam(mon));
+	}
+	else
+		pline("%s chants holy scripture.", Monnam(mon));
+
+	if(Misotheism){
+		pline("But nothing happens!");
+		return MOVE_CANCELLED;
+	}
+
+	/* note: does not perform unturn_dead() on victims' inventories */
+	range = BOLT_LIM + (mon->m_lev / 5);
+	range *= range;
+	once = 0;
+	for(mtmp = fmon; mtmp; mtmp = mtmp2) {
+	    mtmp2 = mtmp->nmon;
+
+	    if (DEADMONSTER(mtmp)) continue;
+	    if (mtmp == mon) continue;
+	    if (!clear_path(mon->mx,mon->my, mtmp->mx,mtmp->my) ||
+			dist2(mon->mx,mon->my, mtmp->mx,mtmp->my) > range
+		) continue;
+		
+	    if (mm_grudge(mon, mtmp) && 
+			(is_undead(mtmp->data) ||
+				(is_demon(mtmp->data) && (mon->m_lev > (MAXULEV/2)))
+			)
+		){
+		    mtmp->msleeping = 0;
+		    if (mon->mconf) {
+				if (!once++){
+					pline("%s voice falters!", s_suffix(Monnam(mon)));
+				}
+				if(mtmp->mtyp != PM_BANDERSNATCH) mtmp->mflee = 0;
+				mtmp->mfrozen = 0;
+				mtmp->mcanmove = 1;
+		    } else if (!resist(mtmp, '\0', 0, TELL)) {
+				if(is_undead(mtmp->data)){
+					xlev = turn_level(mtmp);
+					if (mon->m_lev >= xlev && !resist(mtmp, '\0', 0, NOTELL)) {
+						pline("%s is destroyed!", Monnam(mtmp));
+						grow_up(mon, mtmp);
+						monkilled(mtmp, (const char *)0, AD_SPEL);
+					}
+				}
+				/* else flee */
+				if(!DEADMONSTER(mtmp))
+					monflee(mtmp, 0, FALSE, TRUE);
+		    }
+	    }
+		else if (mon_healing_turn(mon) && mtmp->mhp < mtmp->mhpmax 
+			&& !mon->mtame == !mtmp->mtame && mon->mpeaceful == mtmp->mpeaceful && !mm_grudge(mon, mtmp)
+			&& !(is_undead(mtmp->data) || is_demon(mtmp->data))
+		){
+			if(canseemon(mtmp))
+				pline("%s looks better!", Monnam(mtmp));
+			mtmp->mhp += d(10,6);
+			if(mtmp->mhp > mtmp->mhpmax)
+				mtmp->mhp = mtmp->mhpmax;
+		}
+	}
+	if(distu(mon->mx,mon->my) <= range && !mon->mpeaceful){
+		if(is_undead(youracedata) || (is_demon(youracedata) && (mon->m_lev > (MAXULEV/2)))){
+			if(mon->mconf){
+				pline("%s faltering voice enrages you!", s_suffix(Monnam(mon)));
+				you_aggravate(mon);
+			}
+			else {
+				xlev = turn_level(&youmonst);
+				if(is_undead(youracedata) && mon->m_lev >= xlev && rnd(u.ulevel) <= xlev){
+					if(mon_healing_turn(mon)){
+						You("are burned by the holy light!");
+						losehp(d(10,6), "holy light", KILLED_BY);
+					}
+					else {
+						You("are burned by the holy words!");
+						losehp(d(6,6), "holy scripture", KILLED_BY);
+					}
+				}
+				You("panic!");
+				HPanicking += d(6,6);
+			}
+		}
+		else if(mon->mtame && mon_healing_turn(mon)
+		 && !(is_undead(youracedata) || (is_demon(youracedata) && (mon->m_lev > (MAXULEV/2))))
+		){
+			healup(d(10,6), 0, FALSE, FALSE);
+		}
+	}
+	return MOVE_STANDARD;
+}
+
 const char *
 a_gname()
 {
@@ -3136,17 +3240,20 @@ int eatflag;
 }
 
 STATIC_OVL int
-fire_rider(otmp)
+fire_rider(otmp, offering)
 struct obj *otmp;
+boolean offering;
 {
 	int cn = otmp->corpsenm;
 	struct monst *revived = 0;
 	if(is_rider(&mons[otmp->corpsenm])){
 		pline("A pulse of darkness radiates from %s!", the(xname(otmp)));
 		revived = revive(otmp, FALSE);
-		//Grows angry at you, but doesn't actually smite you.
-		godlist[GOD_THE_SILVER_FLAME].anger++;
-		gods_angry(GOD_THE_SILVER_FLAME);
+		if(offering){
+			//Grows angry at you, but doesn't actually smite you.
+			godlist[GOD_THE_SILVER_FLAME].anger++;
+			gods_angry(GOD_THE_SILVER_FLAME);
+		}
 	}
 	if(revived)
 		return TRUE;
@@ -3645,7 +3752,7 @@ commune_with_silver_flame()
 			if(otmp){
 				if(sflm_mortalable(otmp)){
 					cost = 50;
-					pline("The silver light is focused by your mirror!");
+					pline("The silver light within %s is focused by your mirror!", doname(otmp));
 					add_oprop(otmp, OPROP_MORTW);
 					u.uartisval += TIER_B; /*Theory: Life drain is actually not all that powerful, but the Wizard and his summons are still affected. */
 				}
@@ -3658,7 +3765,7 @@ commune_with_silver_flame()
 			if(otmp){
 				if(sflm_truedeathable(otmp)){
 					cost = 50;
-					pline("The silver light is focused by your mirror!");
+					pline("The silver light within %s is focused by your mirror!", doname(otmp));
 					add_oprop(otmp, OPROP_TDTHW);
 					u.uartisval += TIER_A; /*Theory: Nasty stuff like liches and pharaohs is affected, plus it deals a lot of damage to them. */
 				}
@@ -3671,7 +3778,7 @@ commune_with_silver_flame()
 			if(otmp){
 				if(sflm_unworthyable(otmp)){
 					cost = 50;
-					pline("The silver light is focused by your mirror!");
+					pline("The silver light within %s is focused by your mirror!", doname(otmp));
 					add_oprop(otmp, OPROP_SFUWW);
 					u.uartisval += TIER_S; /*Theory: This specifically affects the nastiest late game enemies. */
 				}
@@ -3857,6 +3964,8 @@ int eatflag;
 		}
 		for(mtmp = fmon; mtmp; mtmp = mtmp->nmon){
 			if(mtmp->mfaction == GOATMOM_FACTION){
+				if(u.ustuck == mtmp)
+					expels(mtmp, mtmp->data, TRUE);
 				mtmp->mpeaceful = 1;
 				set_malign(mtmp);
 				newsym(mtmp->mx, mtmp->my);
@@ -3878,6 +3987,7 @@ int eatflag;
 		}
 		return;
 	}
+	else u.shubbie_atten = 1;
 
 	/* at this point, gain credit */
 
@@ -3902,9 +4012,10 @@ int eatflag;
 	return;
 }
 void
-flame_consume(mtmp, otmp)
+flame_consume(mtmp, otmp, offering)
 struct monst *mtmp;
 struct obj *otmp;
+boolean offering;
 {
     int value = 0;
 	struct permonst *ptr = mtmp ? mtmp->data : otmp ? &mons[otmp->corpsenm] : 0;
@@ -3915,13 +4026,22 @@ struct obj *otmp;
 		return;
 	}
 	
-	if(otmp && fire_rider(otmp)){
+	if(otmp && fire_rider(otmp, offering)){
 		//otmp is now gone, and rider may have printed messages
 		return;
 	}
 
 	if(otmp && otmp->otyp == AMULET_OF_YENDOR){
 		pline("The Amulet proves fireproof.");
+		return;
+	}
+
+	//A monster may be using a silver flame weapon.
+	if(!offering){
+		if(otmp){
+			if (carried(otmp)) useup(otmp);
+			else useupf(otmp, 1L);
+		}
 		return;
 	}
 
@@ -4130,6 +4250,7 @@ int godnum;
 		case GOD_LOLTH: return LOLTH_SYMBOL;
 		case GOD_GHAUNADAUR: return GHAUNADAUR_SYMBOL;
 		case GOD_VER_TAS: return VER_TAS_SYMBOL;
+		case GOD_PEN_A: return PEN_A_SYMBOL;
 		case GOD_EILISTRAEE: return EILISTRAEE_SYMBOL;
 		case GOD_KIARANSALI: return KIARANSALEE_SYMBOL;
 		case GOD_THE_BLACK_MOTHER: return GOATMOM_FACTION;
@@ -4305,7 +4426,7 @@ int sanctum;   /* is it the seat of the high priest? */
 		otmp->spe = 2;\
 		otmp->opoisoned = rn2(4) ? OPOISON_BASIC : OPOISON_PARAL;\
 		otmp->opoisonchrgs = 1;\
-		otmp->ovar1 = 1+rnd(3);\
+		otmp->ovar1_heads = 1+rnd(3);\
 	}\
 	mongets(priest, KHAKKHARA, MKOBJ_NOINIT);\
 	m_dowear(priest, TRUE);\
@@ -4465,15 +4586,29 @@ int x, y;
  * Any attending priests will still get upset, though!
  */
 boolean
-gods_are_friendly(god1, god2)
-int god1, god2;
+gods_are_friendly(from_god, to_god)
+int from_god, to_god;
 {
 	/* elf-gods are friendly with each other */
 	/* NOTE: assumes order of elfgods in godlist.h */
-	if ((GOD_OROME <= god1 && god1 <= GOD_LORIEN)
-		&& (GOD_OROME <= god2 && god2 <= GOD_LORIEN))
+	if ((GOD_OROME <= from_god && from_god <= GOD_LORIEN)
+		&& (GOD_OROME <= to_god && to_god <= GOD_LORIEN))
 	{
 		return TRUE;
+	}
+	if(from_god == GOD_PEN_A || to_god == GOD_PEN_A){
+		if(from_god == GOD_ILMATER || to_god == GOD_ILMATER)
+			return TRUE;
+		if(from_god == GOD_EILISTRAEE || to_god == GOD_EILISTRAEE)
+			return TRUE;
+	}
+	if(from_god == GOD_VANDRIA || from_god == GOD_SEHANINE){
+		if(to_god == GOD_VANDRIA)
+			return TRUE;
+		if(to_god == GOD_SEHANINE)
+			return TRUE;
+		if(to_god == GOD_CORELLON)
+			return TRUE; /*Note: but not FROM Corellon*/
 	}
 
 	return FALSE;

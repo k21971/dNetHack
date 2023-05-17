@@ -63,12 +63,13 @@ struct u_event {
 	Bitfield(uaxus_foe,1);			/*27 enemy of the modrons */
 	Bitfield(utook_castle, 2);		/*29 sat on the castle throne, used artifact wish */
 	Bitfield(uunknowngod, 2);		/*31 given five artifacts to the priests of the unknown god, used artifact wish */
+	Bitfield(uconstellation, 2);	/*33 has earned the star emperor ring wish, used artifact wish */
 #define ARTWISH_EARNED	1
 #define ARTWISH_SPENT	2
-	Bitfield(ascended,1);			/*32 has offered the Amulet */
-	Bitfield(knoxmade,1);			/*33 Portal to Ludios has been made in the main dungeon, teleport ok */
+	Bitfield(ascended,1);			/*34 has offered the Amulet */
+	Bitfield(knoxmade,1);			/*35 Portal to Ludios has been made in the main dungeon, teleport ok */
 	
-	Bitfield(padding,10);			/*43 reseve another bitfield in event. */
+	Bitfield(padding,10);			/*45 reseve another bitfield in event. */
 };
 
 /* KMH, conduct --
@@ -164,6 +165,8 @@ extern struct Role roles[];	/* table of available roles */
 extern struct Role urole;
 #define Role_if(X)	(urole.malenum == (X))
 #define Pantheon_if(X)	(flags.racial_pantheon != 0 ? flags.racial_pantheon == (X) : roles[flags.pantheon].malenum == (X))
+#define God_if(X)	(u.ualign.god == (X))
+#define Holiness_if(X)	(gholiness(u.ualign.god) == (X))
 #define Role_switch	(urole.malenum)
 /* also used to see if you're allowed to eat cats and dogs */
 #define CANNIBAL_ALLOWED() (Role_if(PM_CAVEMAN) || Race_if(PM_ORC) || \
@@ -470,7 +473,8 @@ struct you {
 #define RITUAL_DONE		(RITUAL_CHAOS|RITUAL_NEUTRAL|RITUAL_LAW)
 #define HI_RITUAL_DONE	(RITUAL_HI_CHAOS|RITUAL_HI_NEUTRAL|RITUAL_HI_LAW)
 	Bitfield(peaceful_pets,1);	/* pets don't attack peaceful monsters */
-	/* 12 free bits */
+	Bitfield(uiearepairs,1);	/* Knows how to repair Imperial Elven Armor */
+	/* 11 free bits */
 	
 	int oonaenergy;				/* Record the energy type used by Oona in your game. (Worm that Walks switches?) */
 	int brand_otyp;				/* Record the otyp of Fire and Frost Brand in this game */
@@ -571,7 +575,8 @@ struct you {
 	int		last_used_movement;	/* Partial action: last used turn segment */
 	int 	ustdy;		/* to record extra damage to be dealt due to having been studied */
 	int 	uencouraged;/* to record the buff from tame encouragement songs */
-	int		uentangled; /* to record the otyp of an item entangling you */
+	int		uentangled_otyp; /* to record the otyp of an item entangling you */
+	long	uentangled_oid; /* to record the oid of the item entangling you */
 	long int spawnedGold; /* to record total amount of gold spawned in a game */
 	int 	usanity;	/* to record level of sanity */
 	unsigned long long int 	umadness;	/* to afflictions */
@@ -608,7 +613,9 @@ struct you {
 #define	MAD_TOO_BIG			0x0000000040000000L
 #define	MAD_APOSTASY		0x0000000080000000L
 #define	MAD_ROTTING			0x0000000100000000L
-#define	LAST_MADNESS		MAD_ROTTING
+#define	MAD_REACHER			0x0000000200000000L
+#define	MAD_SCORPIONS		0x0000000400000000L
+#define	LAST_MADNESS		MAD_SCORPIONS
 	int 	uinsight;	/* to record level of insight */
 	/*Insight rate calculation: 40: "high insight" 300: "Approximate per-turn WoYendor intervention rate" 5: "total number of harmful effects" */
 #define INSIGHT_RATE (40*300*5)

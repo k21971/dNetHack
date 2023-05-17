@@ -1946,11 +1946,13 @@ shk_other_services()
 			add_menu(tmpwin, NO_GLYPH, &any , 'p', 0, ATR_NONE,
 				"Poison", MENU_UNSELECTED);
 	}
-  
   	/* Armor-works */
 	if ((ESHK(shkp)->services & (SHK_SPECIAL_A|SHK_SPECIAL_B))
 			 &&(ESHK(shkp)->shoptype == ARMORSHOP
 			   || ESHK(shkp)->shoptype == CERAMICSHOP
+			   || ESHK(shkp)->shoptype == SANDWALKER
+			   || ESHK(shkp)->shoptype == NAIADSHOP
+			   || ESHK(shkp)->shoptype == PETSHOP
 			   )
 	) {
 		any.a_int = 5;
@@ -3456,13 +3458,13 @@ boolean shk_buying, shk_selling;
 		long denominator = materials[objects[obj->otyp].oc_material].cost;
 
 		/* items made of specific gems use that as their material cost mod */
-		if (obj->obj_material == GEMSTONE && obj->ovar1 && obj->oclass != GEM_CLASS && !obj_type_uses_ovar1(obj) && !obj_art_uses_ovar1(obj))
+		if (obj->obj_material == GEMSTONE && obj->sub_material && obj->oclass != GEM_CLASS)
 		{
 			/* costs more if the gem type is expensive */
-			if (objects[obj->ovar1].oc_cost >= 500)
-				numerator += min(4000, objects[obj->ovar1].oc_cost) / 10;	// 100 to 500
+			if (objects[obj->sub_material].oc_cost >= 500)
+				numerator += min(4000, objects[obj->sub_material].oc_cost) / 10;	// 100 to 500
 
-			if (!objects[obj->ovar1].oc_name_known) {
+			if (!objects[obj->sub_material].oc_name_known) {
 				if (shk_buying)
 					/* shopkeepers insist your gem armor is fluorite or equally inexpensive and you don't know otherwise */
 					numerator = materials[obj->obj_material].cost;	// 100
@@ -3852,9 +3854,7 @@ register struct monst *shkp;
 
 	if((udist = distu(omx,omy)) < 3 &&
 		((shkp->mtyp != PM_GRID_BUG && shkp->mtyp != PM_BEBELITH) || (omx==u.ux || omy==u.uy)) &&
-		((shkp->mtyp != PM_CLOCKWORK_SOLDIER && shkp->mtyp != PM_CLOCKWORK_DWARF && 
-		   shkp->mtyp != PM_FABERGE_SPHERE && shkp->mtyp != PM_FIREWORK_CART && 
-		   shkp->mtyp != PM_JUGGERNAUT && shkp->mtyp != PM_ID_JUGGERNAUT) ||
+		(!is_vectored_mtyp(shkp->mtyp) ||
 			(omx + xdir[(int)shkp->mvar_vector] == u.ux && 
 			   omy + ydir[(int)shkp->mvar_vector] == u.uy 
 			)
@@ -5099,8 +5099,8 @@ shk_appraisal(slang, shkp)
 	/* Convert damage to ascii */
 
 	struct weapon_dice wdice[2];
-	(void)dmgval_core(&wdice[0], FALSE, obj, obj->otyp);	// small dice
-	(void)dmgval_core(&wdice[1], TRUE, obj, obj->otyp);		// large dice
+	(void)dmgval_core(&wdice[0], FALSE, obj, obj->otyp, &youmonst);	// small dice
+	(void)dmgval_core(&wdice[1], TRUE, obj, obj->otyp, &youmonst);		// large dice
 
 	Sprintf(buf, "Damage: ");
 
@@ -5506,15 +5506,15 @@ shk_armor_works(slang, shkp)
 				 verbalize("They'll call you the man of stainless steel!");
 
 			/* Costs more the more rusty it is (oeroded 0-3) */
-			charge = 300 * (obj->oeroded+1);
-			if (obj->oeroded > 2) verbalize("Yikes!  This thing's a mess!");
+			charge = 300 * (obj->oeroded + obj->oeroded2 + 1);
+			if ((obj->oeroded + obj->oeroded2) > 2) verbalize("Yikes!  This thing's a mess!");
 
 			/* Artifacts cost more to deal with */
 			/* KMH -- Avoid floating-point */
 			if (obj->oartifact) charge = charge * 3 / 2;
 			
 			/* Smooth out the charge a bit */
-			shk_smooth_charge(&charge, 100, 1000);
+			shk_smooth_charge(&charge, 100, 2000);
 
 			if (shk_offer_price(slang, charge, shkp) == FALSE) return;
 
@@ -5525,6 +5525,7 @@ shk_armor_works(slang, shkp)
 				You("mistake your %s for a pot and...", xname(obj));
 
 			obj->oeroded = 0;
+			obj->oeroded2 = 0;
 			obj->rknown = TRUE;
 			obj->oerodeproof = TRUE;
 			break;
@@ -5957,7 +5958,7 @@ struct monst *mon;
 		if(u.sealsActive&SEAL_ANDROMALIUS && !NoBInvis 
 		  && !((levl[u.ux][u.uy].lit == 0 && (dimness(u.ux, u.uy) <= 0)) //dark square
 			 || (ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE)) //face-covering mask
-			 || (uarmh && (uarmh->otyp==PLASTEEL_HELM || uarmh->otyp==PONTIFF_S_CROWN || uarmh->otyp==FACELESS_HELM)) //OPAQUE face-covering helm (visored should also work)
+			 || (uarmh && (uarmh->otyp==PLASTEEL_HELM || uarmh->otyp==PONTIFF_S_CROWN || uarmh->otyp==FACELESS_HELM || uarmh->otyp==IMPERIAL_ELVEN_HELM)) //OPAQUE face-covering helm (visored should also work)
 			 || (uarmc && (uarmc->otyp==WHITE_FACELESS_ROBE || uarmc->otyp==BLACK_FACELESS_ROBE || uarmc->otyp==SMOKY_VIOLET_FACELESS_ROBE))//face-covering robe
 		  )
 		) count++; 

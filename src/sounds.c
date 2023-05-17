@@ -588,6 +588,9 @@ register struct monst *mtmp;
 	case MS_WAIL:
 	    ret = "wail";
 	    break;
+	case MS_RIBBIT:
+	    ret = "croak";
+	    break;
 	case MS_SILENT:
 		ret = "commotion";
 		break;
@@ -622,9 +625,10 @@ register struct monst *mtmp;
 /* the sounds of mistreated pets */
 void
 yelp(mtmp)
-register struct monst *mtmp;
+struct monst *mtmp;
 {
-    register const char *yelp_verb = 0;
+    const char *yelp_verb = 0;
+	const char *yelp_modifier = 0;
 
     if (mtmp->msleeping || !mtmp->mcanmove || !mtmp->mnotlaugh || !mtmp->data->msound)
 	return;
@@ -655,9 +659,16 @@ register struct monst *mtmp;
 	case MS_WAIL:
 	    yelp_verb = "wail";
 	    break;
+	case MS_RIBBIT:
+	    yelp_verb = "peep";
+	    break;
+	case MS_COUGH:
+	    yelp_verb = "cough";
+		yelp_modifier = " paroxysmally";
+	    break;
     }
     if (yelp_verb) {
-	pline("%s %s!", Monnam(mtmp), vtense((char *)0, yelp_verb));
+	pline("%s %s%s!", Monnam(mtmp), vtense((char *)0, yelp_verb), yelp_modifier ? yelp_modifier : "");
 	if(flags.run) nomul(0, NULL);
 	wake_nearto_noisy(mtmp->mx, mtmp->my, mtmp->data->mlevel * 12);
     }
@@ -736,7 +747,7 @@ boolean chatting;
 					Monnam(mtmp), (is_animal(mtmp->data) || mindless_mon(mtmp) ? "its" : hisherits(mtmp))
 				);
 		}
-		else if(mtmp->entangled == SHACKLES){
+		else if(mtmp->entangled_otyp == SHACKLES){
 			if(chatting && canspotmon(mtmp))
 				pline("%s is unconscious.",  Monnam(mtmp));
 		}
@@ -796,16 +807,37 @@ boolean chatting;
 			}
 		}
 	}
-	switch (
-		is_silent_mon(mtmp) ? MS_SILENT : 
-		(is_dollable(mtmp->data) && mtmp->m_insight_level) ? MS_STATS : 
-		mtmp->ispriest ? MS_PRIEST : 
-		mtmp->isshk ? MS_SELL : 
-		(mtmp->mtyp == PM_RHYMER && !mtmp->mspec_used) ? MS_SONG : 
-		mtmp->mfaction == QUEST_FACTION ? MS_GUARDIAN : 
-		(ptr->msound == MS_CUSS && mtmp->mpeaceful) ? MS_HUMANOID : 
-		ptr->msound
-	) {
+	int soundtype = ptr->msound;
+	//Faction and special abilities adjustment
+	if(mtmp->mtyp == PM_RHYMER && !mtmp->mspec_used)
+		soundtype = MS_SONG;
+	else if(mtmp->mfaction == QUEST_FACTION && mtmp->mtyp != PM_SIR_ALJANOR)
+		soundtype = MS_GUARDIAN;
+	else if(mtmp->mtyp == urole.guardnum)
+		soundtype = MS_GUARDIAN;
+	else if(ptr->msound == MS_CUSS && mtmp->mpeaceful)
+		soundtype = MS_HUMANOID;
+
+	//Don't sing if chatted to.
+	if(chatting && (soundtype == MS_SONG || soundtype == MS_OONA)){
+		if(mtmp->mfaction == QUEST_FACTION)
+			soundtype = MS_GUARDIAN;
+		if(mtmp->mtyp == urole.guardnum)
+			soundtype = MS_GUARDIAN;
+		else soundtype = MS_HUMANOID;
+	}
+
+	//Template and profession adjustments
+	if(is_silent_mon(mtmp))
+		soundtype = MS_SILENT;
+	else if(is_dollable(mtmp->data) && mtmp->m_insight_level)
+		soundtype = MS_STATS;
+	else if(mtmp->ispriest)
+		soundtype = MS_PRIEST;
+	else if(mtmp->isshk)
+		soundtype = MS_SELL;
+
+	switch (soundtype) {
 	case MS_ORACLE:
 	    return doconsult(mtmp);
 	case MS_PRIEST: /*Most (all?) things with this will have ispriest set*/
@@ -999,8 +1031,43 @@ asGuardian:
 	case MS_GURGLE:
 	    pline_msg = "gurgles.";
 	    break;
+	case MS_RIBBIT:
+	    pline_msg = mtmp->mpeaceful ? "ribbits." : "croaks.";
+	    break;
 	case MS_BURBLE:
 	    pline_msg = "burbles.";
+	    break;
+	case MS_COUGH:
+		if (mtmp->mflee)
+		    pline_msg = "coughs frantically.";
+		else if ((get_mx(mtmp, MX_EDOG) && moves > EDOG(mtmp)->hungrytime) || mtmp->mhp*10 < mtmp->mhpmax)
+		    pline_msg = "coughs weakly.";
+		else switch(rn2(10)){
+			default:
+				pline_msg = "coughs spasmodically.";
+			break;
+			case 0:
+				pline_msg = "coughs wetly.";
+			break;
+			case 1:
+				pline_msg = "groans weakly.";
+			break;
+			case 2:
+				pline_msg = "mumbles incoherently.";
+			break;
+			case 3:
+				pline_msg = "coughs.";
+			break;
+			case 4:
+				pline_msg = "coughs dryly.";
+			break;
+			case 5:
+				pline_msg = "coughs up blood.";
+			break;
+			case 6:
+				pline_msg = "vomits.";
+			break;
+		}
 	    break;
 	case MS_JUBJUB:{
 		struct monst *tmpm;
@@ -1040,7 +1107,7 @@ asGuardian:
 				cast_spell(mtmp, (struct monst *)0, &fakesummonspell, !rn2(4) ? SUMMON_ANGEL : SUMMON_MONS, 0, 0);
 			}
 			if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-				uwep->ovar1 |= OHEARD_RALLY;
+				uwep->ovar1_heard |= OHEARD_RALLY;
 			}
 		}
 	}break;
@@ -1057,7 +1124,7 @@ asGuardian:
 				}
 			}
 			if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-				uwep->ovar1 |= OHEARD_RALLY;
+				uwep->ovar1_heard |= OHEARD_RALLY;
 			}
 		}
 	}break;
@@ -1129,7 +1196,7 @@ asGuardian:
 				} else shieldeff(u.ux, u.uy);
 				stop_occupation();
 				if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-					uwep->ovar1 |= OHEARD_DEATH;
+					uwep->ovar1_heard |= OHEARD_DEATH;
 				}
 				}break;
 				case 2:{
@@ -1141,7 +1208,7 @@ asGuardian:
 					}
 				}
 				if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-					uwep->ovar1 |= OHEARD_LIFE;
+					uwep->ovar1_heard |= OHEARD_LIFE;
 				}
 				}break;
 				case 3:
@@ -1157,14 +1224,13 @@ asGuardian:
 				}
 				ix = mtmp ? rnd((int)mtmp->m_lev) : rnd(10);
 				if(Antimagic) ix = (ix + 1) / 2;
-				if(Half_spell_damage) ix = (ix+1) / 2;
-				if(u.uvaul_duration) ix = (ix + 1) / 2;
+				ix = reduce_dmg(&youmonst,ix,FALSE,TRUE);
 				make_confused(HConfusion + ix*10, FALSE);
 				make_stunned(HStun + ix*5, FALSE);
 				make_hallucinated(HHallucination + ix*15, FALSE, 0L);
 				stop_occupation();
 				if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-					uwep->ovar1 |= OHEARD_INSANE;
+					uwep->ovar1_heard |= OHEARD_INSANE;
 				}
 				break;
 				case 4:
@@ -1174,7 +1240,7 @@ asGuardian:
 				stop_occupation();
 				doredraw();
 				if(uwep && uwep->oartifact == ART_SINGING_SWORD){
-					uwep->ovar1 |= OHEARD_QUAKE;
+					uwep->ovar1_heard |= OHEARD_QUAKE;
 				}
 				break;
 				case 5:{
@@ -1434,7 +1500,7 @@ asGuardian:
 						You_feel("%s!", u.uencouraged >= BASE_DOG_ENCOURAGED_MAX ? "berserk" : "wild");
 					}
 					if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 5 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-						uwep->ovar1 |= OHEARD_COURAGE;
+						uwep->ovar1_heard |= OHEARD_COURAGE;
 					}
 				break;
 				case 2:
@@ -1495,7 +1561,7 @@ asGuardian:
 						use_unicorn_horn((struct obj *)0);
 					}
 					if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 5 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-						uwep->ovar1 |= OHEARD_HEALING;
+						uwep->ovar1_heard |= OHEARD_HEALING;
 					}
 				break;
 				case 3:
@@ -1542,7 +1608,7 @@ asGuardian:
 						}
 					}
 					if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 5 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-						uwep->ovar1 |= OHEARD_HASTE;
+						uwep->ovar1_heard |= OHEARD_HASTE;
 					}
 				break;
 			}
@@ -1577,19 +1643,19 @@ asGuardian:
 						case AD_FIRE:
 							pline("%s sings the lament of flames.", Monnam(mtmp));
 							if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 4 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-								uwep->ovar1 |= OHEARD_FIRE;
+								uwep->ovar1_heard |= OHEARD_FIRE;
 							}
 						break;
 						case AD_COLD:
 							pline("%s sings the lament of ice.", Monnam(mtmp));
 							if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 4 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-								uwep->ovar1 |= OHEARD_FROST;
+								uwep->ovar1_heard |= OHEARD_FROST;
 							}
 						break;
 						case AD_ELEC:
 							pline("%s sings the lament of storms.", Monnam(mtmp));
 							if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 4 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-								uwep->ovar1 |= OHEARD_ELECT;
+								uwep->ovar1_heard |= OHEARD_ELECT;
 							}
 						break;
 					}
@@ -1634,8 +1700,7 @@ asGuardian:
 								if(Shock_resistance) dmg = d(min(MAX_BONUS_DICE, mtmp->m_lev/3)+10,4);
 							break;
 						}
-						if(Half_spell_damage) dmg /= 2;
-						if(u.uvaul_duration) dmg /= 2;
+						dmg = reduce_dmg(&youmonst,dmg,FALSE,TRUE);
 						if(dmg) dmg = min(dmg,Upolyd ? (u.mh - 1) : (u.uhp - 1));
 						if(dmg) mdamageu(mtmp,dmg);
 					}
@@ -1687,7 +1752,7 @@ asGuardian:
 						You_feel("%s!", u.uencouraged <= -1*BASE_DOG_ENCOURAGED_MAX ? "inconsolable" : "depressed");
 					}
 					if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 4 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-						uwep->ovar1 |= OHEARD_DIRGE;
+						uwep->ovar1_heard |= OHEARD_DIRGE;
 					}
 				break;
 				case 3:
@@ -1731,7 +1796,7 @@ asGuardian:
 						}
 					}
 					if(distmin(mtmp->mx,mtmp->my,u.ux,u.uy) < 4 && uwep && uwep->oartifact == ART_SINGING_SWORD){
-						uwep->ovar1 |= OHEARD_LETHARGY;
+						uwep->ovar1_heard |= OHEARD_LETHARGY;
 					}
 				break;
 			}
@@ -2012,10 +2077,39 @@ humanoid_sound:
 				doname(comp), (const char *)0);
 			break;
 		}
-	    else{
+	    else {
 			const char *talkabt = "talks about %s.";
 			const char *discuss = "discusses %s.";
-			switch (monsndx(ptr)) {
+			if((ptr->mtyp == PM_PRIESTESS || ptr->mtyp == PM_DEMINYMPH)
+				&& has_template(mtmp, MISTWEAVER)
+			){
+				if(mtmp->mtame && has_object_type(invent, HOLY_SYMBOL_OF_THE_BLACK_MOTHE) && !u.shubbie_atten){
+					godlist[GOD_THE_BLACK_MOTHER].anger = 0;
+					u.shubbie_atten = 1;
+				}
+				switch(rn2(7)){
+					case 0:
+						verbl_msg = "Ia! Shub-Niggurath! The Goat with a Thousand Young!";
+					break;
+					case 1:
+						verbl_msg = "Abundance to the Black Goat of the Woods!";
+					break;
+					case 2:
+						verbl_msg = "From the wells of night to the gulfs of space, and from the gulfs of space to the wells of night, ever Their praises!";
+					break;
+					case 3:
+						verbl_msg = "May Her eyes guide you.";
+					break;
+					case 4:
+						verbl_msg = "Gof'nn hupadgh Shub-Niggurath!";
+					break;
+					case 5:
+					case 6:
+						verbl_msg = "Ia!";
+					break;
+				}
+			}
+			else switch (monsndx(ptr)) {
 				case PM_VALAVI:
 					Sprintf(msgbuff, talkabt, rn2(2) ? "herding" : rn2(2) ? "carpentry" : rn2(10) ? "pottery" : "delicious sawdust recipes");
 					pline_msg = msgbuff;
@@ -2082,8 +2176,19 @@ humanoid_sound:
 					verbl_msg = "Aloha.";
 				break;
 				case PM_LADY_CONSTANCE:
-					if(!u.uevent.qcompleted)
-						verbl_msg = "There's a strange woman in the observation ward. She's asking for you....";
+					if(!u.uevent.qcompleted){
+						if(!quest_status.fakeleader_greet_1){
+							verbl_msg = "You're back! There's a strange woman in the observation ward. She's asking for you....";
+							quest_status.fakeleader_greet_1 = TRUE;
+						}
+						else if(Race_if(PM_ELF) && !quest_status.fakeleader_greet_2){
+							verbl_msg = "I was able to find the armor you talked about. Do you... still remember it?";
+							quest_status.fakeleader_greet_2 = TRUE;
+						}
+						else {
+							verbl_msg = "Have you talked to that strange woman in the observation ward?";
+						}
+					}
 					else {
 						if(!rn2(2)){
 							Sprintf(msgbuff, discuss, !rn2(5) ? "Fiore's dagger techniques" : !rn2(4) ? "mentalism" : !rn2(3) ? "theosophy" : rn2(2) ? "the occult" : "your recent dreams");
@@ -2093,6 +2198,137 @@ humanoid_sound:
 						}
 						pline_msg = msgbuff;
 					}
+				break;
+				case PM_PEN_A_MENDICANT:
+				case PM_MENDICANT_SPROW:
+				case PM_MENDICANT_DRIDER:
+					if(!u.uevent.qcompleted){
+						switch(rn2(6)){
+							case 0:
+								verbl_msg = "The ruling houses are fleeing the city.";
+							break;
+							case 1:
+								verbl_msg = "The surfacers pushed back the demons, but now the kuo toa are attacking!";
+							break;
+							case 2:
+								verbl_msg = "Pen'a whispers that Lolth sacrificed the city to the demon lords.";
+							break;
+							case 3:
+								verbl_msg = "The surfacers have occupied this level, but that doesn't help the commoners below.";
+							break;
+							case 4:
+								verbl_msg = "The dwarf-giant slavers have taken much of the lower levels.";
+							break;
+							case 5:
+								verbl_msg = "The surfacers are right to be afraid. If we fail here, no one will be safe.";
+							break;
+						}
+					}
+					else {
+						switch(rn2(6)){
+							case 0:
+								verbl_msg = "We must not let the ruling houses reclaim the city.";
+							break;
+							case 1:
+								verbl_msg = "Pen'a whispers that a demon lord drove the kuo toa against us.";
+							break;
+							case 2:
+								verbl_msg = "Lolth is a blight upon the world. We must be free of her.";
+							break;
+							case 3:
+								verbl_msg = "Holy be the alliance of Pen'a and Ilmater.";
+							break;
+							case 4:
+								verbl_msg = "The dwarf-giants still hold much of the lower levels.";
+							break;
+							case 5:
+								verbl_msg = "Lolth has ceded the city by her actions. For the safety of the surface and the dark she must never regain it.";
+							break;
+						}
+					}
+				break;
+				case PM_SISTER_T_EIRASTRA:
+					if(!quest_status.got_quest){
+						verbl_msg = flags.female ? "I'm glad you returned whole, little sister. You must speak to Shuushar."
+												 : "I'm glad you returned whole, little brother. You must speak to Shuushar.";
+					}
+					else if(!u.uevent.qcompleted){
+						switch(rn2(6)){
+							case 0:
+								verbl_msg = flags.female ? "Be safe, little sister."
+														 : "Be safe, little brother.";
+							break;
+							case 1:
+								verbl_msg = "Remember your studies, and you will prevail!";
+							break;
+							case 2:
+								verbl_msg = "The perversion of the Ana'auo shames us all.";
+							break;
+							case 3:
+								verbl_msg = "You will face many foes. Consider well the strengths of each!";
+							break;
+							case 4:
+								verbl_msg = "Sight beyond sight.";
+							break;
+							case 5:
+								verbl_msg = flags.female ? "The plague grows worse as we speak.  Hurry, little sister."
+														 : "The plague grows worse as we speak.  Hurry, little brother.";
+							break;
+						}
+					}
+					else {
+						if(!u.uhave.amulet){
+							verbl_msg = flags.female ? "Greetings, little sister. How fare you on your quest for the Amulet?"
+													 : "Greetings, little brother. How fare you on your quest for the Amulet?";
+						}
+						else {
+							com_pager(226);
+						}
+					}
+				break;
+				case PM_SIR_ALJANOR:
+					if(!u.uevent.qcompleted){
+						switch(rn2(5)){
+							case 0:
+								verbl_msg = "I've taken charge of this expeditionary force.";
+							break;
+							case 1:
+								verbl_msg = "The demonic incursion has been delt with, but now something drives these kuo-toa against us.";
+							break;
+							case 2:
+								verbl_msg = "I'm sure Lolth regrets that her slavers took me alive.";
+							break;
+							case 3:
+								verbl_msg = "We've occupied as much of the city as possible. Tyr shall send aid!";
+							break;
+							case 4:
+								verbl_msg = "We must drive the dwarf-giant slavers out of the city!";
+							break;
+						}
+					}
+					else {
+						switch(rn2(5)){
+							case 0:
+								verbl_msg = "We must work together to save all our peoples!";
+							break;
+							case 1:
+								verbl_msg = "I think a demon lord was behind the attacks.";
+							break;
+							case 2:
+								verbl_msg = "By my honor as a knight of Tyr, God of Justice, Lolth will not have this city!";
+							break;
+							case 3:
+								verbl_msg = "We're holding as much of the city as possible. Tyr shall send aid!";
+							break;
+							case 4:
+								verbl_msg = "We must drive the dwarf-giant slavers out of the city!";
+							break;
+						}
+					}
+				break;
+				case PM_IKSH_NA_DEVA:
+					Sprintf(msgbuff, talkabt, !rn2(4) ? "the virtues of poverty" : !rn2(3) ? "the voices of stones" : rn2(2) ? "lights in the dark" : "stars in the deep");
+					pline_msg = msgbuff;
 				break;
 				case PM_ALIDER:
 					if(Race_if(PM_ANDROID))
@@ -2355,6 +2591,8 @@ static const short command_chain[][2] = {
 	{ PM_ANGBAND_ORC, PM_ORC_OF_THE_AGES_OF_STARS},
 
 	{ PM_JUSTICE_ARCHON, PM_RAZIEL }, { PM_SWORD_ARCHON, PM_RAZIEL }, { PM_SHIELD_ARCHON, PM_RAZIEL },
+
+	{ PM_PLAINS_CENTAUR, PM_CENTAUR_CHIEFTAIN }, { PM_FOREST_CENTAUR, PM_CENTAUR_CHIEFTAIN }, { PM_MOUNTAIN_CENTAUR, PM_CENTAUR_CHIEFTAIN },
 
 	{ PM_MIGO_WORKER, PM_MIGO_SOLDIER }, { PM_MIGO_SOLDIER, PM_MIGO_PHILOSOPHER }, { PM_MIGO_PHILOSOPHER, PM_MIGO_QUEEN },
 
@@ -2727,9 +2965,9 @@ int dz;
 		 !is_animal(&mons[otmp->corpsenm])
 	){
 		You("speak to the shadow that dwells within this corpse.");
-		if(otmp->ovar1 < moves){
+		if(otmp->ovar1_corpseRumorCooldown < moves){
 			outrumor(rn2(2), BY_OTHER);
-			otmp->ovar1 = moves + rnz(100);
+			otmp->ovar1_corpseRumorCooldown = moves + rnz(100);
 		}
 		else pline("....");
 	}
@@ -2938,7 +3176,7 @@ int dz;
 					Monnam(mtmp), (is_animal(mtmp->data) || mindless_mon(mtmp) ? "its" : hisherits(mtmp))
 				);
 		}
-		else if(mtmp->entangled == SHACKLES){
+		else if(mtmp->entangled_otyp == SHACKLES){
 			if(canspotmon(mtmp))
 				pline("%s is unconscious.",  Monnam(mtmp));
 		}
@@ -3172,7 +3410,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("A voice whispers from below:");
 					pline("\"All shall feed the shattered night.\"");
-					uwep->ovar1 |= SEAL_AHAZU;
+					uwep->ovar1_seals |= SEAL_AHAZU;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_AHAZU;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3215,7 +3453,7 @@ int tx,ty;
 					pline("No sooner are the shadows born than they rise up against their creator, smothering the flame under a tide of darkness.");
 					pline("Even as it dies, a voice speaks from the blood-red flame:");
 					pline("\"Cursed are you who calls me forth. I damn you to bear my flames, alone in this world of darkness!\"");
-					uwep->ovar1 |= SEAL_AMON;
+					uwep->ovar1_seals |= SEAL_AMON;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_AMON;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3261,7 +3499,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("\"I am Andrealphus, born of angles. In this soft world of curves, I alone am straight and true.\"");
 					pline("\"Though your instrument is born of the point, by my square it shall rectify the world.\"");
-					uwep->ovar1 |= SEAL_ANDREALPHUS;
+					uwep->ovar1_seals |= SEAL_ANDREALPHUS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_ANDREALPHUS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3493,7 +3731,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("Suddenly, the hands toss one of the whirling objects to you.");
 					pline("It's the Pen of the Void. You didn't notice it had been taken!");
-					uwep->ovar1 |= SEAL_ANDROMALIUS;
+					uwep->ovar1_seals |= SEAL_ANDROMALIUS;
 					if(!u.spiritTineA){
 						u.spiritTineA = SEAL_ANDROMALIUS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3588,7 +3826,7 @@ int tx,ty;
 				pline("There is the sound of shrieking metal, and a cracked porcelain face swings into view on a metalic armature.");
 				pline("A voice speaks to you, as the immobile white face studies you and weeps tears of black oil.");
 				pline("*I am Astaroth, the Clockmaker. You shall hold my instrument, to repair this broken world.*");
-				uwep->ovar1 |= SEAL_ASTAROTH;
+				uwep->ovar1_seals |= SEAL_ASTAROTH;
 				if(!u.spiritTineA){
 					u.spiritTineA = SEAL_ASTAROTH;
 					u.spiritTineTA= moves + bindingPeriod;
@@ -3664,7 +3902,7 @@ int tx,ty;
 					}
 					pline("\"I am Balam, offered up as the last sacrifice; condemned to bleed until the end of all suffering.\"");
 					pline("\"By your hand was this done, therefore you shall be stained by my blood.\"");
-					uwep->ovar1 |= SEAL_BALAM;
+					uwep->ovar1_seals |= SEAL_BALAM;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_BALAM;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3724,7 +3962,7 @@ int tx,ty;
 					pline("\"I am Berith, %s.",rn2(2) ? "war-leader of the forgotten" : "god of the covenant of blood");
 					pline("I anoint your blade with Blood, for blood calls to blood.");
 					pline("That is the covenant and curse of Berith.\"");
-					uwep->ovar1 |= SEAL_BERITH;
+					uwep->ovar1_seals |= SEAL_BERITH;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_BERITH;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3765,7 +4003,7 @@ int tx,ty;
 			}
 			else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 				pline("I will walk beside you.\"");
-				uwep->ovar1 |= SEAL_BUER;
+				uwep->ovar1_seals |= SEAL_BUER;
 				if(!u.spiritTineA){
 					u.spiritTineA = SEAL_BUER;
 					u.spiritTineTA= moves + bindingPeriod;
@@ -3808,7 +4046,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("She wraps your blade tight in her bitter cords, making it an anchor for her web.");
-					uwep->ovar1 |= SEAL_CHUPOCLOPS;
+					uwep->ovar1_seals |= SEAL_CHUPOCLOPS;
 					if(!u.spiritTineA){
 						u.spiritTineA = SEAL_CHUPOCLOPS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3862,7 +4100,7 @@ int tx,ty;
 					}
 					pline("\"You, who bear my sceptre,\"");
 					pline("\"go forth, in my name!\"");
-					uwep->ovar1 |= SEAL_DANTALION;
+					uwep->ovar1_seals |= SEAL_DANTALION;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_DANTALION;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3911,7 +4149,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("\"That looks like a pretty distinctive weapon.\"");
 					pline("\"Let me follow you and see how you use it.\"");
-					uwep->ovar1 |= SEAL_SHIRO;
+					uwep->ovar1_seals |= SEAL_SHIRO;
 					if(!u.spiritTineA){
 						u.spiritTineA = SEAL_SHIRO;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3951,7 +4189,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("\"I am Echidna, %s.\"",echidnaTitles[rn2(SIZE(echidnaTitles))]);
 					pline("\"Cut my bonds, and I shall lend my wrath to your cause.\"");
-					uwep->ovar1 |= SEAL_ECHIDNA;
+					uwep->ovar1_seals |= SEAL_ECHIDNA;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_ECHIDNA;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -3999,7 +4237,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("Radiant light falls on your weapon.");
 					pline("The gates are angled such that you can't see past.");
-					uwep->ovar1 |= SEAL_EDEN;
+					uwep->ovar1_seals |= SEAL_EDEN;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_EDEN;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4047,7 +4285,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("I am Enki, god of Eridu.");
 					pline("Bow to me, and I shall lend aid from within the Abzu.");
-					uwep->ovar1 |= SEAL_ENKI;
+					uwep->ovar1_seals |= SEAL_ENKI;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_ENKI;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4095,7 +4333,7 @@ int tx,ty;
 						pline("She dances up to you and performs a sword dance with her claws.");
 					}
 					else You_hear("splashing.");
-					uwep->ovar1 |= SEAL_EURYNOME;
+					uwep->ovar1_seals |= SEAL_EURYNOME;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_EURYNOME;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4134,7 +4372,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					You("try to help her, but she is unable to stand.");
 					pline("She blesses your blade as thanks.");
-					uwep->ovar1 |= SEAL_EVE;
+					uwep->ovar1_seals |= SEAL_EVE;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_EVE;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4179,7 +4417,7 @@ int tx,ty;
 					if(!Blind) pline("The dragon tries to steal your weapon!");
 					else pline("Something tries to steal your weapon!");
 					You("fight it off.");
-					uwep->ovar1 |= SEAL_FAFNIR;
+					uwep->ovar1_seals |= SEAL_FAFNIR;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_FAFNIR;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4223,7 +4461,7 @@ int tx,ty;
 			else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 				if(!Blind) pline("They croak raucously at your weapon.");
 				else You_hear("Raucous croaking.");
-				uwep->ovar1 |= SEAL_HUGINN_MUNINN;
+				uwep->ovar1_seals |= SEAL_HUGINN_MUNINN;
 				if(!u.spiritTineA){ 
 					u.spiritTineA = SEAL_HUGINN_MUNINN;
 					u.spiritTineTA= moves + bindingPeriod;
@@ -4269,7 +4507,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("Something grabs your weapon!");
 					pline("\"Let me play with that!\"");
-					uwep->ovar1 |= SEAL_IRIS;
+					uwep->ovar1_seals |= SEAL_IRIS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_IRIS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4303,7 +4541,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("A will-o-wisp drifts out of the seal to hover near your weapon.");
 					pline("\"Please let me stay with you!\"");
-					uwep->ovar1 |= SEAL_JACK;
+					uwep->ovar1_seals |= SEAL_JACK;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_JACK;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4410,7 +4648,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("A large black feather setles within the seal.");
 					pline("\"I am Malphas. With that instrument, you feed my flock.\"");
-					uwep->ovar1 |= SEAL_MALPHAS;
+					uwep->ovar1_seals |= SEAL_MALPHAS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_MALPHAS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4451,7 +4689,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("The wires wrap around your weapon!");
 					else pline("Something tangles around your weapon!");
-					uwep->ovar1 |= SEAL_MARIONETTE;
+					uwep->ovar1_seals |= SEAL_MARIONETTE;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_MARIONETTE;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4486,7 +4724,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("You're pretty sure something is staring at your weapon....");
-					uwep->ovar1 |= SEAL_MOTHER;
+					uwep->ovar1_seals |= SEAL_MOTHER;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_MOTHER;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4535,7 +4773,7 @@ int tx,ty;
 					} else pline("Something steals your weapon!");
 					pline("You begin to chase the animal,");
 					pline("and it abandons your blade in the center of the seal.");
-					uwep->ovar1 |= SEAL_NABERIUS;
+					uwep->ovar1_seals |= SEAL_NABERIUS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_NABERIUS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4572,7 +4810,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					Your("blade vibrates for a moment.");
-					uwep->ovar1 |= SEAL_ORTHOS;
+					uwep->ovar1_seals |= SEAL_ORTHOS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_ORTHOS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4613,7 +4851,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("The sea bottom swirls below your weapon, forming into thousands of reaching arms.");
-					uwep->ovar1 |= SEAL_OSE;
+					uwep->ovar1_seals |= SEAL_OSE;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_OSE;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4640,7 +4878,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("The dust swirls below your weapon, forming into thousands of reaching arms.");
-					uwep->ovar1 |= SEAL_OSE;
+					uwep->ovar1_seals |= SEAL_OSE;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_OSE;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4677,7 +4915,7 @@ int tx,ty;
 				}
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("The mist fingers curl around your blade.");
-					uwep->ovar1 |= SEAL_OTIAX;
+					uwep->ovar1_seals |= SEAL_OTIAX;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_OTIAX;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4726,6 +4964,7 @@ int tx,ty;
 					pline("\"Your contribution is appreciated. Now don't bother me.\"");
 					o->otyp = SPE_BLANK_PAPER;
 					o->obj_color = objects[SPE_BLANK_PAPER].oc_color;
+					remove_oprop(o, OPROP_TACTB);
 					newsym(tx,ty);
 					bindspirit(ep->ward_id);
 					u.sealTimeout[PAIMON-FIRST_SEAL] = moves + bindingPeriod;
@@ -4735,7 +4974,7 @@ int tx,ty;
 					pline("\"Sometimes, a subtle approach is better.\"");
 					if(!Blind) pline("She dips her fingers into the ink of %s and writes on your weapon.", xname(o));
 					o->spestudied++;
-					uwep->ovar1 |= SEAL_PAIMON;
+					uwep->ovar1_seals |= SEAL_PAIMON;
 					if(!u.spiritTineA){
 						u.spiritTineA = SEAL_PAIMON;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4777,7 +5016,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					pline("Loose feathers rain down around your blade,");
 					pline("each feather a memory of ruin and of loss.");
-					uwep->ovar1 |= SEAL_SIMURGH;
+					uwep->ovar1_seals |= SEAL_SIMURGH;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_SIMURGH;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4820,7 +5059,7 @@ int tx,ty;
 				else if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 					if(!Blind) pline("The darkness inside the seal flows out to stain your weapon.");
 					pline("\"None shall rest until my vengeance is complete.\"");
-					uwep->ovar1 |= SEAL_TENEBROUS;
+					uwep->ovar1_seals |= SEAL_TENEBROUS;
 					if(!u.spiritTineA){ 
 						u.spiritTineA = SEAL_TENEBROUS;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -4884,7 +5123,7 @@ int tx,ty;
 					pline("\"I was Ymir, god of poison,");
 					pline("this steel is the steel of my teeth,");
 					pline("and the gods shall feel their bite.\"");
-					uwep->ovar1 |= SEAL_YMIR;
+					uwep->ovar1_seals |= SEAL_YMIR;
 					if(!u.spiritTineA){
 						u.spiritTineA = SEAL_YMIR;
 						u.spiritTineTA= moves + bindingPeriod;
@@ -5782,7 +6021,7 @@ boolean inc_penalties;
 			maxskill = min(P_EXPERT, P_SKILL(weapon_type(uswapwep)));
 	}
 	
-	if(inc_penalties && u.umadness&MAD_FORMICATION && !BlockableClearThoughts && maxskill > P_UNSKILLED){
+	if(inc_penalties && (u.umadness&MAD_FORMICATION || u.umadness&MAD_SCORPIONS) && !BlockableClearThoughts && maxskill > P_UNSKILLED){
 		int delta = (Insanity)/20;
 		if(Nightmare && ClearThoughts && delta)
 			delta = 1; /* Want Should have SOME effect */
@@ -5870,7 +6109,7 @@ boolean inc_penalties;
 		curskill = P_BASIC;
 	}
 	
-	if(inc_penalties && u.umadness&MAD_FORMICATION && !BlockableClearThoughts && curskill > P_UNSKILLED){
+	if(inc_penalties && (u.umadness&MAD_FORMICATION || u.umadness&MAD_SCORPIONS) && !BlockableClearThoughts && curskill > P_UNSKILLED){
 		int delta = (Insanity)/20;
 		if(Nightmare && ClearThoughts && delta)
 			delta = 1; /* Want Should have SOME effect */
@@ -6634,7 +6873,7 @@ struct monst *dollmaker;
 		return FALSE;
 	}
 	if(dollnum == DOLL_S_TEAR){
-		doll->ovar1 = dollmaker->mvar_dollTypes;
+		doll->ovar1_dollTypes = dollmaker->mvar_dollTypes;
 		doll->spe = (char)dollmaker->m_insight_level;
 		dollmaker->m_insight_level = 0;
 		mondied(dollmaker);

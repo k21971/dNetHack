@@ -182,8 +182,8 @@ struct monst *magr;
 	if(mon == &youmonst)
 		ptr = youracedata;
 	
-	if (Is_weapon || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1 == -P_FIREARM)){
-		if(Race_if(PM_ORC) && otmp == uwep){
+	if (Is_weapon || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1_projectileSkill == -P_FIREARM)){
+		if(youagr && Race_if(PM_ORC) && otmp == uwep){
 			tmp += max((u.ulevel+2)/3, otmp->spe);
 		} else {
 			tmp += otmp->spe;
@@ -272,16 +272,31 @@ struct obj * obj;
 int otyp;
 int oartifact;
 {
+	int attackmask = WHACK;
 	if (obj)
 	{
 		otyp = obj->otyp;
 		oartifact = obj->oartifact;
 	}
-
-	int attackmask = objects[otyp].oc_dtyp;
+	
+	if(otyp && (
+		objects[otyp].oc_class == WEAPON_CLASS
+		|| (objects[otyp].oc_class == TOOL_CLASS && objects[otyp].oc_skill != P_NONE)
+	)){
+		attackmask = objects[otyp].oc_dtyp;
+	}
 	if (oartifact == ART_IBITE_ARM){
 		//No claws! Just a flabby hand.
 		attackmask = WHACK;
+	}
+	if(oartifact == ART_JIN_GANG_ZUO){
+		attackmask = WHACK;
+	}
+	if(otyp == WIND_AND_FIRE_WHEELS){
+		attackmask = PIERCE|SLASH;
+	}
+	if(otyp == STILETTOS){
+		attackmask = PIERCE;
 	}
 
 	/* catch special cases */
@@ -294,14 +309,19 @@ int oartifact;
 	}
 	if (   oartifact == ART_ROGUE_GEAR_SPIRITS
 		|| oartifact == ART_DURIN_S_AXE
-		|| (obj && otyp == KAMEREL_VAJRA && !litsaber(obj))
-		|| (obj && check_oprop(obj, OPROP_SPIKED) && !litsaber(obj))
-		|| (obj && !litsaber(obj) && is_kinstealing_merc(obj))
-		){
+		|| oartifact == ART_GREAT_CLAWS_OF_URDLEN
+		|| oartifact == ART_SHIELD_OF_THE_RESOLUTE_HEA
+		|| oartifact == ART_PREMIUM_HEART
+		|| (obj && ((otyp == KAMEREL_VAJRA && !litsaber(obj))
+		|| 		   (check_oprop(obj, OPROP_SPIKED) && !litsaber(obj))
+		|| 		   (!litsaber(obj) && is_kinstealing_merc(obj))
+		))){
 		attackmask |= PIERCE;
 	}
 	if (   oartifact == ART_LIECLEAVER
 		|| oartifact == ART_INFINITY_S_MIRRORED_ARC
+		|| oartifact == ART_GREAT_CLAWS_OF_URDLEN
+		|| oartifact == ART_CLAWS_OF_THE_REVENANCER
 		|| (obj && check_oprop(obj, OPROP_BLADED) && !litsaber(obj))
 		|| (obj && !litsaber(obj) && is_streaming_merc(obj))
 		){
@@ -357,11 +377,12 @@ int oartifact;
  * typically 1, but artifacts and lightsabers affect it
  */
 int
-dmgval_core(wdice, large, obj, otyp)
+dmgval_core(wdice, large, obj, otyp, magr)
 struct weapon_dice *wdice;
 boolean large;
 struct obj* obj;
 int otyp;
+struct monst *magr;
 {
 	int dmod = 0;						/* die size modifier */
 	int spe_mult = 1;					/* multiplier for enchantment value */
@@ -432,6 +453,27 @@ int otyp;
 			ocn = 1;
 			ocd = (large ? 2 : 4);
 		}
+		else if (otyp == CARCOSAN_STING)
+		{
+			ocn = 1;
+			ocd = 3;
+			if(u.uinsight >= 25){
+				bonn = 1;
+				bond = 5;
+				spe_mult += 1;
+			}
+		}
+		else if (otyp == WIND_AND_FIRE_WHEELS)
+		{
+			if(large){
+				ocn = 1;
+				ocd = 9;
+			}
+			else {
+				ocn = 1;
+				ocd = 14;
+			}
+		}
 		else if (otyp == MOON_AXE)
 		{
 			/*
@@ -442,8 +484,8 @@ int otyp;
 			FULL_MOON	 	4  - 2d12 
 			 */
 			ocn = 2;
-			ocd = max(4 + 2 * obj->ovar1 + 2 * dmod, 2);	// die size is based on axe's phase of moon (0 <= ovar1 <= 4)
-			if (!large && obj->ovar1 == ECLIPSE_MOON)		// eclipse moon axe is surprisingly effective against small creatures (2d12)
+			ocd = max(4 + 2 * obj->ovar1_moonPhase + 2 * dmod, 2);	// die size is based on axe's phase of moon (0 <= ovar1_moonPhase <= 4)
+			if (!large && obj->ovar1_moonPhase == ECLIPSE_MOON)		// eclipse moon axe is surprisingly effective against small creatures (2d12)
 				ocd = max(12 + 2 * dmod, 2);
 		}
 
@@ -592,8 +634,9 @@ int otyp;
 		/* other various artifacts and objects */
 		if (obj->oartifact == ART_VORPAL_BLADE
 			|| obj->oartifact == ART_SNICKERSNEE
-			|| obj->oartifact == ART_DURIN_S_AXE)
-		{
+			|| obj->oartifact == ART_DURIN_S_AXE
+			|| obj->oartifact == ART_RUYI_JINGU_BANG
+		){
 			ocn += 1;						// roll two oc dice
 		}
 		else if (obj->oartifact == ART_FLUORITE_OCTAHEDRON)
@@ -657,6 +700,21 @@ int otyp;
 			bonn = 2;
 			bond = 4;
 		}
+		else if (obj->oartifact == ART_ESSCOOAHLIPBOOURRR)
+		{
+			if (large)
+			{
+				ocn = 2;
+				ocd = max(6 + 2 * dmod, 2);
+				flat += 1;
+			}
+			else
+			{
+				ocn = 1;
+				ocd = max(6 + 2 * dmod, 2);
+				flat += 2;
+			}
+		}
 	}
 
 
@@ -664,7 +722,7 @@ int otyp;
 #define plus(n,x)		plus_base((n), (x) + 2 * dmod)
 #define pls(x)			plus(1, (x))
 #define add(x)			flat += max(0, (x) + dmod)
-#define chrgd			(!obj || obj->ovar1>0)
+#define chrgd			(!obj || obj->ovar1_charges>0)
 	/* bonus dice */
 	switch (otyp)
 	{
@@ -730,7 +788,7 @@ int otyp;
 	case VIPERWHIP:				if(large){;} else {;} break;	// external special case: number of heads striking
 
 	case SEISMIC_HAMMER:		if (chrgd){ ocd *= 3; } break;
-	case ACID_VENOM:			if (obj&&obj->ovar1){ ocn = 0; flat = obj->ovar1; } else{ add(6); } break;
+	case ACID_VENOM:			if (obj&&obj->ovar1_acidSplashDamage){ ocn = 0; flat = obj->ovar1_acidSplashDamage; } else{ add(6); } break;
 	case LIGHTSABER:			spe_mult *= 3; ocn *= 3; if(obj&&obj->altmode){ plus(3,3); spe_mult *= 2;} break;	// external special case: lightsaber forms
 	case BEAMSWORD:				spe_mult *= 3; ocn *= 3; if(obj&&obj->altmode){ plus(3,3); spe_mult *= 2;} break;	// external special case: Atma Weapon, lightsaber forms
 	case DOUBLE_LIGHTSABER:		spe_mult *= 3; ocn *= 3; if(obj&&obj->altmode){ ocn*=2;    spe_mult *= 2;} break;	// external special case: lightsaber forms
@@ -942,10 +1000,11 @@ boolean youdef;
  *	of "otmp" against the monster.
  */
 int
-dmgval(otmp, mon, spec)
+dmgval(otmp, mon, spec, magr)
 struct obj *otmp;
 struct monst *mon;
 int spec;
+struct monst *magr;
 {
 	int tmp = 0;				// running damage sum
 	int otyp = otmp->otyp;		// obj's type
@@ -966,7 +1025,7 @@ int spec;
 	    return 9999;
 
 	/* grab the weapon dice from dmgval_core */
-	spe_mult = dmgval_core(&wdice, bigmonst(ptr), otmp, otyp);
+	spe_mult = dmgval_core(&wdice, bigmonst(ptr), otmp, otyp, magr);
 
 	/* increase die sizes by 2 if Marionette applies*/
 	if (spec & SPEC_MARIONETTE)
@@ -1024,7 +1083,7 @@ int spec;
 			int mir = 0;
 			struct weapon_dice mirdice;
 			/* grab the weapon dice from dmgval_core */
-			(void) dmgval_core(&mirdice, bigmonst(ptr), otmp2, 0);	//note: dmgval_core handles zero weapons gracefully
+			(void) dmgval_core(&mirdice, bigmonst(ptr), otmp2, 0, mon);	//note: dmgval_core handles zero weapons gracefully
 			if (spec & SPEC_MARIONETTE)
 			{
 				mirdice.oc_damd += 2;
@@ -1064,11 +1123,11 @@ int spec;
 		break;
 	case SEISMIC_HAMMER:
 		// damage die is increased by 3x the enchantment of the hammer when charged
-		if (otmp->ovar1)
+		if (otmp->ovar1_charges)
 		{
 			wdice.oc_damd += 3 * (otmp->spe);
 			// drain charge on future-tech powered weapons
-			otmp->ovar1--;
+			otmp->ovar1_charges--;
 		}
 		break;
 	case VIBROBLADE:
@@ -1084,8 +1143,8 @@ int spec;
 	case FORCE_SWORD:
 	case FORCE_WHIP:
 		// drain charge on future-tech powered weapons
-		if (otmp->ovar1)
-			otmp->ovar1--;
+		if (otmp->ovar1_charges)
+			otmp->ovar1_charges--;
 		break;
 	case DOUBLE_FORCE_BLADE:
 		// deals bonus damage when not twoweaponing
@@ -1099,8 +1158,8 @@ int spec;
 			spe_mult *= 2;
 	    }
 		// drain charge on future-tech powered weapons
-		if (otmp->ovar1)
-			otmp->ovar1--;
+		if (otmp->ovar1_charges)
+			otmp->ovar1_charges--;
 		break;
 	}
 
@@ -1219,7 +1278,7 @@ int spec;
 	}
 
 	/* enchantment damage */
-	if ((otmp->oclass == WEAPON_CLASS) || is_weptool(otmp) || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1 == -P_FIREARM))
+	if ((otmp->oclass == WEAPON_CLASS) || is_weptool(otmp) || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1_projectileSkill == -P_FIREARM))
 	{
 		int dambon = otmp->spe;
 		/* player orcs can use their level as their weapon's enchantment */
@@ -1284,6 +1343,7 @@ int x;
 int spot;
 {
 	struct obj *otmp, *obest = 0;
+	boolean marilith = mon_attacktype(mtmp, AT_MARI); //Marilith arms don't suffer weight limits, so also don't impose them on the offhand arm.
 
 	for (otmp = mtmp->minvent; otmp; otmp = otmp->nobj) {
 	    if (otmp->otyp == x &&
@@ -1299,7 +1359,8 @@ int spot;
 			(spot!=W_WEP || (!bimanual(otmp, mtmp->data) || ((mtmp->misc_worn_check & W_ARMS) == 0 && !MON_SWEP(mtmp) && strongmonst(mtmp->data)))) &&
 			/* never unsuitable for offhand wielding */
 			(spot!=W_SWAPWEP || (!(otmp->owornmask & (W_WEP)) && (!otmp->cursed || is_weldproof_mon(mtmp)) && !bimanual(otmp, mtmp->data) && (mtmp->misc_worn_check & W_ARMS) == 0 && 
-				( (otmp->owt <= (30 + (mtmp->m_lev/5)*5)) 
+				( (otmp->owt <= (30 + (mtmp->m_lev/5)*5))
+				|| (marilith && ok_mariwep(otmp, mtmp, mtmp->data, FALSE))
 				|| (otmp->otyp == CHAIN && mtmp->mtyp == PM_CATHEZAR) 
 				|| (otmp->otyp == CHAIN && mtmp->mtyp == PM_FIERNA)
 				|| (otmp->otyp == HEAVY_IRON_BALL && mtmp->mtyp == PM_WARDEN_ARIANNA)
@@ -1315,7 +1376,7 @@ int spot;
 			(mtmp->misc_worn_check & W_ARMG || !hates_unblessed_mon(mtmp) || (is_unholy(otmp) || otmp->blessed))
 		){
 			if (!obest ||
-				(dmgval(otmp, 0 /*zeromonst*/, 0) > dmgval(obest, 0 /*zeromonst*/,0))
+				(dmgval(otmp, 0 /*zeromonst*/, 0, mtmp) > dmgval(obest, 0 /*zeromonst*/,0, mtmp))
 				/*
 				(is_bludgeon(otmp) ? 
 					(otmp->spe - greatest_erosion(otmp) > obest->spe - greatest_erosion(obest)):
@@ -1339,7 +1400,7 @@ struct monst *mtmp;
 		    (!otmp->oartifact || touch_artifact(otmp, mtmp, FALSE)))
             {
 	        if (!obest ||
-		    dmgval(otmp, 0 /*zeromonst*/, 0) > dmgval(obest, 0 /*zeromonst*/,0))
+		    dmgval(otmp, 0 /*zeromonst*/, 0, mtmp) > dmgval(obest, 0 /*zeromonst*/,0, mtmp))
 		    obest = otmp;
 		}
 	}
@@ -1349,7 +1410,7 @@ struct monst *mtmp;
 static NEARDATA const int rwep[] =
 {	
 	RAZOR_WIRE/*damage plus lost turns*/, 
-	IRON_BANDS/*lost turns*/, 
+	BANDS/*lost turns*/, 
 	ROPE_OF_ENTANGLING/*lost turns*/, 
 	LOADSTONE/*1d30 plus weight*/, 
 // #ifdef FIREARMS
@@ -1403,6 +1464,7 @@ static NEARDATA const int pwep[] =
 	ELVEN_LANCE, /*1d8/1d8*/
 	BEC_DE_CORBIN, /*1d8/1d6*/
 	GLAIVE, /*1d6/1d10*/
+    DISKOS/*1d6/1d8*/,
 	FAUCHARD, /*1d6/1d8*/
 	LANCE, /*1d6/1d8*/
 	PARTISAN, /*1d6/1d6*/
@@ -1427,10 +1489,11 @@ struct obj *otmp;
         if (throws_rocks(mtmp->data) &&  is_boulder(wep)) return FALSE;
         if (throws_rocks(mtmp->data) && is_boulder(otmp)) return TRUE;
 		
-		if(wep->otyp == otmp->otyp) return dmgval(otmp, 0 /*zeromonst*/, 0) > dmgval(wep, 0 /*zeromonst*/, 0);
+		if(wep->otyp == otmp->otyp) return dmgval(otmp, 0 /*zeromonst*/, 0, mtmp) > dmgval(wep, 0 /*zeromonst*/, 0, mtmp);
 		
 		if(wep->otyp == ARM_BLASTER) return FALSE;
-		if(wep->otyp == HAND_BLASTER) return (otmp->otyp == ARM_BLASTER && otmp->ovar1 > 0);
+		if(wep->otyp == CARCOSAN_STING) return (otmp->otyp == ARM_BLASTER && otmp->ovar1_charges > 0);
+		if(wep->otyp == HAND_BLASTER) return ((otmp->otyp == ARM_BLASTER || otmp->otyp == CARCOSAN_STING) && otmp->ovar1_charges > 0);
     }
     
     if (((strongmonst(mtmp->data) && (mtmp->misc_worn_check & W_ARMS) == 0) || !bimanual(otmp,mtmp->data)) && 
@@ -1456,7 +1519,7 @@ struct obj *otmp;
         if ( wep &&
              wep->otyp == rwep[i] &&
            !(otmp->otyp == rwep[i] &&
-	     (dmgval(otmp, 0 /*zeromonst*/, 0) > dmgval(wep, 0 /*zeromonst*/, 0))))
+	     (dmgval(otmp, 0 /*zeromonst*/, 0, mtmp) > dmgval(wep, 0 /*zeromonst*/, 0, mtmp))))
 	    return FALSE;
         if (otmp->otyp == rwep[i]) return TRUE;
     }
@@ -1506,6 +1569,10 @@ register struct monst *mtmp;
 	)){
 		return propellor;
 	} else if(!bigmonst(mtmp->data) && (propellor = m_carrying_charged(mtmp, HAND_BLASTER)) && !(
+		((otmp = MON_WEP(mtmp)) && otmp->cursed && otmp != propellor && mtmp->weapon_check == NO_WEAPON_WANTED)// || (mtmp->combat_mode == HNDHND_MODE)
+	)){
+		return propellor;
+	} else if((propellor = m_carrying_charged(mtmp, CARCOSAN_STING)) && !(
 		((otmp = MON_WEP(mtmp)) && otmp->cursed && otmp != propellor && mtmp->weapon_check == NO_WEAPON_WANTED)// || (mtmp->combat_mode == HNDHND_MODE)
 	)){
 		return propellor;
@@ -1861,7 +1928,7 @@ struct obj *otmp;
         if ( wep &&
 	     wep->otyp == hwep[i] &&
            !(otmp->otyp == hwep[i] &&
-	     dmgval(otmp, 0 /*zeromonst*/, 0) > dmgval(wep, 0 /*zeromonst*/, 0)))
+	     dmgval(otmp, 0 /*zeromonst*/, 0, mtmp) > dmgval(wep, 0 /*zeromonst*/, 0, mtmp)))
 	    return FALSE;
         if (otmp->otyp == hwep[i]) return TRUE;
     }
@@ -2272,6 +2339,7 @@ register struct monst *mon;
 				if (/* fixme: cannot twoweapon 2x arm blasters or 2x hand blasters */
 					((tobj = m_carrying_charged(mon, ARM_BLASTER)) && tobj != MON_WEP(mon)) ||
 					((tobj = m_carrying_charged(mon, HAND_BLASTER)) && tobj != MON_WEP(mon)) ||
+					((tobj = m_carrying_charged(mon, CARCOSAN_STING)) && tobj != MON_WEP(mon)) ||
 					/* bullets */
 					((m_carrying(mon, BULLET) || m_carrying(mon, SILVER_BULLET)) &&
 						(((tobj = oselect(mon, ASSAULT_RIFLE, W_SWAPWEP))) ||
@@ -2506,11 +2574,13 @@ abon()		/* attack bonus for strength & dexterity */
 	else if (str < STR18(100)) sbon = 2;
 	else sbon = 3;
 
-	if (dex < 4) return(sbon-3);
-	else if (dex < 6) return(sbon-2);
-	else if (dex < 8) return(sbon-1);
-	else if (dex < 14) return(sbon);
-	else return(sbon + dex-14);
+	if (dex < 4) sbon = (sbon-3);
+	else if (dex < 6) sbon = (sbon-2);
+	else if (dex < 8) sbon = (sbon-1);
+	else if (dex < 14);//Nothing
+	else sbon = (sbon + dex-14);
+
+	return sbon;
 }
 
 #endif /* OVL0 */
@@ -2532,12 +2602,12 @@ struct obj *otmp;
 	mwp = MON_WEP(mon);
 	mswp = MON_SWEP(mon);
 	
-	if(arm && arm->otyp == GAUNTLETS_OF_POWER)
+	if(arm && (arm->otyp == GAUNTLETS_OF_POWER || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GOPOWER))))
 		bonus += 8;
 	
 	if(otmp){
 		if((bimanual(otmp,mon->data)||
-				(otmp->oartifact==ART_PEN_OF_THE_VOID && otmp->ovar1&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0)
+				(otmp->oartifact==ART_PEN_OF_THE_VOID && otmp->ovar1_seals&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0)
 			) && !arms && !mswp
 		) bonus *= 2;
 		else if(otmp->otyp == FORCE_SWORD && !arms && !mswp)
@@ -2555,7 +2625,7 @@ struct obj *otmp;
 		
 		if(otmp==mwp 
 		&& (is_rapier(otmp) || is_rakuyo(otmp)
-			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1 == 0)
+			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1_lightsaberHandle == 0)
 			|| otmp->otyp == SET_OF_CROW_TALONS
 			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
 			|| is_mercy_blade(otmp)
@@ -2567,7 +2637,7 @@ struct obj *otmp;
 			arm = which_armor(mon, W_ARMG);
 			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
 			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART)
+			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
 			) bonus += (arm->spe)/2;
 //			else bonus += ; Something with dex ac?  That would be a bad idea.
 			
@@ -2583,7 +2653,7 @@ struct obj *otmp;
 			arm = which_armor(mon, W_ARMG);
 			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
 			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART)
+			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
 			) bonus += (arm->spe)/2;
 		}
 		
@@ -2594,20 +2664,27 @@ struct obj *otmp;
 			arm = which_armor(mon, W_ARMG);
 			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
 			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART)
+			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
 			) bonus += (arm->spe)/2;
 //			else bonus += ; Something with dex ac?  That would be a bad idea.
 			arm = which_armor(mon, W_ARMH);
 			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
 				bonus += (arm->spe)/2;
 		}
-		
-		if(otmp->oartifact == ART_VELKA_S_RAPIER){
+
+		if(otmp->oartifact == ART_VELKA_S_RAPIER || (mon->m_lev > 0 && check_oprop(otmp, OPROP_GSSDW))){
 			bonus /= 2;
 			//Int only
 			arm = which_armor(mon, W_ARMH);
 			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
 				bonus += (arm->spe)/2;
+		}
+
+		if(otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING){
+			//Wis only
+			arm = which_armor(mon, W_ARMH);
+			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
+				bonus += (arm->spe)/4;
 		}
 
 		if(is_mercy_blade(otmp)){
@@ -2623,6 +2700,16 @@ struct obj *otmp;
 			arm = which_armor(mon, W_ARMH);
 			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
 				bonus += (arm->spe)/2;
+		}
+		if(check_oprop(otmp, OPROP_ELFLW)){
+			//Cha counts for half and Int and Wis count for half
+			arm = which_armor(mon, W_ARMH);
+			if(arm){
+				if(arm->otyp == HELM_OF_BRILLIANCE && arm->otyp == find_gcirclet())
+					bonus += (arm->spe);
+				else if(arm->otyp == HELM_OF_BRILLIANCE || arm->otyp == find_gcirclet())
+					bonus += (arm->spe)/2;
+			}
 		}
 	}
 	return bonus;
@@ -2652,7 +2739,7 @@ struct obj *otmp;
 	if(otmp){
 		if (!uarms && !u.twoweap) {
 			if (bimanual(otmp, youracedata) ||
-				(otmp->oartifact == ART_PEN_OF_THE_VOID && otmp->ovar1&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0))
+				(otmp->oartifact == ART_PEN_OF_THE_VOID && otmp->ovar1_seals&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0))
 				bonus *= 2;
 			else if (otmp->otyp == FORCE_SWORD || otmp->otyp == ROD_OF_FORCE || weapon_type(otmp) == P_QUARTERSTAFF)
 				bonus *= 2;
@@ -2664,7 +2751,7 @@ struct obj *otmp;
 		
 		if(otmp==uwep 
 		&& (is_rapier(otmp) || is_rakuyo(otmp)
-			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1 == 0)
+			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1_lightsaberHandle == 0)
 			|| otmp->otyp == SET_OF_CROW_TALONS
 			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
 			|| is_mercy_blade(otmp)
@@ -2697,10 +2784,14 @@ struct obj *otmp;
 			else bonus += (ACURR(A_INT)-10)/2;
 		}
 
-		if(otmp->oartifact == ART_VELKA_S_RAPIER){
+		if(otmp->oartifact == ART_VELKA_S_RAPIER || (u.uinsight > 0 && check_oprop(otmp, OPROP_GSSDW))){
 			bonus /= 2;
 			if(ACURR(A_INT) == 25) bonus += 8;
 			else bonus += (ACURR(A_INT)-10)/2;
+		}
+		if(otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING){
+			if(ACURR(A_WIS) == 25) bonus += 4;
+			else bonus += (ACURR(A_WIS)-10)/4;
 		}
 		if(is_mercy_blade(otmp)){
 			if(ACURR(A_INT) == 25) bonus += 4;
@@ -2711,11 +2802,20 @@ struct obj *otmp;
 			if(ACURR(A_WIS) == 25) bonus += 8;
 			else bonus += (ACURR(A_WIS)-10)/2;
 		}
+		if(check_oprop(otmp, OPROP_ELFLW)){
+			if(ACURR(A_CHA) == 25) bonus += 8;
+			else bonus += (ACURR(A_CHA)-10)/2;
+			if((ACURR(A_WIS)+ACURR(A_INT)) == 50) bonus += 8;
+			else bonus += (ACURR(A_WIS)+ACURR(A_INT)-20)/4;
+		}
 		if(otmp->oartifact == ART_IBITE_ARM && u.umaniac){
 			//Combine mechanics: Gets a bonus from your bare-handed stuff.
 			if(weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT) > 0)
 				bonus += rnd(ACURR(A_CHA)/5 + weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT)*2);
 		}
+	}
+	else if(u.umaniac && weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT) > 0){
+		bonus += min_ints(weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT), (ACURR(A_CHA)-9)/2);
 	}
 	
 	return bonus;
@@ -3273,6 +3373,9 @@ struct obj *obj;
 	else if(obj->oartifact == ART_WAND_OF_ORCUS){
 		type = P_MACE;
 	}
+	else if(obj->otyp == CARCOSAN_STING){
+		type = P_DAGGER;
+	}
 	else if(obj->oartifact == ART_MASAMUNE){
 		for(int skl = P_FIRST_WEAPON; skl <= P_LAST_WEAPON; skl++){
 			/* Ranged weapon skills are intermixed with melee skills :( */
@@ -3309,8 +3412,8 @@ struct obj *obj;
 		if(!uarms && !u.twoweap)
 			CHECK_ALTERNATE_SKILL(P_POLEARMS)
 	}
-	else if(obj->otyp >= LUCKSTONE && obj->otyp <= ROCK && obj->ovar1){
-		type = (int)obj->ovar1;
+	else if(obj->otyp >= LUCKSTONE && obj->otyp <= ROCK && obj->ovar1_projectileSkill){
+		type = (int)obj->ovar1_projectileSkill;
 	}
 
 	return ((type < 0) ? -type : type);
@@ -3415,8 +3518,14 @@ int wep_type;
 			case P_MASTER:			maxweight = 50; break;
 			case P_GRAND_MASTER:	maxweight = 60; break;
 		}
-		if (youracedata->msize > MZ_MEDIUM)
-			maxweight *= 1+(youracedata->msize - MZ_MEDIUM);
+		int wielder_size = (youracedata->msize - MZ_MEDIUM);
+
+		if (Role_if(PM_CAVEMAN))
+			wielder_size += 1;
+		if (u.sealsActive&SEAL_YMIR)
+			wielder_size += 1;
+		if (wielder_size > 0)
+			maxweight *= 1+wielder_size;
 
 		if (wep_type == P_BARE_HANDED_COMBAT) {
 			bonus -= abs(bonus * 2 / 3);
@@ -3425,7 +3534,7 @@ int wep_type;
 			bonus -= abs(bonus * 2 / 3);
 			/* additional penalty for over-weight offhand weapons */
 			if (uswapwep && uswapwep->owt > maxweight && !(
-				(uwep && (uwep->otyp == STILETTOS)) ||
+				(uwep && (uwep->otyp == STILETTOS || uwep->otyp == WIND_AND_FIRE_WHEELS)) ||
 				(uswapwep->oartifact == ART_BLADE_DANCER_S_DAGGER) ||
 				(uswapwep->oartifact == ART_FRIEDE_S_SCYTHE)
 				))
@@ -3616,10 +3725,10 @@ int wep_type;
 		}
 	}
 	
-	if(weapon && weapon->otyp == SCALPEL && Role_if(PM_HEALER) && weapon == uwep && !u.twoweap){
+	if(weapon && (weapon->otyp == SCALPEL || weapon->otyp == UNICORN_HORN) && Role_if(PM_HEALER) && weapon == uwep && !u.twoweap){
 		/* weapon skills and misc skills */
 		switch (P_SKILL(P_HEALING_SPELL)) {
-			default: impossible("scalpel handeling weapon_hit_bonus: bad skill %d", skill);
+			default: impossible("healer weapon handeling weapon_hit_bonus: bad skill %d", skill);
 				/* fall through */
 			case P_ISRESTRICTED:
 			case P_UNSKILLED:
@@ -3732,7 +3841,7 @@ int wep_type;
 			bonus -= skill;
 			/* additional penalty for over-weight offhand weapons */
 			if (uswapwep && uswapwep->owt > maxweight && !(
-					(uwep && (uwep->otyp == STILETTOS)) ||
+					(uwep && (uwep->otyp == STILETTOS || uwep->otyp == WIND_AND_FIRE_WHEELS)) ||
 					(uswapwep->oartifact == ART_BLADE_DANCER_S_DAGGER) ||
 					(uswapwep->oartifact == ART_FRIEDE_S_SCYTHE)
 				))
@@ -3818,10 +3927,10 @@ int wep_type;
 		// }
 	}
 	
-	if(weapon && weapon->otyp == SCALPEL && Role_if(PM_HEALER) && weapon == uwep && !u.twoweap){
+	if(weapon && (weapon->otyp == SCALPEL || weapon->otyp == UNICORN_HORN) && Role_if(PM_HEALER) && weapon == uwep && !u.twoweap){
 		/* weapon skills and misc skills */
 		switch (P_SKILL(P_HEALING_SPELL)) {
-			default: impossible("scalpel handeling weapon_dam_bonus: bad skill %d", skill);
+			default: impossible("healer weapon handeling weapon_dam_bonus: bad skill %d", skill);
 				/* fall through */
 			case P_ISRESTRICTED:
 			case P_UNSKILLED:
@@ -3975,6 +4084,18 @@ const struct def_skill *class_skill;
 	  OLD_P_SKILL(P_DART) = P_BASIC;
 	  OLD_P_SKILL(P_DAGGER) = P_BASIC;
 	}
+	if (Role_if(PM_HEALER) && Race_if(PM_DROW)){
+	  OLD_P_SKILL(P_BARE_HANDED_COMBAT) = P_BASIC;
+	  OLD_P_SKILL(P_BEAST_MASTERY) = P_BASIC;
+	  OLD_P_SKILL(P_DIVINATION_SPELL) = P_BASIC;
+	  if(flags.initgend){
+		OLD_P_SKILL(P_CLERIC_SPELL) = P_BASIC;
+	  }
+	  else {
+		OLD_P_SKILL(P_ATTACK_SPELL) = P_BASIC;
+		OLD_P_SKILL(P_ENCHANTMENT_SPELL) = P_BASIC;
+	  }
+	}
 	if (u.specialSealsActive&SEAL_BLACK_WEB) {
 	  OLD_P_SKILL(P_CROSSBOW) = P_BASIC;
 	}
@@ -4048,6 +4169,73 @@ aeshbon()
 	}
 	return bonus;
 }
+
+boolean
+ok_mariwep(otmp, magr, pa, youagr)
+struct obj *otmp;
+struct monst *magr;
+struct permonst *pa;
+boolean youagr;
+{
+	return ((otmp->oclass == WEAPON_CLASS || is_weptool(otmp)
+			|| (otmp->otyp == CHAIN && pa->mtyp == PM_CATHEZAR)
+			)																	// valid weapon
+			&& !(otmp->oartifact && !always_twoweapable_artifact(otmp))			// ok artifact
+			&& (!bimanual(otmp, pa) || pa->mtyp == PM_GYNOID || pa->mtyp == PM_PARASITIZED_GYNOID)// not two-handed
+			&& (youagr || (otmp != MON_WEP(magr) && otmp != MON_SWEP(magr)))	// not wielded already (monster)
+			&& (!youagr || otmp->owt <= max(10, P_SKILL(P_TWO_WEAPON_COMBAT)*10))// not too heavy
+			&& (!youagr || (otmp != uwep && (!u.twoweap || otmp != uswapwep)))	// not wielded already (player)
+			&& !(is_ammo(otmp) || (is_bad_melee_pole(otmp) && !melee_polearms(pa)) || is_missile(otmp))	// not unsuitable for melee (ammo, polearm, missile)
+			&& !otmp->owornmask);												// not worn
+}
+
+struct obj *
+get_mariwep(magr, pa, marinum)
+struct monst *magr;
+struct permonst *pa;
+int marinum;
+{
+	struct obj *otmp;
+	boolean youagr = magr == &youmonst;
+	int wcount = 0;	// valid weapons so far
+	// loop through attacker's inv to find next allowable weapon to hit with
+	for (otmp = (youagr ? invent : magr->minvent); otmp; otmp = otmp->nobj){
+		if (ok_mariwep(otmp, magr, pa, youagr)){
+			/* we have a potential weapon */
+			if (wcount == marinum && youagr) {
+				// found the next weapon, exit loop
+				return otmp;
+			}
+			else {
+				// not the next weapon, continue looping
+				wcount++;
+			}
+		}
+	}
+	wcount -= marinum;
+	//Not enough
+	if(wcount < 1)
+		return (struct obj *)0;
+
+	//Get the nth-from-the-last valid weapon
+	for (otmp = (youagr ? invent : magr->minvent); otmp; otmp = otmp->nobj){
+		if (ok_mariwep(otmp, magr, pa, youagr)){
+			/* we have a potential weapon */
+			if (wcount <= 1) {
+				// found the next weapon, exit loop
+				return otmp;
+			}
+			else {
+				// not the next weapon, continue looping
+				wcount--;
+			}
+		}
+	}
+
+	return otmp;
+
+}
+
 
 #endif /* OVLB */
 

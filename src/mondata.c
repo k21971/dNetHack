@@ -99,6 +99,121 @@ int mtyp;
 	return;
 }
 
+void
+update_mon_mvar(mon, oldpm, newpm)
+struct monst *mon;
+int oldpm;
+int newpm;
+{
+	//set mvar1
+	if(is_vectored_mtyp(newpm)){
+		if(!is_vectored_mtyp(oldpm))
+			mon->mvar_vector = rn2(8);
+		//else same as old
+	}
+	else if(is_half_dragon(&mons[newpm])){
+		if(!is_half_dragon(&mons[oldpm])){
+			static const int half_dragon_types[] = { AD_COLD, AD_FIRE, AD_SLEE, AD_ELEC, AD_DRST, AD_ACID };
+			mon->mvar_hdBreath = half_dragon_types[rn2(6)];
+		}
+	}
+	else if(is_boreal_dragoon(&mons[newpm])){
+		if(!is_boreal_dragoon(&mons[oldpm])){
+			static const int boreal_dragon_types[] = { AD_COLD, AD_FIRE, AD_MAGM, AD_PHYS };
+			if (!mon->mvar_hdBreath)
+				mon->mvar_hdBreath = boreal_dragon_types[rn2(4)];
+		}
+	}
+	else if(has_sunflask(newpm)){
+		if(!has_sunflask(oldpm)){
+			mon->mvar_flask_charges = MAX_FLASK_CHARGES(mon);
+		}
+	}
+	else switch(newpm){
+		case PM_PALE_NIGHT:
+			mon->mvar_paleWarning = 0;
+		break;
+		case PM_WITCH_S_FAMILIAR:
+			if(oldpm != PM_WITCH_S_FAMILIAR)
+				mon->mvar_witchID = 0;
+		break;
+		case PM_DANCING_BLADE:
+			if(oldpm != PM_DANCING_BLADE)
+				mon->mvar_suryaID = 0;
+		break;
+		case PM_BLOB_OF_PRESERVED_ORGANS:
+			if(oldpm != PM_BLOB_OF_PRESERVED_ORGANS)
+				mon->mvar_huskID = 0;
+		break;
+		case PM_ALABASTER_MUMMY:
+			if(oldpm != PM_ALABASTER_MUMMY){
+				switch(rnd(6)){
+					case 1:
+						mon->mvar_syllable = SYLLABLE_OF_STRENGTH__AESH;
+					break;
+					case 2:
+						mon->mvar_syllable = SYLLABLE_OF_GRACE__UUR;
+					break;
+					case 3:
+						mon->mvar_syllable = SYLLABLE_OF_LIFE__HOON;
+					break;
+					case 4:
+						mon->mvar_syllable = SYLLABLE_OF_SPIRIT__VAUL;
+						give_mintrinsic(mon, DISPLACED);
+					break;
+					case 5:
+						mon->mvar_syllable = SYLLABLE_OF_POWER__KRAU;
+					break;
+					case 6:
+						mon->mvar_syllable = SYLLABLE_OF_THOUGHT__NAEN;
+					break;
+				}
+			}
+		break;
+		case PM_LICH__THE_FIEND_OF_EARTH:
+		case PM_KARY__THE_FIEND_OF_FIRE:
+		case PM_KRAKEN__THE_FIEND_OF_WATER:
+		case PM_TIAMAT__THE_FIEND_OF_WIND:
+		case PM_CHAOS:
+			mon->mvar_spList_1 = 0;
+		break;
+		case PM_DREAD_SERAPH:
+			mon->mvar_dreadPrayer_cooldown = 0;
+		break;
+		case PM_DRACAE_ELADRIN:{
+			struct permonst *ptr = mkclass(S_CHA_ANGEL, G_PLANES);
+			if(ptr)
+				mon->mvar_dracaePreg = monsndx(ptr);
+		}
+		break;
+		case PM_LIVING_DOLL:
+			mon->mvar_dollTypes = init_doll_sales();
+		break;
+		case PM_STRANGE_LARVA:
+			mon->mvar_tanninType = rn2(10) ? PM_ANCIENT_NUPPERIBO : rn2(5) ? PM_BYAKHEE : PM_MARILITH;
+		break;
+		case PM_DEMINYMPH:
+			mon->mvar_deminymph_role = PM_CAVEMAN;
+		break;
+		default:
+			//mon->mvar_ancient_breath_cooldown = 0;
+			//mon->mvar_yellow_lifesaved = FALSE;
+			mon->mvar1 = 0;
+		break;
+	}
+
+	mon->mvar2 = 0;
+	// mvar_dracaePregTimer = 0
+	// mvar_spList_2 = 0
+	// mvar_dreadPrayer_progress = 0
+	// mvar_attack_pm = 0
+
+	// mvar_conversationTracker = 0
+	// mvar_lifesigns = 0 /*Note: lifesigns are 0ed */
+
+	mon->mvar3 = 0;
+}
+
 /*
  * Safely sets mon->data from an existing data pointer.
  * Calling `set_mon_data_core(mon, mon->data)` is always ok.
@@ -119,56 +234,58 @@ struct permonst * ptr;
 		mon->mintrinsics[i] = 0;
 	}
 
+	/*Updates monster mvar*/
+	if(mon->mtyp != ptr->mtyp)
+		update_mon_mvar(mon, mon->mtyp, ptr->mtyp);
+
 	/* resistances */
 	mon->mintrinsics[0] = (ptr->mresists & MR_MASK);
+	/*
+		Store half dragon breath type in mvar_hdBreath
+	*/
 	if(is_half_dragon(ptr)){
-		/*
-			Store half dragon breath type in mvar_hdBreath
-		*/
-		if(is_half_dragon(ptr)){
-			static const int half_dragon_types[] = { AD_COLD, AD_FIRE, AD_SLEE, AD_ELEC, AD_DRST, AD_ACID };
-			if (!mon->mvar_hdBreath)
-				mon->mvar_hdBreath = half_dragon_types[rn2(6)];
-			switch (mon->mvar_hdBreath){
-				case AD_COLD:
-					mon->mintrinsics[(COLD_RES-1)/32] |= (1 << (COLD_RES-1)%32);
-				break;
-				case AD_FIRE:
-					mon->mintrinsics[(FIRE_RES-1)/32] |= (1 << (FIRE_RES-1)%32);
-				break;
-				case AD_SLEE:
-					mon->mintrinsics[(SLEEP_RES-1)/32] |= (1 << (SLEEP_RES-1)%32);
-				break;
-				case AD_ELEC:
-					mon->mintrinsics[(SHOCK_RES-1)/32] |= (1 << (SHOCK_RES-1)%32);
-				break;
-				case AD_DRST:
-					mon->mintrinsics[(POISON_RES-1)/32] |= (1 << (POISON_RES-1)%32);
-				break;
-				case AD_ACID:
-					mon->mintrinsics[(ACID_RES-1)/32] |= (1 << (ACID_RES-1)%32);
-				break;
-				case AD_MAGM:
-					mon->mintrinsics[(ANTIMAGIC-1)/32] |= (1 << (ANTIMAGIC-1)%32);
-				break;
-			}
-		} else if(is_boreal_dragoon(ptr)){
-			static const int boreal_dragon_types[] = { AD_COLD, AD_FIRE, AD_MAGM, AD_PHYS };
-			if (!mon->mvar_hdBreath)
-				mon->mvar_hdBreath = boreal_dragon_types[rn2(4)];
-			switch (mon->mvar_hdBreath){
-				case AD_COLD:
-					mon->mintrinsics[(COLD_RES-1)/32] |= (1 << (COLD_RES-1)%32);
-				break;
-				case AD_FIRE:
-					mon->mintrinsics[(FIRE_RES-1)/32] |= (1 << (FIRE_RES-1)%32);
-				break;
-				case AD_MAGM:
-					mon->mintrinsics[(ANTIMAGIC-1)/32] |= (1 << (ANTIMAGIC-1)%32);
-				break;
-				case AD_PHYS:
-				break;
-			}
+		static const int half_dragon_types[] = { AD_COLD, AD_FIRE, AD_SLEE, AD_ELEC, AD_DRST, AD_ACID };
+		if (!mon->mvar_hdBreath)
+			mon->mvar_hdBreath = half_dragon_types[rn2(6)];
+		switch (mon->mvar_hdBreath){
+			case AD_COLD:
+				mon->mintrinsics[(COLD_RES-1)/32] |= (1 << (COLD_RES-1)%32);
+			break;
+			case AD_FIRE:
+				mon->mintrinsics[(FIRE_RES-1)/32] |= (1 << (FIRE_RES-1)%32);
+			break;
+			case AD_SLEE:
+				mon->mintrinsics[(SLEEP_RES-1)/32] |= (1 << (SLEEP_RES-1)%32);
+			break;
+			case AD_ELEC:
+				mon->mintrinsics[(SHOCK_RES-1)/32] |= (1 << (SHOCK_RES-1)%32);
+			break;
+			case AD_DRST:
+				mon->mintrinsics[(POISON_RES-1)/32] |= (1 << (POISON_RES-1)%32);
+			break;
+			case AD_ACID:
+				mon->mintrinsics[(ACID_RES-1)/32] |= (1 << (ACID_RES-1)%32);
+			break;
+			case AD_MAGM:
+				mon->mintrinsics[(ANTIMAGIC-1)/32] |= (1 << (ANTIMAGIC-1)%32);
+			break;
+		}
+	} else if(is_boreal_dragoon(ptr)){
+		static const int boreal_dragon_types[] = { AD_COLD, AD_FIRE, AD_MAGM, AD_PHYS };
+		if (!mon->mvar_hdBreath)
+			mon->mvar_hdBreath = boreal_dragon_types[rn2(4)];
+		switch (mon->mvar_hdBreath){
+			case AD_COLD:
+				mon->mintrinsics[(COLD_RES-1)/32] |= (1 << (COLD_RES-1)%32);
+			break;
+			case AD_FIRE:
+				mon->mintrinsics[(FIRE_RES-1)/32] |= (1 << (FIRE_RES-1)%32);
+			break;
+			case AD_MAGM:
+				mon->mintrinsics[(ANTIMAGIC-1)/32] |= (1 << (ANTIMAGIC-1)%32);
+			break;
+			case AD_PHYS:
+			break;
 		}
 	}
 #define set_mintrinsic(ptr_condition, intrinsic) \
@@ -267,6 +384,7 @@ int template;
 		ptr->mflagsg |= (MG_RPIERCE | MG_RBLUNT);
 		ptr->mflagsg &= ~(MG_RSLASH | MG_INFRAVISIBLE);
 		ptr->mflagsa |= (MA_UNDEAD);
+		ptr->mflagsw |= (MW_ELDER_EYE_ENERGY);
 		
 		/*Undead are against natural law*/
 		if(ptr->maligntyp > 0)
@@ -307,6 +425,7 @@ int template;
 		ptr->mflagsg |= (MG_RPIERCE | MG_RSLASH);
 		ptr->mflagsg &= ~(MG_RBLUNT | MG_INFRAVISIBLE);
 		ptr->mflagsa |= (MA_UNDEAD);
+		ptr->mflagsw |= (MW_ELDER_EYE_ENERGY);
 
 		/*Undead are against natural law*/
 		if(ptr->maligntyp > 0)
@@ -360,6 +479,45 @@ int template;
 		/* misc: */
 		ptr->msound = MS_SILENT;
 		break;
+	case CORDYCEPS:
+		ptr->mflagsm |= (MM_STATIONARY);
+	case SPORE_ZOMBIE:
+		/* flags: */
+		ptr->mflagsm |= (MM_BREATHLESS);
+		if(ptr->mflagsm&MM_NEEDPICK)
+			ptr->mflagsm &= ~(MM_TUNNEL|MM_NEEDPICK);
+		ptr->mflagst = (MT_HOSTILE|MT_MINDLESS|MT_NOTAKE);
+		ptr->mflagsg &= ~(MG_INFRAVISIBLE);
+		ptr->mflagsv = (MV_ECHOLOCATE|MV_SCENT);
+		ptr->mflagsb |= (MB_NOEYES);
+		//Note: Plant, NOT Undead. It's a living zombie. Also less resistant to damage
+		ptr->mflagsa |= (MA_PLANT);
+		ptr->mflagsw |= MW_ELDER_EYE_ELEM;
+		
+		/*Zuggtmoy's spores are against natural law*/
+		if(ptr->maligntyp > 0)
+			ptr->maligntyp = -1*ptr->maligntyp;
+		else if(ptr->maligntyp == 0)
+			ptr->maligntyp = -5;
+
+		/*Zombies have no skill*/
+		/*Note: The actual effect of this is to zero out mflagsf, but flags are removed explicitly for futureproofing reasons.*/
+		ptr->mflagsf &= ~(MF_MARTIAL_B|MF_MARTIAL_S|MF_MARTIAL_E);
+		ptr->mflagsf &= ~(MF_BAB_FULL|MF_BAB_HALF);
+		ptr->mflagsf &= ~(MF_LEVEL_30|MF_LEVEL_45);
+		ptr->mflagsf &= ~(MF_PHYS_SCALING);
+		/* defense: */
+		ptr->dac += -2;	/* penalty to dodge AC */
+		ptr->hdr += 1;
+		ptr->bdr += 1;
+		ptr->gdr += 1;
+		ptr->ldr += 1;
+		ptr->fdr += 1;
+		/* resists: */
+		ptr->mresists |= MR_SICK;
+		/* misc: */
+		ptr->msound = MS_SILENT;
+		break;
 	case FRACTURED:
 		/* flags: */
 		ptr->mflagsm |= (MM_BREATHLESS);
@@ -368,6 +526,9 @@ int template;
 		ptr->mflagsb |= (MB_NOEYES|MB_INDIGESTIBLE);
 		ptr->mflagsg &= ~(MG_INFRAVISIBLE);
 		ptr->mflagsa |= (MA_UNDEAD);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		break;
 	case VAMPIRIC:
 		/* flags: */
@@ -379,12 +540,14 @@ int template;
 		ptr->mflagsa |= (MA_UNDEAD | MA_VAMPIRE);
 		/* resists: */
 		ptr->mresists |= (MR_SLEEP | MR_POISON);	/* individual monsters gain cold res at mlev >= 10 */
+		ptr->mflagsw |= (MW_ELDER_EYE_ENERGY);
 		break;
 	case ILLUMINATED:
 		/* flags: */
 		ptr->mflagsg |= (MG_HATESUNHOLY);
 		ptr->mflagsg &= ~(MG_HATESHOLY);
 		ptr->mflagsa |= (MA_MINION);
+		ptr->mflagsw |= (MW_ELDER_EYE_PLANES);
 		break;
 	case PSEUDONATURAL:
 		/* flags */
@@ -405,6 +568,7 @@ int template;
 		ptr->mflagsf |= MF_MARTIAL_E;
 		ptr->mflagsf &= ~(MF_BAB_HALF);
 		ptr->mflagsf |= MF_BAB_FULL;
+		ptr->mflagsg |= (MG_INSIGHT|MG_SANLOSS);
 		/*Pseudonaturals have tentacles, which changes their grasp situation.*/
 		if(ptr->mflagsb&MB_NOLIMBS){
 			ptr->mflagsb &= ~MB_NOLIMBS;
@@ -414,7 +578,11 @@ int template;
 			ptr->mflagsb &= ~MB_NOHANDS;
 			ptr->mflagsb |= MB_NOGLOVES;
 		}
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		ptr->mflagsb |= MB_ACID|MB_POIS;
+		ptr->mlevel *= 1.5;
 		break;
 	case TOMB_HERD:
 		/* flags: */
@@ -425,10 +593,14 @@ int template;
 		ptr->mflagsm |= (MM_TENGTPORT|MM_AMPHIBIOUS|MM_BREATHLESS|MM_TPORT|MM_TPORT_CNTRL|MM_WEBRIP);
 		ptr->mflagst &= ~(MT_MINDLESS|MT_HERBIVORE|MT_METALLIVORE);
 		ptr->mflagst |= (MT_HOSTILE|MT_ANIMAL|MT_CARNIVORE|MT_TRAITOR);
-		ptr->mflagsg &= ~(MG_INFRAVISIBLE);
+		ptr->mflagsg &= ~(MG_INFRAVISIBLE|MG_RBLUNT);
+		ptr->mflagsg |= (MG_VBLUNT|MG_SANLOSS);
 		ptr->mflagsb &= ~(MB_UNSOLID|MB_OVIPAROUS|MB_ACID|MB_POIS|MB_POIS|MB_TOSTY|MB_HALUC|MB_INSUBSTANTIAL);
 		ptr->mflagsb |= (MB_INDIGESTIBLE|MB_THICK_HIDE|MB_STRONG);
 
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		/*The tomb herd is neutral*/
 		ptr->maligntyp = 0;
 
@@ -444,11 +616,40 @@ int template;
 		ptr->mflagst &= ~(MT_MINDLESS|MT_ANIMAL|MT_DOMESTIC);
 		if(!(ptr->mflagsb&(MB_NOLIMBS|MB_NOHANDS)) && !(ptr->mflagsm&MM_TUNNEL) && !(ptr->mflagsm&MM_WALLWALK))
 			ptr->mflagsm |= (MM_TUNNEL|MM_NEEDPICK);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		break;
 	case CRANIUM_RAT:
 		/* defense: */
 		ptr->dac += 4;
 		ptr->hdr = 0; //Exposed brain
+		ptr->mflagst &= ~(MT_ANIMAL|MT_MINDLESS);
+		ptr->mflagsg |= (MG_INSIGHT|MG_SANLOSS);
+		ptr->mflagsv |= MV_TELEPATHIC;
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
+		break;
+	case PSURLON:
+		ptr->pac += 6;
+		ptr->spe_hdr += 6;
+		ptr->spe_bdr += 6;
+		ptr->spe_gdr += 6;
+		ptr->spe_ldr += 6;
+		ptr->spe_fdr += 6;
+		ptr->mflagst &= ~(MT_ANIMAL|MT_MINDLESS);
+		ptr->mflagst |= (MT_HOSTILE|MT_GREEDY|MT_JEWELS|MT_COLLECT|MT_TRAITOR|MT_OMNIVORE);
+		ptr->mflagsg |= (MG_NASTY|MG_INSIGHT|MG_SANLOSS);
+		ptr->mflagsb &= ~(MB_NOLIMBS|MB_NOHANDS|MB_ANIMAL);
+		ptr->mflagsb |= MB_HUMANOID|MB_SLITHY;
+		ptr->mflagsv |= MV_TELEPATHIC|MV_NORMAL;
+		ptr->mflagsa |= MA_ET|MA_G_O_O;
+		if(!(ptr->mflagsm&MM_TUNNEL) && !(ptr->mflagsm&MM_WALLWALK))
+			ptr->mflagsm |= (MM_TUNNEL|MM_NEEDPICK);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		break;
 	case MINDLESS:
 		if(ptr->mflagsm&MM_NEEDPICK)
@@ -479,6 +680,10 @@ int template;
 		ptr->mflagst |= (MT_CARNIVORE);
 		ptr->mflagsv |= (MV_ECHOLOCATE|MV_SCENT);
 		ptr->mflagsa |= (MA_ANIMAL|MA_PLANT|MA_PRIMORDIAL);
+		ptr->mflagsg |= (MG_INSIGHT|MG_SANLOSS);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 #define AVG_DR(typ) if(ptr->typ < 5) ptr->typ = (ptr->typ + 5)/2;
 #define AVG_AC(typ) if(ptr->typ < 16) ptr->typ = (ptr->typ + 16)/2;
 		AVG_AC(nac)
@@ -532,7 +737,7 @@ int template;
 		ptr->mflagsm |= (MM_AMORPHOUS|MM_SWIM|MM_AMPHIBIOUS);
 		ptr->mflagst |= (MT_OMNIVORE | MT_MINDLESS | MT_HOSTILE | MT_STALK);
 		ptr->mflagst &= ~(MT_PEACEFUL | MT_ITEMS | MT_HIDE | MT_CONCEAL);
-		ptr->mflagsg |= (MG_VSLASH|MG_REGEN); //|MG_SANLOSS
+		ptr->mflagsg |= (MG_VSLASH|MG_REGEN|MG_SANLOSS);
 		ptr->mflagsg &= ~(MG_RBLUNT|MG_PNAME);
 		ptr->mflagsa |= (MA_PRIMORDIAL|MA_AQUATIC);
 		ptr->mflagsb |= (MB_NOLIMBS|MB_ACID|MB_POIS|MB_STRONG);
@@ -555,15 +760,16 @@ int template;
 		ptr->mresists |= (MR_ACID|MR_FIRE|MR_COLD|MR_POISON|MR_STONE|MR_SICK);
 		/* misc: */
 		ptr->msound = MS_SILENT;
+		ptr->mflagsw |= (MW_ELDER_SIGN);
 		break;
 	case YELLOW_TEMPLATE:
-		ptr->nac += 3;
+		ptr->nac += 2;
 		ptr->pac += 3;
-		ptr->hdr += 3;
-		ptr->bdr += 3;
-		ptr->gdr += 3;
-		ptr->ldr += 3;
-		ptr->fdr += 3;
+		ptr->hdr += 2;
+		ptr->bdr += 2;
+		ptr->gdr += 2;
+		ptr->ldr += 2;
+		ptr->fdr += 2;
 		ptr->spe_hdr += 3;
 		ptr->spe_bdr += 3;
 		ptr->spe_gdr += 3;
@@ -574,6 +780,9 @@ int template;
 		ptr->mflagsg |= (MG_RPIERCE | MG_RBLUNT);
 		ptr->mflagsg &= ~(MG_RSLASH | MG_INFRAVISIBLE);
 		ptr->mflagsa |= (MA_UNDEAD);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		/*Yellow dead have no skill*/
 		/*Note: The actual effect of this is to zero out mflagsf, but flags are removed explicitly for futureproofing reasons.*/
 		ptr->mflagsf &= ~(MF_MARTIAL_B|MF_MARTIAL_S|MF_MARTIAL_E);
@@ -586,11 +795,14 @@ int template;
 		// ptr->mcolor = CLR_YELLOW;
 		break;
 	case DREAM_LEECH:
-		ptr->pac += 6;
-		ptr->spe_hdr += 6;
+		ptr->pac += 5;
+		ptr->spe_hdr += 5;
 		ptr->mflagst |= (MT_HOSTILE | MT_STALK);
 		ptr->mflagsa |= (MA_UNDEAD);
 		ptr->mflagsv |= (MV_TELEPATHIC);
+		if(!(ptr->mflagsw&MW_EYE_OF_YGG)){
+			ptr->mflagsw |= MW_ELDER_SIGN;
+		}
 		// ptr->mcolor = CLR_YELLOW;
 		break;
 	case MAD_TEMPLATE:
@@ -663,6 +875,49 @@ int template;
 			ptr->dac += 6;
 			ptr->pac += 6;
 			ptr->hdr += 6;
+			ptr->mflagsw |= MW_ELDER_EYE_PLANES;
+		break;
+		case PLAGUE_TEMPLATE:
+			ptr->mflagst &= ~(MT_HOSTILE);
+			ptr->mflagst |= MT_PEACEFUL;
+			ptr->mlevel = (ptr->mlevel+2)/3;
+			ptr->mr /= 3;
+			ptr->dac = -5;
+			ptr->pac = 0;
+			ptr->spe_hdr = 0;
+			ptr->spe_bdr = 0;
+			ptr->spe_gdr = 0;
+			ptr->spe_ldr = 0;
+			ptr->spe_fdr = 0;
+			ptr->mmove = 0;
+			ptr->msound = (ptr->msound == MS_SILENT) ? MS_SILENT : MS_COUGH;
+			ptr->mresists &= ~(MR_POISON|MR_DRAIN|MR_SICK|MR_MAGIC);
+		break;
+	case CONSTELLATION:
+			ptr->geno |= (G_NOCORPSE);
+			ptr->nac = 0;
+			ptr->hdr = 0;
+			ptr->bdr = 0;
+			ptr->gdr = 0;
+			ptr->ldr = 0;
+			ptr->fdr = 0;
+			//Monsters that can move get faster, to at least normal speed
+			if(ptr->mmove){
+				ptr->mmove += 4;
+				if(ptr->mmove < 12)
+					ptr->mmove = 12;
+			}
+			ptr->msound = MS_SILENT;
+			ptr->mresists = MR_ALL|MR_MAGIC;
+			ptr->mflagsm |= MM_FLY|MM_BREATHLESS|MM_FLOAT;
+			ptr->mflagst &= ~(MT_ANIMAL | MT_PEACEFUL | MT_CARNIVORE | MT_HERBIVORE | MT_TRAITOR);
+			ptr->mflagst |= MT_WANDER|MT_STALK|MT_HOSTILE|MT_MINDLESS;
+			ptr->mflagsb |= MB_UNSOLID|MB_INSUBSTANTIAL;
+			ptr->mflagsg &= ~(MG_PNAME);
+			ptr->mflagsg |= MG_NASTY|MG_HATESUNHOLY;
+			ptr->mflagsa = MA_ET;
+			ptr->mflagsv = MV_DETECTION|MV_OMNI;
+			ptr->mflagsw = MW_ELDER_EYE_PLANES;
 		break;
 	}
 #undef MT_ITEMS
@@ -670,6 +925,8 @@ int template;
 	/* adjust attacks in the permonst */
 	extern struct attack noattack;
 	boolean special = FALSE;
+	boolean special_2 = FALSE;
+	boolean special_3 = FALSE;
 	struct attack * attk;
 	boolean insert;
 	int i, j;
@@ -679,7 +936,7 @@ int template;
 		insert = FALSE;
 
 		/* some templates completely skip specific attacks */
-		while ((template == ZOMBIFIED || template == SKELIFIED) &&
+		while ((template == ZOMBIFIED || template == SKELIFIED || template == SPORE_ZOMBIE) &&
 			(
 			attk->lev_req > ptr->mlevel ||
 			attk->aatyp == AT_SPIT ||
@@ -773,6 +1030,22 @@ int template;
 			attk[j] = noattack;
 		}
 
+		/* some templates completely skip specific attacks */
+		while ((template == CONSTELLATION) &&
+			(
+			attk->aatyp == AT_SPIT
+			|| attk->aatyp == AT_ENGL
+			|| attk->aatyp == AT_GAZE
+			|| attk->aatyp == AT_ARRW
+			|| attk->aatyp == AT_VINE
+			)
+		){
+			/* shift all further attacks forwards one slot, and make last one all 0s */
+			for (j = 0; j < (NATTK - i - 1); j++)
+				attk[j] = attk[j + 1];
+			attk[j] = noattack;
+		}
+
 		/* some templates alter damage types */
 		if (template == POISON_TEMPLATE){
 			if(ptr->mtyp == PM_JRT_NETJER){
@@ -789,6 +1062,34 @@ int template;
 			else if(attk->adtyp == AD_PHYS && (attk->aatyp || attk->damn || attk->damd))
 				attk->adtyp = AD_DRCO;
 			//Note: also affects AD_MOON, but this must be handled after the phase of moon code in xhity.
+		}
+
+		/* some templates alter attacks */
+		if (template == CONSTELLATION){
+			if(attk->aatyp == AT_SRPR || attk->aatyp == AT_WEAP){
+				attk->aatyp = AT_SRPR;
+				attk->adtyp = AD_STAR;
+				attk->damn = 4;
+				attk->damd = 8;
+			}
+			else if(attk->aatyp == AT_XSPR || attk->aatyp == AT_XWEP){
+				attk->aatyp = AT_XSPR;
+				attk->adtyp = AD_STAR;
+				attk->damn = 4;
+				attk->damd = 8;
+			}
+			else if(attk->aatyp == AT_MSPR || attk->aatyp == AT_MARI){
+				attk->aatyp = AT_MSPR;
+				attk->adtyp = AD_STAR;
+				attk->damn = 4;
+				attk->damd = 8;
+			}
+			else if(attk->aatyp == AT_DSPR || attk->aatyp == AT_DEVA){
+				attk->aatyp = AT_DSPR;
+				attk->adtyp = AD_STAR;
+				attk->damn = 4;
+				attk->damd = 8;
+			}
 		}
 
 		/* if creatures don't have eyes, some gaze attacks are impossible */
@@ -827,12 +1128,12 @@ int template;
 			attk->damd = max(attk->damd, max(ptr->msize * 2, 4));
 		}
 		/* some templates want to adjust existing attacks, or add additional attacks */
-#define insert_okay (!special && (is_null_attk(attk) || \
-	((attk->aatyp > AT_HUGS && !weapon_aatyp(attk->aatyp) \
-	&& !(attk->aatyp == AT_BREA && ptr->mlet == S_DRAGON)) || attk->aatyp == AT_NONE)) \
+#define insert_okay(specvar) (!(specvar) && (is_null_attk(attk) || \
+		((attk->aatyp > AT_HUGS && !weapon_aatyp(attk->aatyp) \
+			&& !(attk->aatyp == AT_BREA && ptr->mlet == S_DRAGON)) || attk->aatyp == AT_NONE)) \
 	&& (insert = TRUE))
-#define end_insert_okay (!special && (is_null_attk(attk) || attk->aatyp == AT_NONE) && (insert = TRUE))
-#define maybe_insert() if(insert) {for(j=NATTK-i-1;j>0;j--)attk[j]=attk[j-1];*attk=noattack;i++;}
+#define end_insert_okay(specvar) (!(specvar) && (is_null_attk(attk) || attk->aatyp == AT_NONE) && (insert = TRUE))
+#define maybe_insert() if(insert) {for(j=NATTK-i-1;j>0;j--)attk[j]=attk[j-1];*attk=noattack;insert=FALSE;}
 		/* zombies/skeletons get a melee attack if they don't have any (likely due to disallowed aatyp) */
 		if ((template == ZOMBIFIED || template == SKELIFIED || template == MINDLESS) && (
 			i == 0 && (!nolimbs(ptr) || has_head(ptr)) && (
@@ -841,8 +1142,8 @@ int template;
 			) && (insert = TRUE)
 			)
 		){
-			maybe_insert()
-				attk->aatyp = !nolimbs(ptr) ? AT_CLAW : AT_BITE;
+			maybe_insert();
+			attk->aatyp = !nolimbs(ptr) ? AT_CLAW : AT_BITE;
 			attk->adtyp = AD_PHYS;
 			attk->damn = ptr->mlevel / 10 + (template == ZOMBIFIED ? 1 : 2);
 			attk->damd = max(ptr->msize * 2, 4);
@@ -850,7 +1151,7 @@ int template;
 
 		/* skeletons get a paralyzing touch */
 		if (template == SKELIFIED && (
-			insert_okay
+			insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -863,7 +1164,7 @@ int template;
 		
 		/* vitreans get a cold touch */
 		if (template == CRYSTALFIED && (
-			insert_okay
+			insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -874,7 +1175,7 @@ int template;
 			special = TRUE;
 		}
 		if (template == MISTWEAVER && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -891,7 +1192,7 @@ int template;
 			attk->adtyp == AD_SQUE ||
 			attk->adtyp == AD_SAMU
 			))
-			|| insert_okay
+			|| insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -914,7 +1215,7 @@ int template;
 		/* vampires' bites are vampiric: pt 2: primary bites*/
 		if (template == VAMPIRIC && (
 			attk->aatyp == AT_BITE
-			|| (insert_okay && !nomouth(ptr->mtyp))
+			|| (insert_okay(special) && !nomouth(ptr->mtyp))
 			)
 		){
 			maybe_insert();
@@ -924,10 +1225,33 @@ int template;
 			attk->damd = max(4, max(ptr->msize * 2, attk->damd));
 			special = TRUE;
 		}
+		/* infectees' bites are sickening: pt 1: other bites */
+		if (template == SPORE_ZOMBIE && (
+			attk->aatyp == AT_OBIT
+			|| attk->aatyp == AT_LNCK
+			)
+		){
+			attk->adtyp = AD_DISE;
+			attk->damn = max(1, attk->damn);
+			attk->damd = max(4, max(ptr->msize * 2, attk->damd));
+		}
+		/* infectees' bites are sickening: pt 2: primary bites*/
+		if (template == SPORE_ZOMBIE && (
+			attk->aatyp == AT_BITE
+			|| (insert_okay(special) && !nomouth(ptr->mtyp))
+			)
+		){
+			maybe_insert();
+			attk->aatyp = AT_BITE;
+			attk->adtyp = AD_DISE;
+			attk->damn = max(1, attk->damn);
+			attk->damd = max(4, max(ptr->msize * 2, attk->damd));
+			special = TRUE;
+		}
 		/* pseudonatural's bites become int-draining tentacles */
 		if (template == PSEUDONATURAL && (
 			(attk->aatyp == AT_BITE)
-			|| insert_okay
+			|| insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -936,6 +1260,27 @@ int template;
 			attk->damn = 1;
 			attk->damd = 4;
 			special = TRUE;
+		}
+		/* Cordyceps always have the same attacks */
+		if(template == CORDYCEPS){
+			if(i==0){
+				attk->aatyp = AT_GAZE;
+				attk->adtyp = AD_SPOR;
+				attk->damn = 0;
+				attk->damd = 0;
+			}
+			else if(i==1){
+				attk->aatyp = AT_NONE;
+				attk->adtyp = AD_DISE;
+				attk->damn = 0;
+				attk->damd = 0;
+			}
+			else {
+				/* shift all further attacks forwards one slot, and make last one all 0s */
+				for (j = 0; j < (NATTK - i - 1); j++)
+					attk[j] = attk[j + 1];
+				attk[j] = noattack;
+			}
 		}
 		/* tomb herd's attacks are generally stronger */
 		if (template == TOMB_HERD && (
@@ -949,7 +1294,7 @@ int template;
 		}
 		/* tomb herd also gets an abduction attack */
 		if (template == TOMB_HERD && (
-			insert_okay
+			insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -961,7 +1306,7 @@ int template;
 		}
 		/* yith gain spellcasting */
 		if (template == YITH && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -973,7 +1318,41 @@ int template;
 		}
 		/* cranium rats gain psionic spellcasting */
 		if (template == CRANIUM_RAT && (
-			end_insert_okay
+			attk->aatyp == AT_MAGC || end_insert_okay(special)
+			))
+		{
+			maybe_insert();
+			attk->aatyp = AT_MAGC;
+			attk->adtyp = AD_PSON;
+			attk->damn = 0;
+			attk->damd = 15;
+			special = TRUE;
+		}
+		/* psurlons have hands and psionic spellcasting */
+		if (template == PSURLON && (
+			attk->aatyp == AT_WEAP || insert_okay(special_2)
+			)
+		){
+			maybe_insert();
+			attk->aatyp = AT_WEAP;
+			attk->adtyp = AD_PHYS;
+			attk->damn = 1;
+			attk->damd = ptr->msize+1;
+			special_2 = TRUE;
+		}
+		if (template == PSURLON && (
+			attk->aatyp == AT_XWEP || insert_okay(special_3)
+			))
+		{
+			maybe_insert();
+			attk->aatyp = AT_XWEP;
+			attk->adtyp = AD_PHYS;
+			attk->damn = 1;
+			attk->damd = ptr->msize+1;
+			special_3 = TRUE;
+		}
+		if (template == PSURLON && (
+			attk->aatyp == AT_MAGC || end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -985,7 +1364,7 @@ int template;
 		}
 		/* monsters that have mastered the black web gain shadow blades */
 		if (template == M_BLACK_WEB && (
-			insert_okay
+			insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -996,7 +1375,7 @@ int template;
 			special = TRUE;
 		}
 		if (template == M_GREAT_WEB && (
-			insert_okay
+			insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -1029,7 +1408,7 @@ int template;
 			attk->damd = max(ptr->msize * 2, 4);
 		}
 		if (template == SLIME_REMNANT && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -1044,7 +1423,7 @@ int template;
 			attk->damd += 2;
 		}
 		if (template == YELLOW_TEMPLATE && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -1055,14 +1434,14 @@ int template;
 			special = TRUE;
 		}
 		if (template == DREAM_LEECH && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
 			attk->aatyp = AT_TUCH;
 			attk->adtyp = AD_DRIN;
 			attk->damn = 1;
-			attk->damd = 6;
+			attk->damd = 5;
 			special = TRUE;
 		}
 		if (template == MAD_TEMPLATE && !is_null_attk(attk) && attk->adtyp != AD_DISN && attk->adtyp != AD_SURY){
@@ -1071,7 +1450,7 @@ int template;
 			attk->damd += 4;
 		}
 		if (template == FALLEN_TEMPLATE && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -1082,7 +1461,7 @@ int template;
 			special = TRUE;
 		}
 		if (template == MOLY_TEMPLATE && (
-			end_insert_okay
+			end_insert_okay(special)
 			))
 		{
 			maybe_insert();
@@ -1160,6 +1539,9 @@ int mtyp;
 	case CRANIUM_RAT:
 		/* is a rodent */
 		return is_rat(ptr);
+	case PSURLON:
+		/* is a basic worm */
+		return is_basic_worm(ptr);
 	case MISTWEAVER:
 		/* could be a worshipper of the Goat */
 		return !(nonliving(ptr) || is_whirly(ptr) || noncorporeal(ptr));
@@ -1180,6 +1562,9 @@ int mtyp;
 		return is_minion(ptr);
 	case MOLY_TEMPLATE:
 		return is_cha_demon(ptr);
+	case CORDYCEPS:
+	case SPORE_ZOMBIE:
+		return can_undead(ptr);
 	}
 	/* default fall through -- allow all */
 	return TRUE;
@@ -2167,7 +2552,7 @@ struct obj *obj;		/* aatyp == AT_WEAP, AT_SPIT */
 	    o = (mdef == &youmonst) ? invent : mdef->minvent;
 	    for ( ; o; o = o->nobj){
 			if ((o->owornmask & W_ARMH) &&
-				(o->otyp == find_vhelm() || o->otyp == CRYSTAL_HELM || o->otyp == PLASTEEL_HELM || o->otyp == PONTIFF_S_CROWN || o->otyp == FACELESS_HELM)
+				(o->otyp == find_vhelm() || o->otyp == CRYSTAL_HELM || o->otyp == PLASTEEL_HELM || o->otyp == PONTIFF_S_CROWN || o->otyp == FACELESS_HELM || (o->otyp == IMPERIAL_ELVEN_HELM && check_imp_mod(o, IEA_BLIND_RES)))
 			) return FALSE;
 			if ((o->owornmask & W_ARMC) &&
 				(o->otyp == WHITE_FACELESS_ROBE
@@ -2267,7 +2652,7 @@ struct monst * mtmp;
 		return TRUE;
 	/* or if wearing the Grappler's Grasp */
 	struct obj * gloves = ((mtmp == &youmonst) ? uarmg : which_armor(mtmp, W_ARMG));
-	if (gloves && gloves->oartifact == ART_GRAPPLER_S_GRASP)
+	if (gloves && (gloves->oartifact == ART_GRAPPLER_S_GRASP || (gloves->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(gloves, IEA_STRANGLE))))
 		return TRUE;
 
 	return FALSE;
@@ -2279,21 +2664,54 @@ num_horns(ptr)
 struct permonst *ptr;
 {
     switch (monsndx(ptr)) {
+	case PM_DRACAE_ELADRIN:
+	case PM_FIERNA:
+	case PM_GRAZ_ZT:
+	return 6;
+	case PM_TRICERATOPS:
+	return 3;
+	case PM_LAMB:
+	case PM_ROTHE:
+	case PM_SHEEP:
+	case PM_DIRE_SHEEP:
     case PM_HORNED_DEVIL:	/* ? "more than one" */
     case PM_MINOTAUR:
-    case PM_ASMODEUS:
+    case PM_MINOTAUR_PRIESTESS:
+    case PM_SMALL_GOAT_SPAWN:
+    case PM_GOAT_SPAWN:
+    case PM_GIANT_GOAT_SPAWN:
+    case PM_BLESSED:
+    case PM_BAPHOMET:
+    case PM_MALCANTHET:
+    case PM_ORCUS:
     case PM_BALROG:
+    case PM_DURIN_S_BANE:
+    case PM_LUNGORTHIN:
     case PM_LEGION_DEVIL_GRUNT:
     case PM_LEGION_DEVIL_SOLDIER:
     case PM_LEGION_DEVIL_SERGEANT:
     case PM_LEGION_DEVIL_CAPTAIN:
     case PM_GOOD_NEIGHBOR:
+    case PM_PIT_FIEND:
+    case PM_NESSIAN_PIT_FIEND:
+    case PM_BAEL:
+    case PM_DISPATER:
+    case PM_MAMMON:
+    case PM_GREEN_PIT_FIEND:
+    case PM_BELIAL:
+    case PM_MOLEK:
+    case PM_MEPHISTOPHELES:
+    case PM_BAALPHEGOR:
+    case PM_ASMODEUS:
+    case PM_VERIER:
     case PM_GLASYA:
 	return 2;
     case PM_WHITE_UNICORN:
     case PM_GRAY_UNICORN:
     case PM_BLACK_UNICORN:
+    case PM_NIGHTMARE:
     case PM_KI_RIN:
+    case PM_ANCIENT_OF_CORRUPTION:
 	return 1;
     default:
 	break;
@@ -2610,6 +3028,9 @@ static const short grownups[][2] = {
 	{PM_OMEGA_METROID, PM_METROID_QUEEN},
 	{PM_VAMPIRE, PM_VAMPIRE_LORD}, {PM_VAMPIRE, PM_VAMPIRE_LADY}, {PM_BAT, PM_GIANT_BAT},
 	{PM_GIANT_BAT, PM_BATTLE_BAT}, {PM_BATTLE_BAT, PM_WARBAT},
+	{PM_PLAINS_CENTAUR, PM_CENTAUR_CHIEFTAIN},
+	{PM_FOREST_CENTAUR, PM_CENTAUR_CHIEFTAIN},
+	{PM_MOUNTAIN_CENTAUR, PM_CENTAUR_CHIEFTAIN},
 	{PM_BABY_GRAY_DRAGON, PM_GRAY_DRAGON},
 	{PM_BABY_SILVER_DRAGON, PM_SILVER_DRAGON},
 	{PM_BABY_DEEP_DRAGON, PM_DEEP_DRAGON},
@@ -2630,6 +3051,7 @@ static const short grownups[][2] = {
 	{PM_BABY_LONG_WORM, PM_LONG_WORM},
 	{PM_BABY_PURPLE_WORM, PM_PURPLE_WORM},
 	{PM_BABY_CROCODILE, PM_CROCODILE},
+	{PM_CHUUL, PM_ELDER_CHUUL},
 	{PM_BABY_CAVE_LIZARD,PM_SMALL_CAVE_LIZARD}, {PM_SMALL_CAVE_LIZARD, PM_CAVE_LIZARD}, {PM_CAVE_LIZARD, PM_LARGE_CAVE_LIZARD},
 	{PM_SOLDIER, PM_SERGEANT}, {PM_SERGEANT, PM_LIEUTENANT}, {PM_LIEUTENANT, PM_CAPTAIN},
 	{PM_MYRMIDON_HOPLITE, PM_MYRMIDON_LOCHIAS}, {PM_MYRMIDON_LOCHIAS, PM_MYRMIDON_YPOLOCHAGOS}, 
@@ -2646,6 +3068,7 @@ static const short grownups[][2] = {
 	{PM_ACOLYTE, PM_PRIESTESS},
 	{PM_SECRET_WHISPERER, PM_TRUTH_SEER}, {PM_TRUTH_SEER, PM_DREAM_EATER}, {PM_DREAM_EATER, PM_VEIL_RENDER},
 	{PM_APPRENTICE, PM_WIZARD},
+	{PM_VALKYRIE, PM_AWAKENED_VALKYRIE}, {PM_AWAKENED_VALKYRIE, PM_TRANSCENDENT_VALKYRIE},
 	{PM_DUNGEON_FERN_SPROUT, PM_DUNGEON_FERN},
 	{PM_SWAMP_FERN_SPROUT, PM_SWAMP_FERN},
 	{PM_BURNING_FERN_SPROUT, PM_BURNING_FERN},
@@ -2846,6 +3269,9 @@ struct permonst *ptr;
 		if(ptr->mlevel < ptr->mattk[i].lev_req)
 			continue;
 
+		if(ptr->mattk[i].ins_req > 0)
+			continue;
+
 		tmp2 = ptr->mattk[i].aatyp;
 		n += (tmp2 > 0);
 		n += (tmp2 == AT_MAGC || tmp2 == AT_MMGC ||
@@ -2873,6 +3299,9 @@ struct permonst *ptr;
 	for (i = 0; i < NATTK; i++) {
 
 		if(ptr->mlevel < ptr->mattk[i].lev_req)
+			continue;
+
+		if(ptr->mattk[i].ins_req > 0)
 			continue;
 
 		tmp2 = ptr->mattk[i].adtyp;
@@ -2923,12 +3352,12 @@ struct monst *mon;
 	struct obj *weap = MON_WEP(mon);
 	struct obj *xweap = MON_SWEP(mon);
 	
-	if(gloves && gloves->otyp == GAUNTLETS_OF_POWER)
+	if(gloves && (gloves->otyp == GAUNTLETS_OF_POWER || (gloves->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(gloves, IEA_GOPOWER))))
 		return 25L;
 	//else
 	if(weap){
 		if(weap->oartifact == ART_SCEPTRE_OF_MIGHT
-		|| (weap->oartifact == ART_PEN_OF_THE_VOID && weap->ovar1&SEAL_YMIR && mvitals[PM_ACERERAK].died > 0)
+		|| (weap->oartifact == ART_PEN_OF_THE_VOID && weap->ovar1_seals&SEAL_YMIR && mvitals[PM_ACERERAK].died > 0)
 		|| weap->oartifact == ART_STORMBRINGER
 		|| weap->oartifact == ART_OGRESMASHER
 		)

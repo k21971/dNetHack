@@ -124,19 +124,16 @@ static struct Bool_Opt
 	{"hilite_pet",    &iflags.wc_hilite_pet, TRUE, SET_IN_GAME},	/*WC*/
 #ifdef WIN32CON
 	{"hilite_peaceful",    &iflags.wc_hilite_peaceful, FALSE, SET_IN_GAME},	/*WC*/
-	{"hilite_zombie",    &iflags.wc_hilite_zombies, FALSE, SET_IN_GAME},	/*WC*/
-	{"zombies_as_Z",    &iflags.wc_zombie_z, TRUE, SET_IN_GAME},	/*WC*/
 	{"hilite_detected",    &iflags.wc_hilite_detected, FALSE, SET_IN_GAME},	/*WC*/
 	{"use_inverse",   &iflags.wc_inverse, TRUE, SET_IN_GAME},		/*WC*/
 #else
 	{"hilite_peaceful",    &iflags.wc_hilite_peaceful, TRUE, SET_IN_GAME},	/*WC*/
-	{"hilite_zombie",    &iflags.wc_hilite_zombies, TRUE, SET_IN_GAME},	/*WC*/
-	{"zombies_as_Z",    &iflags.wc_zombie_z, FALSE, SET_IN_GAME},	/*WC*/
 	{"hilite_detected",    &iflags.wc_hilite_detected, TRUE, SET_IN_GAME},	/*WC*/
 	{"use_inverse",   &iflags.wc_inverse, FALSE, SET_IN_GAME},		/*WC*/
 #endif
 	{"hilite_hidden_stairs",    &iflags.hilite_hidden_stairs, TRUE, SET_IN_GAME},	/*WC*/
 	{"hilite_obj_piles",    &iflags.hilite_obj_piles, FALSE, SET_IN_GAME},	/*WC*/
+	{"default_template_hilite", &iflags.default_template_hilite, TRUE, SET_IN_FILE },
 	{"dnethack_start_text",    &iflags.dnethack_start_text, TRUE, DISP_IN_GAME},
 	{"artifact_descriptors",    &iflags.artifact_descriptors, FALSE, SET_IN_GAME},
 	{"force_artifact_names",    &iflags.force_artifact_names, TRUE, SET_IN_GAME},
@@ -771,7 +768,63 @@ initoptions()
 	} else
 #endif
 		read_config_file((char *)0);
+	if(iflags.default_template_hilite){
+		if(!(iflags.monstertemplate[ZOMBIFIED-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[ZOMBIFIED-1].bg = CLR_GREEN;
+			iflags.monstertemplate[ZOMBIFIED-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
 
+		if(!(iflags.monstertemplate[SKELIFIED-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[SKELIFIED-1].bg = CLR_GREEN;
+			iflags.monstertemplate[SKELIFIED-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[CRYSTALFIED-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[CRYSTALFIED-1].bg = CLR_GREEN;
+			iflags.monstertemplate[CRYSTALFIED-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[FRACTURED-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[FRACTURED-1].bg = CLR_GREEN;
+			iflags.monstertemplate[FRACTURED-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[TOMB_HERD-1].set&MONSTERTEMPLATE_FOREGROUND)){
+			iflags.monstertemplate[TOMB_HERD-1].fg = CLR_GRAY;
+		}
+		if(!(iflags.monstertemplate[TOMB_HERD-1].set&MONSTERTEMPLATE_SYMBOL)){
+			iflags.monstertemplate[TOMB_HERD-1].symbol = '`';
+		}
+		iflags.monstertemplate[TOMB_HERD-1].set |= MONSTERTEMPLATE_FOREGROUND|MONSTERTEMPLATE_SYMBOL;
+
+		if(!(iflags.monstertemplate[YELLOW_TEMPLATE-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[YELLOW_TEMPLATE-1].bg = CLR_GREEN;
+			iflags.monstertemplate[YELLOW_TEMPLATE-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[DREAM_LEECH-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[DREAM_LEECH-1].bg = CLR_GREEN;
+			iflags.monstertemplate[DREAM_LEECH-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[MOLY_TEMPLATE-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[MOLY_TEMPLATE-1].bg = CLR_GREEN;
+			iflags.monstertemplate[MOLY_TEMPLATE-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[SPORE_ZOMBIE-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[SPORE_ZOMBIE-1].bg = CLR_GREEN;
+			iflags.monstertemplate[SPORE_ZOMBIE-1].set |= MONSTERTEMPLATE_BACKGROUND;
+		}
+
+		if(!(iflags.monstertemplate[CORDYCEPS-1].set&MONSTERTEMPLATE_SYMBOL)){
+			iflags.monstertemplate[CORDYCEPS-1].symbol = 'F';
+		}
+		if(!(iflags.monstertemplate[CORDYCEPS-1].set&MONSTERTEMPLATE_BACKGROUND)){
+			iflags.monstertemplate[CORDYCEPS-1].bg = CLR_GREEN;
+		}
+		iflags.monstertemplate[CORDYCEPS-1].set |= MONSTERTEMPLATE_BACKGROUND|MONSTERTEMPLATE_SYMBOL;
+	}
 	(void)fruitadd(pl_fruit);
 	/* Remove "slime mold" from list of object names; this will	*/
 	/* prevent it from being wished unless it's actually present	*/
@@ -1497,6 +1550,130 @@ parse_monster_color(str)
     }
 }
 
+/* parse template:target:value and set corresponding in iflags */
+boolean
+parse_monster_template(str)
+char * str;
+{
+    int i, c = NO_COLOR, template;
+	char s;
+	int type = 0;
+    char *s_temp, *s_type, *s_val;
+    char buf[BUFSZ];
+
+    if (!str) return FALSE;
+
+    strncpy(buf, str, BUFSZ);
+	s_temp = buf;
+    s_type = strchr(s_temp, ':');
+    if (!s_type) return FALSE;
+	else s_type++;
+	s_val = strchr(s_type, ':');
+	if (!s_val) return FALSE;
+	else s_val++;
+
+    /* skip whitespace at start of strings */
+    while (*s_temp && isspace(*s_temp)) s_temp++;
+	while (*s_type && isspace(*s_type)) s_type++;
+	while (*s_val  && isspace(*s_val )) s_val++;
+
+	/* determine template */
+	if (strstri(s_temp, "zombi") == s_temp)
+		template = ZOMBIFIED;
+	else if (strstri(s_temp, "skel") == s_temp)
+		template = SKELIFIED;
+	else if ((strstri(s_temp, "cryst") == s_temp) || strstri(s_temp, "vitri") == s_temp)
+		template = CRYSTALFIED;
+	else if ((strstri(s_temp, "fracture") == s_temp) || (strstri(s_temp, "witness") == s_temp))
+		template = FRACTURED;
+	else if (strstri(s_temp, "vampir") == s_temp)
+		template = VAMPIRIC;
+	else if ((strstri(s_temp, "illuminated") == s_temp) || (strstri(s_temp, "shining") == s_temp))
+		template = ILLUMINATED;
+	else if (strstri(s_temp, "pseudo") == s_temp)
+		template = PSEUDONATURAL;
+	else if (strstri(s_temp, "tomb") == s_temp)
+		template = TOMB_HERD;
+	else if (strstri(s_temp, "yith") == s_temp)
+		template = YITH;
+	else if (strstri(s_temp, "crani") == s_temp)
+		template = CRANIUM_RAT;
+	else if (strstri(s_temp, "psurlon") == s_temp)
+		template = PSURLON;
+	else if (strstri(s_temp, "constellation") == s_temp)
+		template = CONSTELLATION;
+	else if (strstri(s_temp, "mistweaver") == s_temp)
+		template = MISTWEAVER;
+	else if (strstri(s_temp, "deloused") == s_temp)
+		template = DELOUSED;
+	else if (strstri(s_temp, "black web") == s_temp)
+		template = M_BLACK_WEB;
+	else if (strstri(s_temp, "great web") == s_temp)
+		template = M_GREAT_WEB;
+	else if (strstri(s_temp, "slime") == s_temp)
+		template = SLIME_REMNANT;
+	else if (strstri(s_temp, "yellow") == s_temp)
+		template = YELLOW_TEMPLATE;
+	else if (strstri(s_temp, "dream") == s_temp)
+		template = DREAM_LEECH;
+	else if (strstri(s_temp, "mad") == s_temp)
+		template = MAD_TEMPLATE;
+	else if (strstri(s_temp, "fallen") == s_temp)
+		template = FALLEN_TEMPLATE;
+	else if (strstri(s_temp, "world") == s_temp)
+		template = WORLD_SHAPER;
+	else if (strstri(s_temp, "mindless") == s_temp)
+		template = MINDLESS;
+	else if (strstri(s_temp, "poison") == s_temp)
+		template = POISON_TEMPLATE;
+	else if (strstri(s_temp, "moly") == s_temp)
+		template = MOLY_TEMPLATE;
+	else
+		return FALSE;
+
+	/* determine type */
+	if ((strstri(s_type, "fg") == s_type) ||
+		(strstri(s_type, "fore") == s_type))
+		type = MONSTERTEMPLATE_FOREGROUND;
+	else if ((strstri(s_type, "bg") == s_type) ||
+			(strstri(s_type, "back") == s_type))
+		type = MONSTERTEMPLATE_BACKGROUND;
+	else if (strstri(s_type, "sym") == s_type)
+		type = MONSTERTEMPLATE_SYMBOL;
+	else
+		return FALSE;
+    /* determine color, if type is forground or background */
+	if (type == MONSTERTEMPLATE_BACKGROUND || type == MONSTERTEMPLATE_FOREGROUND) {
+		for (i = 0; i < SIZE(colornames); i++)
+		if (strstri(s_val, colornames[i].name) == s_val) {
+			c = colornames[i].color;
+			break;
+		}
+		if ((i == SIZE(colornames)) && (*s_val >= '0' && *s_val <='9'))
+			c = atoi(s_val);
+		if (c > 15) return FALSE;
+	}
+	/* read symbol, if type is symbol */
+	else {
+		if (!(*s_val)) return FALSE;
+		s = *s_val;
+	}
+	switch(type) {
+		case MONSTERTEMPLATE_FOREGROUND:
+			iflags.monstertemplate[template - 1].fg = c;
+			break;
+		case MONSTERTEMPLATE_BACKGROUND:
+			iflags.monstertemplate[template - 1].bg = c;
+			break;
+		case MONSTERTEMPLATE_SYMBOL:
+			iflags.monstertemplate[template - 1].symbol = s;
+			break;
+	}
+	iflags.monstertemplate[template - 1].set |= type;
+
+	return TRUE;
+}
+
 /** Split up a string that matches name:value or 'name':value and
  * return name and value separately. */
 static boolean
@@ -1816,6 +1993,8 @@ boolean tinitial, tfrom_file;
 				ADD_REMOVE_SECTION(POKEDEX_SHOW_ATTACKS);
 			else if (!strncmpi(op, "summary",    l= 7))
 				ADD_REMOVE_SECTION(POKEDEX_SHOW_CRITICAL);
+			else if (!strncmpi(op, "wards",    l= 5))
+				ADD_REMOVE_SECTION(POKEDEX_SHOW_WARDS);
 			else
 				badoption(opts);
 #undef ADD_REMOVE_SECTION
