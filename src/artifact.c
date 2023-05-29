@@ -4292,6 +4292,10 @@ int * truedmgptr;
 			bmod = (otmp->wrathdata&0x3L)+1;
 			*plusdmgptr += bmod*basedmg / 4;
 		}
+		if(magr){
+			bmod = min_ints(4, (*hpmax(magr)-*hp(magr)+mlev(magr))*4/(*hpmax(magr)));
+			*plusdmgptr += bmod*basedmg / 4;
+		}
 	}
 	if(youdef ? (u.ualign.type != A_CHAOTIC) : (sgn(mdef->data->maligntyp) >= 0)){
 		if(check_oprop(otmp, OPROP_ANARW))
@@ -5056,6 +5060,43 @@ boolean printmessages; /* print generic elemental damage messages */
 		}
 		if(youdef ? (u.ualign.type != A_LAWFUL) : (sgn(mdef->data->maligntyp) <= 0)){
 			*truedmgptr += d(2, 7);
+		}
+	}
+	//Magic-disrupting focus gems in lightsabers
+	// Antimagic rifts can cancel monsters with AD_SPEL magic attacks (or PCs who cast with Int)
+	// Catapsi vorticies can cancel monsters with AD_PSON magic attacks (or PCs who cast with Cha)
+	if(dieroll <= 2 && is_lightsaber(otmp) && litsaber(otmp) && otmp->cobj){
+		if(otmp->cobj->otyp == CATAPSI_VORTEX){
+			if(youdef){
+				if(base_casting_stat() == A_CHA){
+					cancel_monst(mdef, otmp->cobj, youagr, FALSE, FALSE, 0);
+				}
+			}
+			else {
+				struct attack * aptr;
+				aptr = attacktype_fordmg(mdef->data, AT_MAGC, AD_PSON);
+				if(!aptr)
+					aptr = attacktype_fordmg(mdef->data, AT_MMGC, AD_PSON);
+				if(aptr){
+					cancel_monst(mdef, otmp->cobj, youagr, FALSE, FALSE, 0);
+				}
+			}
+		}
+		else if(otmp->cobj->otyp == ANTIMAGIC_RIFT){
+			if(youdef){
+				if(base_casting_stat() == A_INT){
+					cancel_monst(mdef, otmp->cobj, youagr, FALSE, FALSE, 0);
+				}
+			}
+			else {
+				struct attack * aptr;
+				aptr = attacktype_fordmg(mdef->data, AT_MAGC, AD_SPEL);
+				if(!aptr)
+					aptr = attacktype_fordmg(mdef->data, AT_MMGC, AD_SPEL);
+				if(aptr){
+					cancel_monst(mdef, otmp->cobj, youagr, FALSE, FALSE, 0);
+				}
+			}
 		}
 	}
 
