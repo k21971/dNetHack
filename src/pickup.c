@@ -955,6 +955,7 @@ int how;			/* type of query */
 	    pack++;
 	    if (invlet >= 'u') {
 		impossible("query_category: too many categories");
+		destroy_nhwindow(win);
 		return 0;
 	    }
 	} while (*pack);
@@ -1868,7 +1869,7 @@ gotit:
 			else {
 				pline("A broken-off fang is embedded in %s chest. It seems to have pierced %s heart!", s_suffix(mon_nam(mtmp)), mhis(mtmp));
 				if(!helpless_still(mtmp) && !TimeStop){
-					pline("%s moves to quickly for you to grasp the fang.", Monnam(mtmp));
+					pline("%s moves too quickly for you to grasp the fang.", Monnam(mtmp));
 				}
 				else if(yn("Attempt to remove the fang?")=='y'){
 					/* Don't really want the solution to be wages of sloth */
@@ -2200,15 +2201,18 @@ register struct obj *obj;
 		crystal_skull_overweight(current_container, obj)
 		|| obj->otyp == TREPHINATION_KIT
 		|| ensouled_item(obj)
+		|| get_ox(obj, OX_ESUM)
 		|| duplicate_item(current_container, obj)
 		)
 	) {
 		pline("%s doesn't fit in the skull!", The(xname(obj)));
 		return 0;
-	} else if (is_asc_obj(obj)) {
+	} else if (is_asc_obj(obj) || obj->oartifact == ART_ESSCOOAHLIPBOOURRR) {
 	/* Prohibit Amulets in containers; if you allow it, monsters can't
 	 * steal them.  It also becomes a pain to check to see if someone
 	 * has the Amulet.  Ditto for the Candelabrum, the Bell and the Book.
+	 * 
+	 * Esscoo can suck up BoH and wands of cancellation, causing bag-splosions
 	 */
 	    pline("%s cannot be confined in such trappings.", The(xname(obj)));
 	    return 0;
@@ -2322,7 +2326,7 @@ register struct obj *obj;
 		if (!floor_container)
 			useup(current_container);
 		else if (obj_here(current_container, u.ux, u.uy))
-			useupf(current_container, obj->quan);
+			useupf(current_container, current_container->quan);
 		else
 			panic("in_container:  bag not found.");
 
@@ -2578,19 +2582,24 @@ boolean past;
 	if(urole.neminum == PM_BLIBDOOLPOOLP__GRAVEN_INTO_FLESH){
 		int drow_plague_types[] = {
 			PM_DWARF_QUEEN, PM_DWARF_KING, 
+			PM_DWARF_SMITH,
 			PM_ORC_CAPTAIN, PM_JUSTICE_ARCHON, PM_SHIELD_ARCHON, PM_SWORD_ARCHON,
 			PM_MOVANIC_DEVA, PM_MONADIC_DEVA, PM_ASTRAL_DEVA, 
 			PM_LILLEND, PM_COURE_ELADRIN, PM_NOVIERE_ELADRIN, PM_BRALANI_ELADRIN, PM_FIRRE_ELADRIN, PM_SHIERE_ELADRIN,
 			PM_SPROW, PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR,
+			PM_SHADOWSMITH,
 			PM_NURSE,
 			PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+			PM_TREESINGER, PM_MITHRIL_SMITH,
 			PM_ANULO, PM_ANULO,
 			PM_DROW_CAPTAIN, PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_MATRON,
 			PM_DROW_CAPTAIN, PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_MATRON, PM_UNEARTHLY_DROW, PM_HEDROW_BLADEMASTER,
 			PM_HEDROW_MASTER_WIZARD, PM_STJARNA_ALFR, PM_PEN_A_MENDICANT, PM_MENDICANT_SPROW, PM_MENDICANT_DRIDER,
+			PM_SHADOWSMITH,
 			PM_YOCHLOL, PM_LILITU, PM_MARILITH,
 			PM_ALLIANCE_VANGUARD, PM_PAGE, PM_DWARF_WARRIOR,
-			PM_BARBARIAN, PM_HALF_DRAGON, PM_BARD, PM_HEALER, PM_RANGER, PM_VALKYRIE
+			PM_BARBARIAN, PM_HALF_DRAGON, PM_BARD, PM_HEALER, PM_RANGER, PM_VALKYRIE,
+			PM_HUMAN_SMITH
 		};
 
 		victim = makemon(&mons[ROLL_FROM(drow_plague_types)], box->ox, box->oy, MM_ADJACENTOK);
@@ -2598,6 +2607,7 @@ boolean past;
 	else {
 		int plague_types[] = {
 			PM_DWARF_LORD, PM_DWARF_CLERIC, PM_DWARF_QUEEN, PM_DWARF_KING, 
+			PM_DWARF_SMITH,
 			PM_DEEP_ONE, PM_WINGED_KOBOLD,
 			PM_DEMINYMPH, PM_THRIAE, 
 			PM_ORC_CAPTAIN, PM_JUSTICE_ARCHON, PM_SHIELD_ARCHON, PM_SWORD_ARCHON,
@@ -2611,6 +2621,7 @@ boolean past;
 			PM_VAMPIRE, PM_VAMPIRE_LORD, PM_VAMPIRE_LADY,
 			PM_NURSE, PM_WATCH_CAPTAIN, 
 			PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+			PM_TREESINGER, PM_MITHRIL_SMITH,
 			PM_DROW_MATRON,
 			PM_HORNED_DEVIL, PM_SUCCUBUS, PM_INCUBUS, PM_ERINYS, PM_VROCK, PM_BARBED_DEVIL,
 			PM_LILITU,
@@ -2671,19 +2682,24 @@ struct obj *box;
 	if(urole.neminum == PM_BLIBDOOLPOOLP__GRAVEN_INTO_FLESH){
 		int drow_plague_types[] = {
 			PM_DWARF_QUEEN, PM_DWARF_KING, 
+			PM_DWARF_SMITH,
 			PM_ORC_CAPTAIN, PM_JUSTICE_ARCHON, PM_SHIELD_ARCHON, PM_SWORD_ARCHON,
 			PM_MOVANIC_DEVA, PM_MONADIC_DEVA, PM_ASTRAL_DEVA, 
 			PM_LILLEND, PM_COURE_ELADRIN, PM_NOVIERE_ELADRIN, PM_BRALANI_ELADRIN, PM_FIRRE_ELADRIN, PM_SHIERE_ELADRIN,
 			PM_SPROW, PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR,
+			PM_SHADOWSMITH,
 			PM_NURSE,
 			PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+			PM_TREESINGER, PM_MITHRIL_SMITH,
 			PM_ANULO, PM_ANULO,
 			PM_DROW_CAPTAIN, PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_MATRON,
 			PM_DROW_CAPTAIN, PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_MATRON, PM_UNEARTHLY_DROW, PM_HEDROW_BLADEMASTER,
 			PM_HEDROW_MASTER_WIZARD, PM_STJARNA_ALFR, PM_PEN_A_MENDICANT, PM_MENDICANT_SPROW, PM_MENDICANT_DRIDER,
+			PM_SHADOWSMITH,
 			PM_YOCHLOL, PM_LILITU, PM_MARILITH,
 			PM_ALLIANCE_VANGUARD, PM_PAGE, PM_DWARF_WARRIOR,
-			PM_BARBARIAN, PM_HALF_DRAGON, PM_BARD, PM_HEALER, PM_RANGER, PM_VALKYRIE
+			PM_BARBARIAN, PM_HALF_DRAGON, PM_BARD, PM_HEALER, PM_RANGER, PM_VALKYRIE,
+			PM_HUMAN_SMITH
 		};
 
 		victim = makemon(&mons[ROLL_FROM(drow_plague_types)], box->ox, box->oy, MM_ADJACENTOK);
@@ -2691,6 +2707,7 @@ struct obj *box;
 	else {
 		int plague_types[] = {
 			PM_DWARF_LORD, PM_DWARF_CLERIC, PM_DWARF_QUEEN, PM_DWARF_KING, 
+			PM_DWARF_SMITH,
 			PM_DEEP_ONE, PM_WINGED_KOBOLD,
 			PM_DEMINYMPH, PM_THRIAE, 
 			PM_ORC_CAPTAIN, PM_JUSTICE_ARCHON, PM_SHIELD_ARCHON, PM_SWORD_ARCHON,
@@ -2704,6 +2721,7 @@ struct obj *box;
 			PM_VAMPIRE, PM_VAMPIRE_LORD, PM_VAMPIRE_LADY,
 			PM_NURSE, PM_WATCH_CAPTAIN, 
 			PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+			PM_TREESINGER, PM_MITHRIL_SMITH,
 			PM_DROW_MATRON,
 			PM_HORNED_DEVIL, PM_SUCCUBUS, PM_INCUBUS, PM_ERINYS, PM_VROCK, PM_BARBED_DEVIL,
 			PM_LILITU,
@@ -2890,6 +2908,17 @@ boolean past;
 	struct obj *otmp;
 	for(otmp = box->cobj; otmp; otmp = otmp->nobj)
 		knows_object(otmp->otyp);
+
+	if (flags.descendant){
+		for(otmp = box->cobj; otmp; otmp = otmp->nobj){
+			if(otmp->oartifact == u.inherited){
+				expert_weapon_skill(weapon_type(otmp));
+				discover_artifact(u.inherited);
+				break;
+			}
+		}
+	}
+
 	switch(urace.malenum){
 		default:
 		case PM_HALF_DRAGON:
@@ -3032,6 +3061,7 @@ boolean past;
 			knows_object(find_signet_ring());
 		break;
 		case PM_ORC:
+			expert_weapon_skill(P_BOW);
 			expert_weapon_skill(P_SCIMITAR);
 			skilled_weapon_skill(P_TWO_HANDED_SWORD);
 			skilled_weapon_skill(P_RIDING);
@@ -3047,6 +3077,20 @@ boolean past;
 			knows_object(ORCISH_SHIELD);
 			knows_object(URUK_HAI_SHIELD);
 			knows_object(ORCISH_CLOAK);
+
+			knows_object(ELVEN_SHORT_SWORD);
+			knows_object(ELVEN_ARROW);
+			knows_object(ELVEN_BOW);
+			knows_object(ELVEN_SPEAR);
+			knows_object(ELVEN_DAGGER);
+			knows_object(ELVEN_BROADSWORD);
+			knows_object(ELVEN_MACE);
+			knows_object(ELVEN_LANCE);
+			knows_object(ELVEN_MITHRIL_COAT);
+			knows_object(ELVEN_HELM);
+			knows_object(ELVEN_SHIELD);
+			knows_object(ELVEN_BOOTS);
+			knows_object(ELVEN_CLOAK);
 		break;
 		case PM_YUKI_ONNA:
 			expert_weapon_skill(P_LONG_SWORD);

@@ -225,7 +225,7 @@ const char *verb;
 		newsym(x,y);
 		return TRUE;
 	} else if (is_lava(x, y)) {
-		return fire_damage(obj, FALSE, FALSE, x, y);
+		return lava_damage(obj, x, y);
 	} else if (is_pool(x, y, TRUE)) {
 		/* Reasonably bulky objects (arbitrary) splash when dropped.
 		 * If you're floating above the water even small things make noise.
@@ -1429,99 +1429,109 @@ remake:
 	    u_on_newpos(ttrap->tx, ttrap->ty);
 	} else if (at_stairs && !In_endgame(&u.uz)) {
 	    if (up) {
-		if (at_ladder) {
-		    u_on_newpos(xdnladder, ydnladder);
-		} else {
-		    if (newdungeon) {
-			if (Is_stronghold(&u.uz)) {
-			    register xchar x, y;
+			if (at_ladder) {
+				dnladder.u_traversed = TRUE;
+				u_on_newpos(xdnladder, ydnladder);
+			} else {
+				if (newdungeon) {
+					sstairs.u_traversed = TRUE;
+					if (Is_stronghold(&u.uz)) {
+					register xchar x, y;
 
-			    do {
-				x = (COLNO - 2 - rnd(5));
-				y = rn1(ROWNO - 4, 3);
-			    } while(occupied(x, y) ||
-				    IS_WALL(levl[x][y].typ));
-			    u_on_newpos(x, y);
-			} else u_on_sstairs();
-		    } else u_on_dnstairs();
-		}
-		/* Remove bug which crashes with levitation/punishment  KAA */
-		if (Punished && !Levitation) {
-			pline("With great effort you climb the %s.",
-				at_ladder ? "ladder" : "stairs");
-		} else if (at_ladder)
-		    You("climb up the ladder.");
-	    } else {	/* down */
-		if (at_ladder) {
-		    u_on_newpos(xupladder, yupladder);
-		} else {
-		    if (newdungeon) u_on_sstairs();
-		    else u_on_upstairs();
-		}
-		if (u.dz && Flying)
-		    You("fly down along the %s.",
-			at_ladder ? "ladder" : "stairs");
-		else if (u.dz &&
-#ifdef CONVICT
-		    (near_capacity() > UNENCUMBERED || (Punished &&
-		    ((uwep != uball) || ((P_SKILL(P_FLAIL) < P_BASIC))
-            || !Role_if(PM_CONVICT)))
-		     || Fumbling)
-#else
-		    (near_capacity() > UNENCUMBERED || Punished || Fumbling)
-#endif /* CONVICT */
-		) {
-		    You("fall down the %s.", at_ladder ? "ladder" : "stairs");
-		    if (Punished) {
-			drag_down();
-			ballrelease(FALSE);
-		    }
-			if(((uwep && is_lightsaber(uwep) && litsaber(uwep))) ||
-				(uswapwep && is_lightsaber(uswapwep) && litsaber(uswapwep) && u.twoweap)
-			){
-				boolean mainsaber = (uwep && is_lightsaber(uwep) && litsaber(uwep));
-				boolean mainsaber_locked = (uwep && (uwep->oartifact == ART_INFINITY_S_MIRRORED_ARC || uwep->otyp == KAMEREL_VAJRA));
-				boolean secsaber = (uswapwep && is_lightsaber(uswapwep) && litsaber(uswapwep) && u.twoweap);
-				boolean secsaber_locked = (uswapwep && (uswapwep->oartifact == ART_INFINITY_S_MIRRORED_ARC || uswapwep->otyp == KAMEREL_VAJRA));
-				if((mainsaber &&  mainsaber_locked)
-					|| (secsaber && secsaber_locked)
-				){
-					int lrole = rnl(20);
-					if(lrole+5 < ACURR(A_DEX)){
-						You("roll and dodge your tumbling energy sword%s.", (mainsaber && secsaber) ? "s" : "");
-					} else {
-						You("come into contact with your energy sword%s.", (mainsaber && secsaber && (lrole >= ACURR(A_DEX) || (mainsaber_locked && secsaber_locked))) ? "s" : "");
-						if(mainsaber && (mainsaber_locked || lrole >= ACURR(A_DEX)))
-							losehp(dmgval(uwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
-						if(secsaber && (secsaber_locked || lrole >= ACURR(A_DEX)))
-							losehp(dmgval(uswapwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
-					}
-					if(mainsaber && !mainsaber_locked)
-						lightsaber_deactivate(uwep, TRUE);
-					if(secsaber && !secsaber_locked)
-						lightsaber_deactivate(uswapwep, TRUE);
+					do {
+						x = (COLNO - 2 - rnd(5));
+						y = rn1(ROWNO - 4, 3);
+					} while(occupied(x, y) ||
+						IS_WALL(levl[x][y].typ));
+						u_on_newpos(x, y);
+					} else u_on_sstairs();
 				} else {
-					if(rnl(20) < ACURR(A_DEX)){
-						You("hurriedly deactivate your energy sword%s.", (mainsaber && secsaber) ? "s" : "");
-					} else {
-						You("come into contact with your energy sword%s.", (mainsaber && secsaber) ? "s" : "");
-						if(mainsaber) losehp(dmgval(uwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
-						if(secsaber) losehp(dmgval(uswapwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
-					}
-					if(mainsaber) lightsaber_deactivate(uwep, TRUE);
-					if(secsaber) lightsaber_deactivate(uswapwep, TRUE);
+					dnstair.u_traversed = TRUE;
+					u_on_dnstairs();
 				}
 			}
-#ifdef STEED
-		    /* falling off steed has its own losehp() call */
-		    if (u.usteed)
-			dismount_steed(DISMOUNT_FELL);
-		    else
-#endif
-			losehp(rnd(3), "falling downstairs", KILLED_BY);
-		    selftouch("Falling, you");
-		} else if (u.dz && at_ladder)
-		    You("climb down the ladder.");
+			/* Remove bug which crashes with levitation/punishment  KAA */
+			if (Punished && !Levitation) {
+				pline("With great effort you climb the %s.",
+				at_ladder ? "ladder" : "stairs");
+			} else if (at_ladder)
+				You("climb up the ladder.");
+	    } else {	/* down */
+			if (at_ladder) {
+				upladder.u_traversed = TRUE;
+				u_on_newpos(xupladder, yupladder);
+			} else {
+				if (newdungeon) {
+					sstairs.u_traversed = TRUE;
+					u_on_sstairs();
+				} else {
+					upstair.u_traversed = TRUE;
+					u_on_upstairs();
+				}
+			}
+			if (u.dz && Flying)
+				You("fly down along the %s.",
+				at_ladder ? "ladder" : "stairs");
+			else if (u.dz &&
+	#ifdef CONVICT
+				(near_capacity() > UNENCUMBERED || (Punished &&
+				((uwep != uball) || ((P_SKILL(P_FLAIL) < P_BASIC))
+				|| !Role_if(PM_CONVICT)))
+				 || Fumbling)
+	#else
+				(near_capacity() > UNENCUMBERED || Punished || Fumbling)
+	#endif /* CONVICT */
+			) {
+				You("fall down the %s.", at_ladder ? "ladder" : "stairs");
+				if (Punished) {
+				drag_down();
+				ballrelease(FALSE);
+				}
+				if(((uwep && is_lightsaber(uwep) && litsaber(uwep))) ||
+					(uswapwep && is_lightsaber(uswapwep) && litsaber(uswapwep) && u.twoweap)
+				){
+					boolean mainsaber = (uwep && is_lightsaber(uwep) && litsaber(uwep));
+					boolean mainsaber_locked = (uwep && (uwep->oartifact == ART_INFINITY_S_MIRRORED_ARC || uwep->otyp == KAMEREL_VAJRA));
+					boolean secsaber = (uswapwep && is_lightsaber(uswapwep) && litsaber(uswapwep) && u.twoweap);
+					boolean secsaber_locked = (uswapwep && (uswapwep->oartifact == ART_INFINITY_S_MIRRORED_ARC || uswapwep->otyp == KAMEREL_VAJRA));
+					if((mainsaber &&  mainsaber_locked)
+						|| (secsaber && secsaber_locked)
+					){
+						int lrole = rnl(20);
+						if(lrole+5 < ACURR(A_DEX)){
+							You("roll and dodge your tumbling energy sword%s.", (mainsaber && secsaber) ? "s" : "");
+						} else {
+							You("come into contact with your energy sword%s.", (mainsaber && secsaber && (lrole >= ACURR(A_DEX) || (mainsaber_locked && secsaber_locked))) ? "s" : "");
+							if(mainsaber && (mainsaber_locked || lrole >= ACURR(A_DEX)))
+								losehp(dmgval(uwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
+							if(secsaber && (secsaber_locked || lrole >= ACURR(A_DEX)))
+								losehp(dmgval(uswapwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
+						}
+						if(mainsaber && !mainsaber_locked)
+							lightsaber_deactivate(uwep, TRUE);
+						if(secsaber && !secsaber_locked)
+							lightsaber_deactivate(uswapwep, TRUE);
+					} else {
+						if(rnl(20) < ACURR(A_DEX)){
+							You("hurriedly deactivate your energy sword%s.", (mainsaber && secsaber) ? "s" : "");
+						} else {
+							You("come into contact with your energy sword%s.", (mainsaber && secsaber) ? "s" : "");
+							if(mainsaber) losehp(dmgval(uwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
+							if(secsaber) losehp(dmgval(uswapwep,&youmonst,0,&youmonst), "falling downstairs with a lit lightsaber", KILLED_BY);
+						}
+						if(mainsaber) lightsaber_deactivate(uwep, TRUE);
+						if(secsaber) lightsaber_deactivate(uswapwep, TRUE);
+					}
+				}
+				/* falling off steed has its own losehp() call */
+				if (u.usteed)
+					dismount_steed(DISMOUNT_FELL);
+				else
+					losehp(rnd(3), "falling downstairs", KILLED_BY);
+
+				selftouch("Falling, you");
+			} else if (u.dz && at_ladder)
+				You("climb down the ladder.");
 	    }
 	} else {	/* trap door or level_tele or In_endgame */
 misc_levelport:
@@ -1604,7 +1614,7 @@ misc_levelport:
 
 	if (level_info[new_ledger].flags & FORGOTTEN) {
 	    forget_map(100);	/* forget the map */
-	    forget_traps();		/* forget all traps too */
+	    // forget_traps();		/* forget all traps too */
 	    familiar = TRUE;
 	    level_info[new_ledger].flags &= ~FORGOTTEN;
 	}
@@ -2002,6 +2012,9 @@ int different;
 		if(mtmp->mpeaceful && !mtmp->mtame){
 			mtmp->mpeaceful = 0;
 		}
+		if(has_template(mtmp, SPORE_ZOMBIE) && Nightmare && u.umadness&MAD_SPORES && rn2(100) < Insanity){
+			mtmp->mpeaceful = TRUE;
+		}
 	}
 	if(different==REVIVE_YELLOW){
 		set_template(mtmp, YELLOW_TEMPLATE);
@@ -2022,6 +2035,10 @@ int different;
 		    else if (different==GROW_SLIME) {
 				Your("weapon goes slimy.");
 				pline("%s slips out of your grasp!", Monnam(mtmp));
+		    }
+		    else if (different==GROW_BBLOOM) {
+				Your("weapon sprouts flowers.");
+				pline("%s pushes out of your grasp!", Monnam(mtmp));
 		    }
 		    else if (different==REVIVE_ZOMBIE || different==REVIVE_YELLOW) {
 				pline_The("%s rises from the dead!", cname);
@@ -2046,6 +2063,9 @@ int different;
 		    else if (different==GROW_SLIME)
 				pline("%s leaks from a putrefying corpse!",
 				  Amonnam(mtmp));
+		    else if (different==GROW_BBLOOM)
+				pline("%s sprouts from a corpse!",
+				  Amonnam(mtmp));
 		    else if (different==REVIVE_ZOMBIE || different==REVIVE_YELLOW)
 				pline("%s rises from the dead!",
 				  Amonnam(mtmp));
@@ -2068,6 +2088,7 @@ int different;
 			      mon_nam(mcarry), different ? "a corpse" : an(cname),
 			      different==GROW_MOLD ? "goes moldy" : 
 			      different==GROW_SLIME ? "putrefies" : 
+			      different==GROW_BBLOOM ? "sprouts" : 
 			      different==REVIVE_ZOMBIE ? "rises from the dead" : 
 			      different==REVIVE_YELLOW ? "rises from the dead" : 
 			      different==REVIVE_SHADE ? "dissolves into shadow" : 
@@ -2212,10 +2233,19 @@ long timeout;
 	/* Turn the corpse into a mold corpse if molds are available */
 	oldtyp = body->corpsenm;
 
-	/* Weight towards non-motile fungi.
-	 */
-	//	fruitadd("slime mold");
-	pmtype = molds[rn2(SIZE(molds))];
+	struct monst *attchmon = 0;
+	if(get_ox(body, OX_EMON)) attchmon = EMON(body);
+	if(attchmon && attchmon->brainblooms){
+		pmtype = PM_BRAINBLOSSOM_PATCH;
+		rem_ox(body, OX_EMON);
+		attchmon = 0;
+	}
+	else {
+		/* Weight towards non-motile fungi.
+		 */
+		//	fruitadd("slime mold");
+		pmtype = molds[rn2(SIZE(molds))];
+	}
 
 	/* [ALI] Molds don't grow in adverse conditions.  If it ever
 	 * becomes possible for molds to grow in containers we should
@@ -2251,7 +2281,7 @@ long timeout;
 			if (body->where == OBJ_INVENT)
 				body->quan++;
 			oldquan = body->quan;
-			if (revive_corpse(body, GROW_MOLD)) {
+			if (revive_corpse(body, (pmtype == PM_BRAINBLOSSOM_PATCH) ? GROW_BBLOOM : GROW_MOLD)) {
 				if (oldquan != 1) {		/* Corpse still valid */
 					body->corpsenm = oldtyp;
 					if (body->where == OBJ_INVENT) {
@@ -2546,91 +2576,49 @@ long timeout;
 int
 donull()
 {
-	static long lastreped = -13;//hacky way to tell if the player has recently tried repairing themselves
+	static long lastreped = -13; // counter to tell if you recently tried to repair yourself/meditate
 	u.unull = TRUE;
+	int regen = 0;
+
+	int *hp = (Upolyd) ? (&u.mh) : (&u.uhp);
+	int *hpmax = (Upolyd) ? (&u.mhmax) : (&u.uhpmax);
 	
-	if(uclockwork){
-		if(!Upolyd && u.uhp<u.uhpmax){
+	if ((*hp) < (*hpmax)){
+		if (uclockwork) {
 			if(lastreped < monstermoves-13) You("attempt to make repairs.");
-			if(!rn2(15-u.ulevel/2)){
-				u.uhp += rnd(10);
+			if(!rn2(15 - u.ulevel/2)){
+				(*hp) += rnd(10);
 				flags.botl = 1;
 			}
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.uhp++;
-			}
-			if(u.uhp > u.uhpmax) u.uhp = u.uhpmax;
 			lastreped = monstermoves;
-			if(u.uhp == u.uhpmax){
+			regen = 1;
+		} else if (uandroid && u.uen > 0) {
+			(*hp) += u.ulevel/6+1;
+			if(rn2(6) < u.ulevel%6) (*hp) += 1;
+			u.uen--;
+			flags.botl = 1;
+			regen = 1;
+		} 
+		if (uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
+			(*hp) += 1;
+			regen = 2;
+		}
+
+		if ((*hp) >= (*hpmax) && regen > 0){
+			if(uclockwork && lastreped == monstermoves){
 				You("complete your repairs.");
 				lastreped = -13;
-				stop_occupation();
-				occupation = 0; /*redundant failsafe? why doesn't stop_occupation work?*/
-			}
-		} else if(Upolyd && u.mh<u.mhmax){
-			if(lastreped < monstermoves-100) You("attempt to make repairs.");
-			if(!rn2(15-u.ulevel/2)){
-				u.mh += rnd(10);
-				flags.botl = 1;
-			}
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.mh++;
-			}
-			if(u.mh > u.mhmax) u.mh = u.mhmax;
-			lastreped = monstermoves;
-			if(u.mh == u.mhmax){
-				You("complete your repairs.");
-				lastreped = -13;
-				stop_occupation();
-				occupation = 0; /*redundant failsafe? why doesn't stop_occupation work?*/
-			}
-		} else if(u.sealsActive&SEAL_EURYNOME && ++u.eurycounts>5) unbind(SEAL_EURYNOME,TRUE);
-	} else if(uandroid){
-		if(!Upolyd && u.uhp<u.uhpmax && u.uen > 0){
-			u.uhp += u.ulevel/6+1;
-			if(rn2(6) < u.ulevel%6)
-				u.uhp++;
-			flags.botl = 1;
-			u.uen--;
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.uhp++;
-			}
-			if(u.uhp > u.uhpmax) u.uhp = u.uhpmax;
-			if(u.uhp == u.uhpmax){
+			} else if (uandroid && regen == 1){
 				You("finish regenerating.");
-				stop_occupation();
-				occupation = 0; /*redundant failsafe? why doesn't stop_occupation work?*/
+			} else if (regen == 2){
+				Your("sword hums contentedly.");
 			}
-		} else if(Upolyd && u.mh<u.mhmax && u.uen > 0){
-			u.mh += u.ulevel/3+1;
-			flags.botl = 1;
-			u.uen--;
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.uhp++;
-			}
-			if(u.mh > u.mhmax) u.mh = u.mhmax;
-			if(u.mh == u.mhmax){
-				You("finish regenerating.");
-				stop_occupation();
-				occupation = 0; /*redundant failsafe? why doesn't stop_occupation work?*/
-			}
-		} else if(u.sealsActive&SEAL_EURYNOME && ++u.eurycounts>5) unbind(SEAL_EURYNOME,TRUE);
-	} else {
-		if(Role_if(PM_MONK)){
-			if(lastreped < monstermoves-13) You("meditate.");
-			lastreped = monstermoves;
+			stop_occupation();
+			(*hp) = (*hpmax);
 		}
-		else if(u.sealsActive&SEAL_EURYNOME && ++u.eurycounts>5) unbind(SEAL_EURYNOME,TRUE);
-		
-		if(Upolyd && u.uhp<u.uhpmax){
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.mh++;
-			}
-		} else if(!Upolyd && u.uhp<u.uhpmax){
-			if(uwep && uwep->oartifact == ART_SINGING_SWORD && uwep->osinging == OSING_HEALING){
-				u.uhp++;
-			}
-		}
+	} else if (!Role_if(PM_MONK) && u.sealsActive&SEAL_EURYNOME && ++u.eurycounts>5) {
+		// monks meditate & fast, increasing pw regen and lowering hunger rate while they haven't moved
+		unbind(SEAL_EURYNOME,TRUE);
 	}
 	return MOVE_STANDARD;	/* Do nothing, but let other things happen */
 }
@@ -2769,6 +2757,114 @@ docome()
 		if(mtmp->mtame){
 			mtmp->mwait = 0;
 			You("order %s to follow you.", mon_nam(mtmp));
+		}
+	} else pline("There is no target there.");
+	return MOVE_INSTANT;
+}
+
+
+int
+doattack()
+{
+	struct monst *mtmp;
+	if (!getdir("Indicate pet that should engage in battle, or '.' for all.")) return MOVE_CANCELLED;
+	if(!(u.dx || u.dy)){
+		You("order all your pets to engage in battle.");
+		for(mtmp = fmon; mtmp; mtmp = mtmp->nmon){
+			if(mtmp->mtame){
+				// if(mtmp->mretreat)
+					// mtmp->mretreat = 0;
+				// else
+					mtmp->mpassive = 0;
+			}
+		}
+	}
+	else if(isok(u.ux+u.dx, u.uy+u.dy)) {
+		mtmp = m_at(u.ux+u.dx, u.uy+u.dy);
+		if(!mtmp){
+			pline("There is no target there.");
+			return MOVE_INSTANT;
+		}
+		if(mtmp->mtame){
+			// mtmp->mretreat = 0;
+			mtmp->mpassive = 0;
+			You("order %s to engage in battle.", mon_nam(mtmp));
+		}
+	} else pline("There is no target there.");
+	return MOVE_INSTANT;
+}
+
+
+int
+dopassive()
+{
+	struct monst *mtmp;
+	if (!getdir("Indicate pet that should not engage foes, or '.' for all.")) return MOVE_CANCELLED;
+	if(!(u.dx || u.dy)){
+		You("order all your pets not to engage foes.");
+		for(mtmp = fmon; mtmp; mtmp = mtmp->nmon){
+			if(mtmp->mtame) mtmp->mpassive = 1;
+		}
+	}
+	else if(isok(u.ux+u.dx, u.uy+u.dy)) {
+		mtmp = m_at(u.ux+u.dx, u.uy+u.dy);
+		if(!mtmp){
+			pline("There is no target there.");
+			return MOVE_INSTANT;
+		}
+		if(mtmp->mtame){
+			mtmp->mpassive = 1;
+			You("order %s not to engage foes.", mon_nam(mtmp));
+		}
+	} else pline("There is no target there.");
+	return MOVE_INSTANT;
+}
+
+
+int
+dodropall()
+{
+	struct monst *mtmp;
+	if (!getdir("Indicate pet that drop all non-worn gear, or '.' for all.")) return MOVE_CANCELLED;
+	if(!(u.dx || u.dy)){
+		You("order all your pets to drop their junk.");
+		for(mtmp = fmon; mtmp; mtmp = mtmp->nmon){
+			if(mtmp->mtame){
+				boolean keep = TRUE;
+				while(keep){
+					keep = FALSE;
+					for(struct obj *otmp = mtmp->minvent; otmp; otmp = otmp->nobj){
+						if(!(otmp->owornmask)){
+							obj_extract_and_unequip_self(otmp);
+							mdrop_obj(mtmp, otmp, TRUE);
+							keep = TRUE;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	else if(isok(u.ux+u.dx, u.uy+u.dy)) {
+		mtmp = m_at(u.ux+u.dx, u.uy+u.dy);
+		if(!mtmp){
+			pline("There is no target there.");
+			return MOVE_INSTANT;
+		}
+		if(mtmp->mtame){
+			You("order %s to drop %s gear.", mon_nam(mtmp), mhis(mtmp));
+			boolean keep = TRUE;
+			while(keep){
+				keep = FALSE;
+				for(struct obj *otmp = mtmp->minvent; otmp; otmp = otmp->nobj){
+					if(!(otmp->owornmask)){
+						obj_extract_and_unequip_self(otmp);
+						mdrop_obj(mtmp, otmp, TRUE);
+						keep = TRUE;
+						break;
+					}
+				}
+			}
 		}
 	} else pline("There is no target there.");
 	return MOVE_INSTANT;

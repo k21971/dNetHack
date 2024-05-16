@@ -1009,7 +1009,7 @@ char * yogTitles[] =  {
 	", the gate",
 	", the knower of the gate",
 	", the key and the guardian of the gate",
-	", the key and the hate",
+	", the key and the gate",
 	", the past, present, and future",
 	", the opener of the way",
 	", the lurker at the threshold",
@@ -1314,6 +1314,8 @@ register int x, y;
 	    return "headstone";
 	else if(IS_FOUNTAIN(levl[x][y].typ))
 	    return "fountain";
+	else if(IS_FORGE(levl[x][y].typ))
+	    return "forge";
 	else if(IS_PUDDLE(levl[x][y].typ))
 	    return "muddy floor";
 	else if ((IS_ROOM(lev->typ) && !Is_earthlevel(&u.uz)) ||
@@ -2319,6 +2321,18 @@ int mode;
 				mvitals[PM_ACERERAK].died > 0 && (otmp->ovar1_seals & SEAL_ANDREALPHUS)
 		) {
 			type = BURN;
+		} else if (is_lightsaber(otmp)) {
+			if (litsaber(otmp)) {
+				type = BURN;
+				/* currently the only weapon-class lightsaber */
+				if (!Blind && otmp->otyp == KAMEREL_VAJRA) {
+					Sprintf(post_engr_text,
+						"Lightning arcs from the %s.",
+						OBJ_DESCR(objects[otmp->otyp]));
+					doblind = TRUE;
+				}
+			}
+			else Your("%s is deactivated!", aobjnam(otmp,"are"));
 		} else if (is_blade(otmp)) {
 		    if ((int)otmp->spe > -3 
 			|| levl[u.ux][u.uy].typ == GRASS 
@@ -3747,7 +3761,6 @@ const char * prompt;
 
 		Sprintf(buf, "Known Seals");
 		add_menu(tmpwin, NO_GLYPH, &any, 0, 0, ATR_BOLD, buf, MENU_UNSELECTED);
-
 		/* regular seals */
 		for (i = 0; i < (QUEST_SPIRITS - FIRST_SEAL); i++){
 			seal_flag = 0x1L << i;

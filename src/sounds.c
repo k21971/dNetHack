@@ -17,7 +17,7 @@
 #define 	SANCTIFY_WEP	4
 
 #define		NURSE_FULL_HEAL			1
-#define		NURSE_TRANQUIZIZERS		2
+#define		NURSE_TRANQUILIZERS		2
 #define		NURSE_RESTORE_ABILITY	3
 #define		NURSE_FIX_MORGUL		4
 #define		NURSE_FIX_SICKNESS		5
@@ -49,6 +49,7 @@ const int nurseprices[] = {
 static const char *FDECL(DantalionRace,(int));
 int FDECL(dobinding,(int, int));
 int * FDECL(spirit_skills, (int));
+static int FDECL(doyochlolmenu, (struct monst *));
 static int NDECL(doblessmenu);
 static int NDECL(donursemenu);
 static int NDECL(dorendermenu);
@@ -72,7 +73,7 @@ static const char *buerTitles[] = {
 	"the wandering sage",
 	"the forsaken sage",
 	"the banished sage",
-	"interent teacher",
+	"itinerant teacher",
 	"fallen of heaven",
 	"risen of hell",
 	"from beyond the fixed stars",
@@ -165,7 +166,7 @@ static const char *embracedPrisoners[] = {
 	"Lolth, help me!",
 	"I can't control my arms!",
 	"I can't stop!  Look out!!",
-	"Cut me lose, please!",
+	"Cut me loose, please!",
 	"It's so dark!",
 	"Free me!",
 	"Lolth, why have you forsaken me!?",
@@ -178,7 +179,7 @@ static const char *embracedAlider[] = {
 	"Mother, help me!",
 	"I can't control my arms!",
 	"I can't stop!  Look out!!",
-	"Cut me lose, please!",
+	"Cut me loose, please!",
 	"It's so dark!",
 	"Free me!",
 	"Kill me!  Please, just kill me...",
@@ -267,6 +268,12 @@ dosounds()
 	};
 	You_hear1(fountain_msg[rn2(3)+hallu]);
     }
+	if (level.flags.nforges && !rn2(300)) {
+		static const char *const forge_msg[3] = {
+			"a slow bubbling.", "crackling flames.", "chestnuts roasting on an open fire.",
+		};
+		You_hear1(forge_msg[rn2(2) + hallu]);
+	}
 #ifdef SINK
     if (level.flags.nsinks && !rn2(300)) {
 	static const char * const sink_msg[3] = {
@@ -462,7 +469,7 @@ dosounds()
 	static const char * const zoo_msg[3] = {
 		"a sound reminiscent of an elephant stepping on a peanut.",
 		"a sound reminiscent of a seal barking.",
-		"Doctor Doolittle!",
+		"Doctor Dolittle!",
 	};
 	for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
 	    if (DEADMONSTER(mtmp)) continue;
@@ -760,16 +767,6 @@ boolean chatting;
 		return 0;
 	}
 	
-    /* presumably nearness and sleep checks have already been made */
-	if (!flags.soundok) return(0);
-	if (is_silent_mon(mtmp)){
-		if (chatting) {
-			pline("%s does not respond.", Monnam(mtmp));
-			return 1;
-		}
-		return(0);
-	}
-	
 	/* Make sure its your role's quest quardian; adjust if not */
 	if (ptr->msound == MS_GUARDIAN && ptr->mtyp != urole.guardnum && ptr->mtyp != PM_CELEBORN){
 		int mndx = monsndx(ptr);
@@ -783,6 +780,24 @@ boolean chatting;
 		ptr->msound != MS_INTONE && ptr->msound != MS_FLOWER && ptr->msound != MS_OONA
 	) map_invisible(mtmp->mx, mtmp->my);
 	mtmp->mnoise = TRUE;
+	
+	if(mtmp->mtame && is_yochlol(mtmp->data) && yn("(Ask to change form?)") == 'y'){
+		int pm = doyochlolmenu(mtmp);
+		if(pm){
+			were_transform(mtmp, pm);
+			return 1;
+		}
+	}
+	
+    /* presumably nearness and sleep checks have already been made */
+	if (!flags.soundok) return(0);
+	if (is_silent_mon(mtmp)){
+		if (chatting) {
+			pline("%s does not respond.", Monnam(mtmp));
+			return 1;
+		}
+		return(0);
+	}
 	
 	if(mtmp->ispriest){
 		priest_talk(mtmp);
@@ -1131,7 +1146,7 @@ asGuardian:
 	case MS_DREAD:{
 		struct monst *tmpm;
 		int ix, iy;
-		if(mtmp->mvar_dreadPrayer_cooldown >= moves && !mtmp->mdoubt && (
+		if(mtmp->mvar_dreadPrayer_cooldown < moves && !mtmp->mdoubt && (
 			mtmp->mhp < mtmp->mhpmax/4 || mtmp->mcrazed
 		)){
 			mtmp->mvar_dreadPrayer_cooldown = moves + rnz(350);
@@ -1925,6 +1940,7 @@ asGuardian:
 				u.uencouraged = min_ints(Insanity/5+1, u.uencouraged+rnd(Insanity/5+1));
 				exercise(A_INT, TRUE);
 				exercise(A_WIS, TRUE);
+				exercise(A_CHA, TRUE);
 			} else if(!mtmp->mpeaceful){
 				aggravate();
 			}
@@ -2080,7 +2096,7 @@ humanoid_sound:
 	    else {
 			const char *talkabt = "talks about %s.";
 			const char *discuss = "discusses %s.";
-			if((ptr->mtyp == PM_PRIESTESS || ptr->mtyp == PM_DEMINYMPH)
+			if((ptr->mtyp == PM_ITINERANT_PRIESTESS || ptr->mtyp == PM_PRIESTESS || ptr->mtyp == PM_DEMINYMPH)
 				&& has_template(mtmp, MISTWEAVER)
 			){
 				if(mtmp->mtame && has_object_type(invent, HOLY_SYMBOL_OF_THE_BLACK_MOTHE)){
@@ -2092,7 +2108,7 @@ humanoid_sound:
 						pacify_goat_faction();
 					}
 				}
-				switch(rn2(10)){
+				switch(rn2(15)){
 					case 0:
 						verbl_msg = "Ia! Shub-Nugganoth! The Goat with a Thousand Young!";
 					break;
@@ -2120,6 +2136,67 @@ humanoid_sound:
 					break;
 					case 9:
 						verbl_msg = "She shall spawn and spawn again!";
+					break;
+					case 10:
+						verbl_msg = "May Her light shine upon you!";
+					break;
+					case 11:
+						verbl_msg = "Neither man nor beast.";
+					break;
+					case 12:
+						verbl_msg = "Neither the living nor the dead.";
+					break;
+					case 13:
+						verbl_msg = "All things are mingled.";
+					break;
+					case 14:
+						verbl_msg = "Silet per diem universus, lucet nocturnis ignibus.";
+					break;
+				}
+			}
+			else if(ptr->mtyp == PM_DARK_YOUNG){
+				if(mtmp->mtame && has_object_type(invent, HOLY_SYMBOL_OF_THE_BLACK_MOTHE)){
+					if(!u.shubbie_atten){
+						godlist[GOD_THE_BLACK_MOTHER].anger = 0;
+						u.shubbie_atten = 1;
+					}
+					if(godlist[GOD_THE_BLACK_MOTHER].anger == 0){
+						pacify_goat_faction();
+					}
+				}
+				switch(rn2(14)){
+					case 0:
+						verbl_msg = "Ia! Shub-Nugganoth!";
+					break;
+					case 1:
+						verbl_msg = "Y'ai 'ng'ngah, Yog-Sothoth h'ee - l'geb f'ai throdog uaaah!";
+					break;
+					case 2:
+						verbl_msg = "Ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn.";
+					break;
+					case 3:
+						//Extracted from Notebook found in a Deserted House (Robert Bloch)
+						verbl_msg = "Ia Shub-Nugganoth! R'lyeh nb'shoggoth!";
+					break;
+					case 4:
+						verbl_msg = "Gof'nn hupadgh Shub-Nugganoth!";
+					break;
+					case 5:
+					case 6:
+						verbl_msg = "Ia!";
+					break;
+					case 7:
+						//These three are from the Burrowers Beneath, not by Lovecraft
+						verbl_msg = "Ya na kadishtu nilgh'ri stell'bsna Nyogtha.";
+					break;
+					case 8:
+						verbl_msg = "K'yarnak phlegethor l'ebumna syha'h n'ghft.";
+					break;
+					case 9:
+						verbl_msg = "Ya hai kadishtu ep r'luh-eeh Nyogtha eeh.";
+					break;
+					default:
+						pline_msg = "mumbles incoherently.";
 					break;
 				}
 			}
@@ -2591,6 +2668,18 @@ humanoid_sound:
 
     if (pline_msg) pline("%s %s", Monnam(mtmp), pline_msg);
     else if (verbl_msg) verbalize1(verbl_msg);
+
+	if(chatting && HAS_ESMT(mtmp) && mtmp->mpeaceful){
+		char query[BUFSZ] = "";
+		if(mtmp->mtyp == PM_DRACAE_ELADRIN)
+			Sprintf(query, "Ask %s about incubation services?", mhim(mtmp));
+		else
+			Sprintf(query, "Ask %s about smithing services?", mhim(mtmp));
+		if(yn(query) == 'y'){
+			smithy_services(mtmp);
+		}
+	}
+
     return(1);
 }
 
@@ -3163,7 +3252,10 @@ int dz;
 #endif
 					bless(uwep);
 					remove_oprop(uwep, OPROP_LESSER_HOLYW);
-					add_oprop(uwep, OPROP_HOLYW);
+					if(accepts_weapon_oprops(uwep))
+						add_oprop(uwep, OPROP_HOLYW);
+					if(uwep->oclass == ARMOR_CLASS)
+						add_oprop(uwep, OPROP_HOLY);
 					if(uwep->spe < 3)
 						uwep->spe = 3;
 					mongone(mtmp);
@@ -3328,7 +3420,7 @@ char *andromaliusItems[18] = {
 /*09*/	"an egg",
 /*00*/	"a potion",
 /*11*/	"a dead spider",
-/*12*/	"a human skull",
+/*12*/	"a skull",
 /*13*/	"an arm bone",
 /*14*/	"a spellbook",
 /*15*/	"a bell",
@@ -3450,9 +3542,12 @@ int tx,ty;
 			int curx, cury;
 			char altarfound=0;
 			//Amon can't be invoked on levels with altars, and in fact doing so causes imediate level loss, as for a broken taboo.
-			for(curx=1;curx < COLNO;curx++)
-				for(cury=1;cury < ROWNO;cury++)
-					if(IS_ALTAR(levl[curx][cury].typ)){ altarfound=1; cury=ROWNO; curx=COLNO;}//end search
+			for(curx=1;curx < COLNO;curx++){
+				for(cury=1;cury < ROWNO;cury++){
+					if(IS_ALTAR(levl[curx][cury].typ)) { altarfound = 1; break; }
+				}
+				if (altarfound == 1) break;
+			}//end search
 			
 			if(!altarfound){
 				pline("A golden flame roars suddenly to life within the seal, throwning the world into a stark relief of hard-edged shadows and brilliant light.");
@@ -3486,11 +3581,11 @@ int tx,ty;
 			else{
 				Your("mind's eye is blinded by a flame blasting through an altar.");
 				losexp("shredding of the soul",TRUE,TRUE,TRUE);
-				if(in_rooms(tx, ty, TEMPLE)){
+				if(in_rooms(curx, cury, TEMPLE)){
 //					struct monst *priest = findpriest(roomno);
 					//invoking Amon inside a temple angers the resident deity
-					altar_wrath(tx, ty);
-					angrygods(god_at_altar(tx, ty));
+					altar_wrath(curx, cury);
+					angrygods(god_at_altar(curx, cury));
 				}
 				u.sealTimeout[AMON-FIRST_SEAL] = moves + bindingPeriod; // invoking amon on a level with an altar still triggers the binding period.
 			}
@@ -3563,6 +3658,9 @@ int tx,ty;
 						else if(otmp->oclass == POTION_CLASS){ o1 = otmp; t1 = 10;}
 						else if(otmp->otyp == CORPSE && otmp->corpsenm==PM_CAVE_SPIDER){ o1 = otmp; t1 = 11;}
 						else if(otmp->otyp == CORPSE && your_race(&mons[otmp->corpsenm])){ o1 = otmp; t1 = 12;}
+						else if(otmp->otyp == CLOCKWORK_COMPONENT && Race_if(PM_CLOCKWORK_AUTOMATON)){ o1 = otmp; t1 = 12;}
+						else if(otmp->otyp == BROKEN_ANDROID && Race_if(PM_ANDROID)){ o1 = otmp; t1 = 12;}
+						else if(otmp->otyp == BROKEN_GYNOID && Race_if(PM_ANDROID)){ o1 = otmp; t1 = 12;}
 						else if(otmp->otyp == CORPSE && is_andromaliable(&mons[otmp->corpsenm]) ){ o1 = otmp; t1 = 13;}
 						else if(otmp->oclass == SPBOOK_CLASS){ o1 = otmp; t1 = 14;}
 						else if(otmp->otyp == BELL){ o1 = otmp; t1 = 15;}
@@ -3582,6 +3680,9 @@ int tx,ty;
 						else if(otmp->oclass == POTION_CLASS && otmp->oclass != o1->oclass){ o2 = otmp; t2 = 10;}
 						else if(otmp->otyp == CORPSE && otmp->corpsenm==PM_CAVE_SPIDER && t1 != 11){ o2 = otmp; t2 = 11;}
 						else if(otmp->otyp == CORPSE && your_race(&mons[otmp->corpsenm]) && t1 != 12 && otmp != o1){ o2 = otmp; t2 = 12;}
+						else if(otmp->otyp == CLOCKWORK_COMPONENT && Race_if(PM_CLOCKWORK_AUTOMATON) && t1 != 12 && otmp != o1){ o2 = otmp; t2 = 12;}
+						else if(otmp->otyp == BROKEN_ANDROID && Race_if(PM_ANDROID) && t1 != 12 && otmp != o1){ o2 = otmp; t2 = 12;}
+						else if(otmp->otyp == BROKEN_GYNOID && Race_if(PM_ANDROID) && t1 != 12 && otmp != o1){ o2 = otmp; t2 = 12;}
 						else if(otmp->otyp == CORPSE && is_andromaliable(&mons[otmp->corpsenm]) && t1 != 13 && otmp != o1){ o2 = otmp; t2 = 13;}
 						else if(otmp->oclass == SPBOOK_CLASS && otmp->oclass != o1->oclass){ o2 = otmp; t2 = 14;}
 						else if(otmp->otyp == BELL && otmp->otyp != o1->otyp){ o2 = otmp; t2 = 15;}
@@ -3688,15 +3789,28 @@ int tx,ty;
 								doname(otmp), (const char *)0);
 						break;
 						case 12:
-							otmp = mksobj(CORPSE, NO_MKOBJ_FLAGS);
-							otmp->corpsenm = urace.malenum;
-							otmp->oeaten = mons[otmp->corpsenm].cnutrit;
-							consume_oeaten(otmp, 1);
-							otmp->owt = weight(otmp);
+							//Note: "Skull"
+							//Androids need a broken android, clockworks need a mechanism, Vampires need a human
+							if(Race_if(PM_ANDROID)){
+								otmp = mksobj(flags.female ? BROKEN_ANDROID : BROKEN_GYNOID, NO_MKOBJ_FLAGS);
+								otmp->owt = weight(otmp);
+							}
+							else if(Race_if(PM_CLOCKWORK_AUTOMATON)){
+								otmp = mksobj(CLOCKWORK_COMPONENT, NO_MKOBJ_FLAGS);
+								otmp->owt = weight(otmp);
+							}
+							else {
+								otmp = mksobj(CORPSE, NO_MKOBJ_FLAGS);
+								otmp->corpsenm = (Race_if(PM_VAMPIRE) || Race_if(PM_INCANTIFIER)) ? PM_HUMAN : urace.malenum;
+								otmp->oeaten = mons[otmp->corpsenm].cnutrit;
+								consume_oeaten(otmp, 1);
+								otmp->owt = weight(otmp);
+							}
 							hold_another_object(otmp, "You drop %s!",
 								doname(otmp), (const char *)0);
 						break;
 						case 13:
+							//Note: "Arm bone"
 							otmp = mksobj(CORPSE, NO_MKOBJ_FLAGS);
 							otmp->corpsenm = androCorpses[rn2(SIZE(androCorpses))];
 							otmp->oeaten = mons[otmp->corpsenm].cnutrit;
@@ -3825,7 +3939,7 @@ int tx,ty;
 				}
 				pline("A hand of worn and broken clockwork on a rusted metal arm reaches into the seal.");
 				pline("The hand gently touches the %s%s, then rests on the seal's surface as its unseen owner shifts his weight onto that arm.", prefix, xname(o));
-				pline("There is the sound of shrieking metal, and a cracked porcelain face swings into view on a metalic armature.");
+				pline("There is the sound of shrieking metal, and a cracked porcelain face swings into view on a metallic armature.");
 				pline("A voice speaks to you, as the immobile white face weeps tears of black oil onto the %s.", surface(tx,ty));
 				pline("*I am Astaroth, the Clockmaker. You shall be my instrument, to repair this broken world.*");
 				bindspirit(ep->ward_id);
@@ -3837,7 +3951,7 @@ int tx,ty;
 			else if(uwep && (uwep->spe<0 || uwep->oeroded || uwep->oeroded2) && uwep->oartifact == ART_PEN_OF_THE_VOID && (!u.spiritTineA || (!u.spiritTineB && quest_status.killed_nemesis && Role_if(PM_EXILE)))){
 				pline("A hand of worn and broken clockwork on a rusted metal arm reaches into the seal.");
 				pline("The hand slowly stretches out towards you, then rests on the seal's surface as its unseen owner shifts his weight onto that arm.");
-				pline("There is the sound of shrieking metal, and a cracked porcelain face swings into view on a metalic armature.");
+				pline("There is the sound of shrieking metal, and a cracked porcelain face swings into view on a metallic armature.");
 				pline("A voice speaks to you, as the immobile white face studies you and weeps tears of black oil.");
 				pline("*I am Astaroth, the Clockmaker. You shall hold my instrument, to repair this broken world.*");
 				uwep->ovar1_seals |= SEAL_ASTAROTH;
@@ -4079,7 +4193,7 @@ int tx,ty;
 						newsym(tx,ty);
 					} else{
 						levl[tx][ty].typ = ROOM;
-						digfarhole(TRUE,tx,ty);
+						digfarhole(TRUE,tx,ty, TRUE);
 					}
 					// u.sealTimeout[CHUPOCLOPS-FIRST_SEAL] = moves + bindingPeriod/10;
 				}
@@ -4192,7 +4306,7 @@ int tx,ty;
 				if(!Blind){
 					You("suddenly notice a monstrous nymph reclining in the center of the seal.");
 					pline("She is half a fair woman, with glancing eyes and fair cheeks,");
-					pline("and half again a terible dragon, with great scaly wings and serpent's tails where legs should be.");
+					pline("and half again a terrible dragon, with great scaly wings and serpent's tails where legs should be.");
 				}
 				if(u.sealCounts < numSlots){
 					pline("\"I am Echidna, %s.\"",echidnaTitles[rn2(SIZE(echidnaTitles))]);
@@ -5164,7 +5278,7 @@ int tx,ty;
 		if(u.sealTimeout[DAHLVER_NAR-FIRST_SEAL] < moves){
 			//Spirit requires that his seal be drawn by a level 14+ Binder.
 			if(quest_status.got_quest && Role_if(PM_EXILE)){
-				pline("The bloody, tooth-torn corpse of Dahlver-Nar hanges over the seal.");
+				pline("The bloody, tooth-torn corpse of Dahlver-Nar hangs over the seal.");
 				pline("He moans and reaches out to you.");
 				bindspirit(ep->ward_id);
 				u.sealTimeout[DAHLVER_NAR-FIRST_SEAL] = moves + bindingPeriod;
@@ -5175,7 +5289,7 @@ int tx,ty;
 		if(u.sealTimeout[ACERERAK-FIRST_SEAL] < moves){
 			//Spirit requires that his seal be drawn by a Binder who has killed him.
 			if(Role_if(PM_EXILE) && quest_status.killed_nemesis){
-				pline("A golden skull hanges over the seal.");
+				pline("A golden skull hangs over the seal.");
 				pline("\"I am Acererak. Long ago, I dared the Gates of Teeth.\"");
 				pline("\"Now I am trapped outside of time,");
 				pline("beyond life, motion, and thought.\"");
@@ -5400,6 +5514,20 @@ int tx,ty;
 			} else You("try to think of the last place you saw a black web....");
 		} else pline("You can't feel the spirit.");
 	}break;
+	case YOG_SOTHOTH:{
+		if(u.sealTimeout[YOG_SOTHOTH-FIRST_SEAL] < moves){
+			struct trap *t = t_at(tx,ty);
+			if((t && (t->ttyp == MAGIC_PORTAL || t->ttyp == LEVEL_TELEP || t->ttyp == TELEP_TRAP)) 
+			|| carrying_art(ART_SILVER_KEY)
+			){
+				You("percieve a great BEING beyond the gate, and it addresses you with waves of thunderous and burning power.");
+				You("are smote and changed by the unendurable violence of its voice!");
+				exercise(A_CON, FALSE);
+				bindspirit(ep->ward_id);
+				u.sealTimeout[YOG_SOTHOTH-FIRST_SEAL] = moves + bindingPeriod;
+			} else You("need a gateway....");
+		} else pline("You can't feel the spirit.");
+	}break;
 	case NUMINA:{
 		//Spirit requires that its seal be drawn by a level 30 Binder.
 		//There is no binding period.
@@ -5556,6 +5684,10 @@ int floorID;
 		break;
 	case BLACK_WEB:
 		break;
+	case YOG_SOTHOTH:
+		propchain[i++] = BLOODSENSE;
+		propchain[i++] = PROT_FROM_SHAPE_CHANGERS;
+		break;
 	case NUMINA:
 		propchain[i++] = BLOCK_CONFUSION;
 		propchain[i++] = DETECT_MONSTERS;
@@ -5693,6 +5825,9 @@ int floorID;
 	case MISKA:
 		skillchain[i++] = P_TWO_WEAPON_COMBAT;
 		break; 
+	case YOG_SOTHOTH:
+		skillchain[i++] = P_FIREARM;
+		break;
 	case NUDZIRATH:
 	case ALIGNMENT_THING:
 	case UNKNOWN_GOD:
@@ -5748,6 +5883,7 @@ int floorID;
 		floorID == MISKA ||
 		floorID == NUDZIRATH ||
 		floorID == ALIGNMENT_THING ||
+		floorID == YOG_SOTHOTH ||
 		floorID == UNKNOWN_GOD
 		) {
 		spirit_type = ALIGN_SPIRIT;
@@ -6002,14 +6138,8 @@ boolean inc_penalties;
 	} else if(spiritSkill(p_skill)) maxskill = max(P_EXPERT,maxskill);
 	else if(u.specialSealsActive&SEAL_NUMINA) maxskill = max(P_SKILLED,maxskill);
 	
-	if(roleSkill(p_skill)) maxskill = min(maxskill + 1, P_EXPERT);
-	
-	if(p_skill >= P_SHII_CHO && p_skill <= P_JUYO){
-		if(uwep && is_lightsaber(uwep)) maxskill = min(maxskill, P_SKILL(weapon_type(uwep)));
-		else if(uswapwep && is_lightsaber(uswapwep)) maxskill = min(maxskill, P_SKILL(weapon_type(uswapwep)));
-		else maxskill = P_UNSKILLED;
-	}
-	
+	//if(roleSkill(p_skill)) maxskill = P_EXPERT;
+
 	if(Air_crystal){
 		if(WIND_SKILL(p_skill))
 			INCR_MAXSKILL;
@@ -6078,9 +6208,9 @@ boolean inc_penalties;
 		curskill += 1;
 	}
 	
-	// if(roleSkill(p_skill)){
-		// curskill = min(curskill+1, P_EXPERT);
-	// }
+	/*if(roleSkill(p_skill)){
+		curskill = min(curskill+1, P_UNSKILLED);
+	}*/
 	
 	if(p_skill == P_SHIEN){
 		if(OLD_P_SKILL(P_DJEM_SO) >= P_SKILLED) curskill++;
@@ -6091,7 +6221,9 @@ boolean inc_penalties;
 		if(OLD_P_SKILL(P_SHIEN) >= P_SKILLED) curskill++;
 		if(OLD_P_SKILL(P_SHIEN) >= P_EXPERT) curskill++;
 	}
-	
+
+	curskill = min(curskill, maxskill);
+
 	if(Air_crystal){
 		if(WIND_SKILL(p_skill))
 			INCR_CURSKILL;
@@ -6132,9 +6264,7 @@ boolean inc_penalties;
 			delta = 1; /* Want Should have SOME effect */
 		curskill = max(curskill - delta, P_UNSKILLED);
 	}
-	
-	curskill = min(curskill, maxskill);
-	
+
 	return curskill;
 }
 
@@ -6151,10 +6281,22 @@ int p_skill;
 	return (P_SKILL(p_skill) == P_ISRESTRICTED);
 }
 
+/*
+ * this has been co-opted into meaning
+ * "skill unlocked by specific role under specific circumstances"
+ */
 boolean
 roleSkill(p_skill)
 int p_skill;
 {
+	if (Role_if(PM_KNIGHT)){
+		if (p_skill == P_KNI_SACRED)
+			return TRUE;
+		if (p_skill == P_KNI_ELDRITCH)
+			return TRUE;
+		if (p_skill == P_KNI_RUNIC)
+			return TRUE;
+	}
 	return FALSE;
 }
 
@@ -6297,6 +6439,72 @@ const char* msg;
 #endif /* USER_SOUNDS */
 
 STATIC_OVL int
+doyochlolmenu(mon)
+struct monst *mon;
+{
+	winid tmpwin;
+	int n, how;
+	char buf[BUFSZ];
+	char incntlet = 'a';
+	menu_item *selected;
+	anything any;
+
+	tmpwin = create_nhwindow(NHW_MENU);
+	start_menu(tmpwin);
+	any.a_void = 0;		/* zero out all bits */
+
+	Sprintf(buf, "Change to which form?");
+	add_menu(tmpwin, NO_GLYPH, &any, 0, 0, ATR_BOLD, buf, MENU_UNSELECTED);
+	
+	incntlet = 'a';
+	
+	if(mon->mtyp != PM_YOCHLOL){
+		Sprintf(buf, "Yochlol");
+		any.a_int = PM_YOCHLOL;	/* must be non-zero */
+		add_menu(tmpwin, NO_GLYPH, &any,
+			incntlet, 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
+	}
+	incntlet++;
+	if(mon->mtyp != PM_UNEARTHLY_DROW){
+		Sprintf(buf, "Drow");
+		any.a_int = PM_UNEARTHLY_DROW;	/* must be non-zero */
+		add_menu(tmpwin, NO_GLYPH, &any,
+			incntlet, 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
+	}
+	incntlet++;
+	if(mon->mtyp != PM_STINKING_CLOUD){
+		Sprintf(buf, "Cloud");
+		any.a_int = PM_STINKING_CLOUD;	/* must be non-zero */
+		add_menu(tmpwin, NO_GLYPH, &any,
+			incntlet, 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
+	}
+	incntlet++;
+	if(mon->mtyp != PM_DEMONIC_BLACK_WIDOW){
+		Sprintf(buf, "Spider");
+		any.a_int = PM_DEMONIC_BLACK_WIDOW;	/* must be non-zero */
+		add_menu(tmpwin, NO_GLYPH, &any,
+			incntlet, 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
+	}
+	incntlet++;
+	
+	end_menu(tmpwin, "Select form");
+
+	how = PICK_ONE;
+	n = select_menu(tmpwin, how, &selected);
+	destroy_nhwindow(tmpwin);
+	if(n > 0){
+		int picked = selected[0].item.a_int;
+		free(selected);
+		return picked;
+	}
+	return 0;
+}
+
+STATIC_OVL int
 doblessmenu()
 {
 	winid tmpwin;
@@ -6345,7 +6553,8 @@ doblessmenu()
 			MENU_UNSELECTED);
 	}
 	incntlet++; //Advance anyway
-	if(uwep && (uwep->oclass == WEAPON_CLASS || is_weptool(uwep) || is_gloves(uwep)) && !check_oprop(uwep, OPROP_HOLYW)){
+	if(uwep && ((accepts_weapon_oprops(uwep) && !check_oprop(uwep, OPROP_HOLYW)) ||
+		    (uwep->oclass == ARMOR_CLASS && !check_oprop(uwep, OPROP_HOLY)))){
 		Sprintf(buf, "Sanctify your weapon");
 		any.a_int = SANCTIFY_WEP;	/* must be non-zero */
 		add_menu(tmpwin, NO_GLYPH, &any,
@@ -6393,8 +6602,8 @@ donursemenu()
 		MENU_UNSELECTED);
 	incntlet++;
 	if(u.usanity < 100){
-		Sprintf(buf, "Something for my nerves ($%d)", nurseprices[NURSE_TRANQUIZIZERS]);
-		any.a_int = NURSE_TRANQUIZIZERS;	/* must be non-zero */
+		Sprintf(buf, "Something for my nerves ($%d)", nurseprices[NURSE_TRANQUILIZERS]);
+		any.a_int = NURSE_TRANQUILIZERS;	/* must be non-zero */
 		add_menu(tmpwin, NO_GLYPH, &any,
 			incntlet, 0, ATR_NONE, buf,
 			MENU_UNSELECTED);
@@ -6487,7 +6696,7 @@ struct monst *nurse;
 #else
 		gold = money_cnt(invent);
 #endif
-	if(service == NURSE_FULL_HEAL || service == NURSE_TRANQUIZIZERS){
+	if(service == NURSE_FULL_HEAL || service == NURSE_TRANQUILIZERS){
 		char inbuf[BUFSZ];
 		getlin("How many courses?", inbuf);
 		if (*inbuf == '\033') count = 1;
@@ -6516,7 +6725,7 @@ struct monst *nurse;
 			pline("%s doses you with healing medicine.", Monnam(nurse));
 			healup(400*count, 8*count, FALSE, TRUE);
 		break;
-		case NURSE_TRANQUIZIZERS:
+		case NURSE_TRANQUILIZERS:
 			pline("%s doses you with tranquilizers.", Monnam(nurse));
 			if(Sleep_resistance || Free_action)
 				You("yawn.");

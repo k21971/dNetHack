@@ -559,7 +559,10 @@ register struct monst *mtmp;
 
 	info[0] = 0;
 	//This comes up often enough for debug that it's worth it.
-	if (mtmp->female && !is_neuter(mtmp->data)) Strcat(info, ", female");
+	if (!is_neuter(mtmp->data)) {
+		if (mtmp->female) Strcat(info, ", female");
+		else Strcat(info, ", male");
+	}
 	if (mtmp->mtame) {	  Strcat(info, ", tame");
 #ifdef WIZARD
 	    if (wizard) {
@@ -589,7 +592,7 @@ register struct monst *mtmp;
 	else if(is_blind(mtmp)) Strcat(info, ", dazzled");
 	if (mtmp->mstun)	  Strcat(info, ", stunned");
 	if (mtmp->msleeping)	  Strcat(info, ", asleep");
-	if (mtmp->mstdy > 0)	  Sprintf(eos(info), ", weakened (%d)", mtmp->mstdy);
+	if (mtmp->mstdy > 0)	  Sprintf(eos(info), ", vulnerable (%d)", mtmp->mstdy);
 	if (mtmp->encouraged != 0)	  Sprintf(eos(info), ", morale (%d)", mtmp->encouraged);
 	else if (mtmp->mstdy < 0)	  Sprintf(eos(info), ", protected (%d)", mtmp->mstdy);
 #if 0	/* unfortunately mfrozen covers temporary sleep and being busy
@@ -673,7 +676,7 @@ ustatusline()
 	    }	/* note: "goop" == "glop"; variation is intentional */
 	}
 	if (Stunned)		Strcat(info, ", stunned");
-	if (u.ustdy > 0)	  Sprintf(eos(info), ", weakened (%d)", u.ustdy);
+	if (u.ustdy > 0)	  Sprintf(eos(info), ", vulnerable (%d)", u.ustdy);
 	if (u.uencouraged != 0)	  Sprintf(eos(info), ", morale (%d)", u.uencouraged);
 #ifdef STEED
 	if (!u.usteed)

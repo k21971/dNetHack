@@ -426,6 +426,7 @@ Helmet_on()
 	case HELM_OF_DRAIN_RESISTANCE:
 	case HARMONIUM_HELM:
 	case HELM_OF_BRILLIANCE:
+	case SUNLIGHT_MAGGOT:
 		break;
 	case CORNUTHAUM:
 		/* people think marked wizards know what they're talking
@@ -464,6 +465,7 @@ Helmet_on()
 		    You_feel("%s.",	/* track INT change; ignore WIS */
 		  ACURR(A_INT) <= (ABASE(A_INT) + ABON(A_INT) + ATEMP(A_INT)) ?
 			     "like sitting in a corner" : "giddy");
+		    makeknown(DUNCE_CAP);
 		} else {
 		    Your("mind oscillates briefly.");
 		    makeknown(HELM_OF_OPPOSITE_ALIGNMENT);
@@ -538,6 +540,7 @@ Helmet_off()
 	case GNOMISH_POINTY_HAT:
 	case ORCISH_HELM:
 	case HARMONIUM_HELM:
+	case SUNLIGHT_MAGGOT:
 	    break;
 	case DUNCE_CAP:
 	    flags.botl = 1;
@@ -988,10 +991,6 @@ Amulet_on()
 		    Slimed = 0;
 		    flags.botl = 1;
 		}
-		if (Upolyd && uskin && uskin->oartifact == ART_MIRRORED_MASK) {
-			You("shudder!");
-			rehumanize();
-		}
 		break;
 	case AMULET_OF_CHANGE:
 	    {
@@ -1061,9 +1060,6 @@ Amulet_off()
 		break;
 	case AMULET_OF_UNCHANGING:
 		setworn((struct obj *)0, W_AMUL);
-		if (!Unchanging && ublindf && ublindf->otyp == MASK && ublindf->oartifact == ART_MIRRORED_MASK && ublindf->corpsenm != NON_PM) {
-			activate_mirrored_mask(ublindf);
-		}
 		return;
 	case AMULET_OF_MAGICAL_BREATHING:
 		if (Underwater) {
@@ -1374,7 +1370,7 @@ register struct obj *otmp;
 	    if (Punished) set_bc(0);
 	} else if (already_blind && !Blind) {
 	    changed = TRUE;
-	    /* "You are now wearing the Eyes of the Overworld." */
+	    /* "You are now wearing the Eye of the Overworld." */
 	    You("can see!");
 	}
 	if (changed) {
@@ -1382,9 +1378,6 @@ register struct obj *otmp;
 	    if (Blind_telepat || Infravision) see_monsters();
 	    vision_full_recalc = 1;	/* recalc vision limits */
 	    flags.botl = 1;
-	}
-	if (!Unchanging && otmp->otyp == MASK && otmp->oartifact == ART_MIRRORED_MASK && otmp->corpsenm != NON_PM) {
-		activate_mirrored_mask(otmp);
 	}
 	if(check_oprop(otmp, OPROP_CURS)){
 		if (Blind)
@@ -1414,7 +1407,7 @@ register struct obj *otmp;
 		    You("still cannot see.");
 	    } else {
 		changed = TRUE;	/* !was_blind */
-		/* "You were wearing the Eyes of the Overworld." */
+		/* "You were wearing the Eye of the Overworld." */
 		You_cant("see anything now!");
 		/* set ball&chain variables before the hero goes blind */
 		if (Punished) set_bc(0);
@@ -1796,6 +1789,10 @@ boolean noisy;
 				if (noisy)
 				You("don't have a head.");
 				err++;
+			} else if(nohat(youracedata)){
+				if (noisy)
+				You("can't wear a helm or hat.");
+				err++;
 			} else if(!helm_match(youracedata,otmp) && !hat){
 				if (noisy)
 				pline_The("%s is the wrong shape for your head.", c_helmet);
@@ -1823,10 +1820,9 @@ boolean noisy;
 			if (noisy) already_wearing(an(c_shield));
 			err++;
 		} else if (uwep && bimanual(uwep,youracedata)) {
+			const char *term = is_sword(uwep) ? c_sword : (uwep->otyp == BATTLE_AXE) ? c_axe : c_weapon;
 			if (noisy) 
-			You("cannot wear a shield while wielding a two-handed %s.",
-				is_sword(uwep) ? c_sword :
-				(uwep->otyp == BATTLE_AXE) ? c_axe : c_weapon);
+			You("cannot wear a shield while wielding %s in both hands.", an(term));
 			err++;
 		} else if (u.twoweap) {
 			if (noisy)
@@ -2036,7 +2032,9 @@ doputon()
 		Your("%s%s are full, and you're already wearing an amulet and %s.",
 			humanoid(youracedata) ? "ring-" : "",
 			makeplural(body_part(FINGER)),
-			(ublindf->otyp==LENSES || ublindf->otyp==SUNGLASSES) ? "some lenses" : (ublindf->otyp==MASK || ublindf->otyp==LIVING_MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE) ? "a mask" : "a blindfold");
+			(ublindf->otyp==LENSES || ublindf->otyp==SUNGLASSES) ? "some lenses"
+			: (ublindf->otyp==SOUL_LENS) ? "a lens"
+			: (ublindf->otyp==MASK || ublindf->otyp==LIVING_MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE) ? "a mask" : "a blindfold");
 		return MOVE_CANCELLED;
 	}
 	otmp = getobj(accessories, "put on");
@@ -2129,13 +2127,24 @@ doputon()
 			else if (ublindf->otyp == BLINDFOLD || ublindf->otyp == LIVING_MASK || ublindf->otyp == ANDROID_VISOR) {
 				if (otmp->otyp == LENSES || otmp->otyp == SUNGLASSES)
 					already_wearing2("lenses", "a blindfold");
+				else if(otmp->otyp == SOUL_LENS)
+					already_wearing2("a lens", "a blindfold");
 				else
 					already_wearing("a blindfold");
 			} else if (ublindf->otyp == LENSES || ublindf->otyp == SUNGLASSES) {
 				if (otmp->otyp == BLINDFOLD || otmp->otyp == LIVING_MASK || otmp->otyp == ANDROID_VISOR)
 					already_wearing2("a blindfold", "some lenses");
+				else if (otmp->otyp == SOUL_LENS)
+					already_wearing2("a lense", "some lenses");
 				else
 					already_wearing("some lenses");
+			} else if (ublindf->otyp == SOUL_LENS) {
+				if (otmp->otyp == BLINDFOLD || otmp->otyp == LIVING_MASK || otmp->otyp == ANDROID_VISOR)
+					already_wearing2("a blindfold", "a lens");
+				else if (otmp->otyp == SOUL_LENS)
+					already_wearing("a lense");
+				else
+					already_wearing2("some lenses", "a lenses");
 			} else
 				already_wearing(something);
 			return MOVE_CANCELLED;
@@ -2143,7 +2152,8 @@ doputon()
 		if (otmp->otyp != MASK && otmp->otyp != R_LYEHIAN_FACEPLATE && 
 			otmp->otyp != BLINDFOLD && otmp->otyp != ANDROID_VISOR && 
 			otmp->otyp != TOWEL && otmp->otyp != LENSES && 
-			otmp->otyp != SUNGLASSES && otmp->otyp != LIVING_MASK
+			otmp->otyp != SUNGLASSES && otmp->otyp != LIVING_MASK &&
+			otmp->otyp != SOUL_LENS
 		) {
 			You_cant("wear that!");
 			return MOVE_CANCELLED;
@@ -2325,6 +2335,9 @@ struct obj * otmp;
 	case ART_ARMOR_OF_KHAZAD_DUM:
 		def += 4;
 		break;
+	case ART_WEB_OF_LOLTH:
+		def += 4;
+		break;
 	case ART_CLAWS_OF_THE_REVENANCER:
 		def += 5;
 		break;
@@ -2333,6 +2346,12 @@ struct obj * otmp;
 		break;
 	case ART_SPIDERSILK:
 		def += 2;//offsetting the cloth material
+		break;
+	case ART_SCORPION_CARAPACE:
+		if(check_carapace_mod(otmp, CPROP_PLATES))
+			def += 5;
+		else if(check_carapace_mod(otmp, CPROP_HARD_SCALE))
+			def += 1;//offsetting the chitin material
 		break;
 	}
 
@@ -2420,15 +2439,21 @@ struct obj * otmp;
 	case ART_ARMOR_OF_KHAZAD_DUM:
 		def += 4;
 		break;
+	case ART_WEB_OF_LOLTH:
+		def += 8;
+		break;
 	case ART_AEGIS:
 		def += 1;//3 total, Same as Cloak of protection
 		break;
 	case ART_SPIDERSILK:
 		def += 2;//offsetting the cloth material
 		break;
-	// case ART_CLAWS_OF_THE_REVENANCER:
-		// def += 5;
-		// break;
+	case ART_SCORPION_CARAPACE:
+		if(check_carapace_mod(otmp, CPROP_PLATES))
+			def += 5;
+		else if(check_carapace_mod(otmp, CPROP_HARD_SCALE))
+			def += 1;//offsetting the chitin material
+		break;
 	}
 
 	return def;
@@ -2502,7 +2527,7 @@ base_uac()
 				uac -= u.uinsight - 10;
 		}
 		if(!flat_foot){
-			if((is_rapier(uwep) && arti_shining(uwep)) || 
+			if((is_rapier(uwep) && arti_phasing(uwep)) || 
 				(uwep->otyp == LIGHTSABER && litsaber(uwep) && uwep->oartifact != ART_ANNULUS && uwep->ovar1_lightsaberHandle == 0)
 					) uac -= max(
 						min(
@@ -2627,6 +2652,10 @@ base_uac()
 			dexbonus += max((int)( (ACURR(A_WIS)-1)/2 - 5 ),0) + (int)(u.ulevel/6 + 1);
 			if(Confusion && u.udrunken>u.ulevel) dexbonus += u.udrunken/9+1;
 		}
+		
+		if (uarmh && uarmh->oartifact == ART_ENFORCED_MIND){
+			dexbonus += max((int)((ACURR(A_CHA)-11)/2), 0);
+		}
 		/*Corsets suck*/
 		if(uarmu && uarmu->otyp == VICTORIAN_UNDERWEAR){
 			uac += 2; //flat penalty. Something in the code "corrects" ac values >10, this is a kludge.
@@ -2676,11 +2705,16 @@ find_ac()
 		if(uwep && (objects[uwep->otyp].oc_skill == P_SPEAR || objects[uwep->otyp].oc_skill == P_POLEARMS || objects[uwep->otyp].oc_skill == P_LANCE))
 			uac -= 2;
 	}
+	else if(uarm && uarm->oartifact == ART_SCORPION_CARAPACE && check_carapace_mod(uarm, CPROP_SHIELDS)){
+		uac -= 1 + shield_skill(uarm);
+		if(uwep && (objects[uwep->otyp].oc_skill == P_SPEAR || objects[uwep->otyp].oc_skill == P_POLEARMS || objects[uwep->otyp].oc_skill == P_LANCE))
+			uac -= 3;//+1 bonus to shield size
+	}
 	if (uarmg)	uac -= arm_ac_bonus(uarmg);
 	if (uarmu)	uac -= arm_ac_bonus(uarmu);
 	
 	if(uwep){
-		if((is_rapier(uwep) && !arti_shining(uwep)))
+		if((is_rapier(uwep) && !arti_phasing(uwep)))
 			uac -= max(
 				min(
 				(ACURR(A_DEX)-13)/4,
@@ -2694,6 +2728,16 @@ find_ac()
 				uac -= 2+uwep->spe;
 			else
 				uac -= 1+(uwep->spe)/2;
+		}
+		const struct artifact *weap = get_artifact(uwep);
+		if(weap && (weap->inv_prop == GITH_ART || weap->inv_prop == AMALGUM_ART) && activeMentalEdge(GSTYLE_DEFENSE)){
+			uac -= u.usanity < 50 ? 0 : u.usanity < 75 ? max(uwep->spe,0) : u.usanity < 90 ? 2+max(uwep->spe,0) : 5+max(uwep->spe,0);
+		}
+	}
+	if(uswapwep){
+		const struct artifact *weap = get_artifact(uswapwep);
+		if(weap && (weap->inv_prop == GITH_ART || weap->inv_prop == AMALGUM_ART) && activeMentalEdge(GSTYLE_DEFENSE)){
+			uac -= u.usanity < 50 ? 0 : u.usanity < 75 ? max(uswapwep->spe/2,0) : u.usanity < 90 ? 1+max(uswapwep->spe/2,0) : 3+max(uswapwep->spe/2,0);
 		}
 	}
 	if(Race_if(PM_HALF_DRAGON)){
@@ -2741,6 +2785,9 @@ int base_nat_udr()
 				udr += (u.ulevel)/3;
 			else udr += (u.ulevel)/6;
 		}
+	}
+	if(uarm && uarm->oartifact == ART_SCORPION_CARAPACE && check_carapace_mod(uarm, CPROP_IMPURITY) && u.uinsight >= 5){
+		udr += 3;
 	}
 	
 	if(u.sealsActive&SEAL_ECHIDNA)
@@ -2793,10 +2840,10 @@ find_dr()
 	int udr = 0, i;
 	
 	for(i = 0; i < 5; i++)
-		udr += slot_udr(1<<i,0, 0);
-	udr += slot_udr(UPPER_TORSO_DR,0, 0);
-	udr += slot_udr(LOWER_TORSO_DR,0, 0);
-	udr += max(slot_udr(UPPER_TORSO_DR,0, 0), slot_udr(ARM_DR,0, 0))*2;
+		udr += slot_udr(1<<i,0, 0, AT_ANY);
+	udr += slot_udr(UPPER_TORSO_DR,0, 0, AT_ANY);
+	udr += slot_udr(LOWER_TORSO_DR,0, 0, AT_ANY);
+	udr += max(slot_udr(UPPER_TORSO_DR,0, 0, AT_ANY), slot_udr(ARM_DR,0, 0, AT_ANY))*2;
 	udr /= 9;
 	if (udr > 127) udr = 127;	/* u.uac is an schar */
 	if(udr != u.udr){
@@ -2814,10 +2861,11 @@ find_dr()
  * Includes effectiveness vs magr (optional)
  */
 int
-slot_udr(slot, magr, depth)
+slot_udr(slot, magr, depth, aatyp)
 int slot;
 struct monst *magr;
 int depth;
+uchar aatyp;
 {
 	/* DR addition: bas + sqrt(nat^2 + arm^2) */
 	int bas_udr; /* base DR:    magical-ish   */
@@ -2827,6 +2875,10 @@ int depth;
 	bas_udr = base_udr();
 	nat_udr = base_nat_udr();
 	arm_udr = 0;
+
+	/* is it even possible for youagr to be true here? */
+	boolean youagr = (magr == &youmonst);
+	struct obj *magr_helm = magr ? (youagr ? uarmh : which_armor(magr, W_ARMH)) : NULL;
 
 	/* for use vs specific magr */
 	int agralign = 0;
@@ -2861,11 +2913,16 @@ int depth;
 	struct obj * uarmor[] = ARMOR_SLOTS;
 	int i;
 	for (i = 0; i < SIZE(uarmor); i++) {
-		if (uarmor[i] && (objects[uarmor[i]->otyp].oc_dtyp & slot)) {
-			if(depth && higher_depth(uarmor[i]->owornmask, depth))
-				continue;
-			arm_udr += arm_dr_bonus(uarmor[i]);
-			if (magr) arm_udr += properties_dr(uarmor[i], agralign, agrmoral);
+		if (uarmor[i]){
+			if((objects[uarmor[i]->otyp].oc_dtyp & slot)) {
+				if(depth && higher_depth(uarmor[i]->owornmask, depth))
+					continue;
+				arm_udr += arm_dr_bonus(uarmor[i]);
+				if (magr) arm_udr += properties_dr(uarmor[i], agralign, agrmoral);
+			}
+			else if(uarmor[i]->otyp == CLOAK_OF_PROTECTION){
+				arm_udr += arm_dr_bonus(uarmor[i])/2; //Half protection in other slots (skin depth)
+			}
 		}
 	}
 	/* Tensa Zangetsu adds to worn armor */
@@ -2902,6 +2959,12 @@ int depth;
 	){
 		bas_udr += u.ulevel/10;
 	}
+	/* The Crown of Vermin adds up to +3 magic DR to the head (in practice it will usually at 2 or less due to missing vermin) */
+	if(uarm && uarm->oartifact == ART_SCORPION_CARAPACE && check_carapace_mod(uarm, CPROP_CROWN)
+		&& (slot&HEAD_DR)
+	){
+		bas_udr += artinstance[ART_SCORPION_CARAPACE].CarapaceAura/C_CROWN_AURA_DIVISOR;
+	}
 	/* Vaul is not randomized, and contributes to magical DR */
 	if (u.uvaul) {
 		int offset = 0;
@@ -2920,7 +2983,7 @@ int depth;
 		bas_udr += 3;
 	
 	//Star spawn reach extra-dimensionally past all armor, even bypassing natural armor.
-	if(magr && (magr->mtyp == PM_STAR_SPAWN || magr->mtyp == PM_GREAT_CTHULHU || magr->mtyp == PM_DREAM_EATER || magr->mtyp == PM_VEIL_RENDER || (magr->mtyp == PM_LADY_CONSTANCE && !rn2(2)) || mad_monster_turn(magr, MAD_NON_EUCLID))){
+	if(magr && (is_extradimensional(magr) || (aatyp == AT_BUTT && magr_helm && magr_helm->oartifact == ART_APOTHEOSIS_VEIL))){
 		arm_udr = 0;
 		if(undiffed_innards(youracedata))
 			nat_udr /= 2;
@@ -2945,17 +3008,19 @@ int depth;
 }
 
 int
-roll_udr(magr)
+roll_udr(magr, aatyp)
 struct monst *magr;
+uchar aatyp;
 {
-	return roll_udr_detail(magr, 0, 0);
+	return roll_udr_detail(magr, 0, 0, aatyp);
 }
 
 int
-roll_udr_detail(magr, slot, depth)
+roll_udr_detail(magr, slot, depth, aatyp)
 struct monst *magr;
 int slot;
 int depth;
+uchar aatyp;
 {
 	int udr;
 	int cap = 10;
@@ -2979,12 +3044,12 @@ int depth;
 		break;
 		case 7:
 		case 8:
-			if(slot_udr(UPPER_TORSO_DR, magr, 0) > slot_udr(ARM_DR, magr, 0))
+			if(slot_udr(UPPER_TORSO_DR, magr, 0, aatyp) > slot_udr(ARM_DR, magr, 0, aatyp))
 				slot = UPPER_TORSO_DR;
 			else slot = ARM_DR;
 		break;
 	}
-	udr = slot_udr(slot, magr, depth);
+	udr = slot_udr(slot, magr, depth, aatyp);
 	if(active_glyph(DEEP_SEA))
 		cap += 3;
 	//diminishing returns after 10 points of DR.
@@ -3172,9 +3237,13 @@ int otyp;
 
 /* also for praying; find worn item that confers "Unchanging" attribute */
 struct obj *
-unchanger()
+cursed_unchanger()
 {
-    if (uamul && uamul->otyp == AMULET_OF_UNCHANGING) return uamul;
+	struct obj *otmp;
+	for(otmp = invent; otmp; otmp = otmp->nobj){
+		if(otmp->owornmask && item_has_property(otmp, UNCHANGING) && otmp->cursed)
+			return otmp;
+	}
     return 0;
 }
 
@@ -3847,95 +3916,127 @@ register struct obj *otmp;
 }
 
 int
-teleport_arm(atmp)
-register struct obj *atmp;
+teleport_arm(atmp, mdef)
+struct obj *atmp;
+struct monst *mdef;
 {
-	register struct obj *otmp;
+	struct obj *otmp;
 #define TELEPORT_ARM(o) ((otmp = (o)) != 0 && \
 			(!atmp || atmp == otmp) && \
 			(!obj_resists(otmp, 66, 90)))
-
-	if (TELEPORT_ARM(uarmc)) {
-		if (donning(otmp)) cancel_don();
-		Your("%s vanishes!",
-		     cloak_simple_name(uarmc));
-		(void) Cloak_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your cloak!");
-			HPanicking += 1+rnd(6);
+	if(!mdef || mdef == &youmonst){
+		if (TELEPORT_ARM(uarmc)) {
+			if (donning(otmp)) cancel_don();
+			Your("%s vanishes!",
+				 cloak_simple_name(uarmc));
+			(void) Cloak_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your cloak!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarm)) {
+			if (donning(otmp)) cancel_don();
+			Your("armor vanishes!");
+			(void) Armor_gone();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your armor!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarmu)) {
+			if (donning(otmp)) cancel_don();
+			Your("underclothes vanish!");
+			(void) Shirt_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your underclothes!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarmh)) {
+			if (donning(otmp)) cancel_don();
+			Your("helmet vanishes!");
+			(void) Helmet_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your helmet!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarmg)) {
+			if (donning(otmp)) cancel_don();
+			Your("gloves vanish!");
+			(void) Gloves_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			selftouch("You");
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your gloves!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarmf)) {
+			if (donning(otmp)) cancel_don();
+			Your("boots vanish!");
+			(void) Boots_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your boots!");
+				HPanicking += 1+rnd(6);
+			}
+		} else if (TELEPORT_ARM(uarms)) {
+			if (donning(otmp)) cancel_don();
+			Your("shield vanishes!");
+			(void) Shield_off();
+			obj_extract_self(otmp);
+			otmp->ox = u.ux;
+			otmp->oy = u.uy;
+			randomly_place_obj(otmp);
+			if(roll_madness(MAD_TALONS)){
+				You("panic after losing your shield!");
+				HPanicking += 1+rnd(6);
+			}
+		} else {
+			return 0;		/* could not destroy anything */
 		}
-	} else if (TELEPORT_ARM(uarm)) {
-		if (donning(otmp)) cancel_don();
-		Your("armor vanishes!");
-		(void) Armor_gone();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your armor!");
-			HPanicking += 1+rnd(6);
+	}
+	else { //mdef isn't 0 and isn't you
+		if(atmp){
+			if(!obj_resists(atmp, 66, 90)){
+				obj_extract_and_unequip_self(atmp);
+				atmp->ox = mdef->mx;
+				atmp->oy = mdef->my;
+				randomly_place_obj(atmp);
+			}
 		}
-	} else if (TELEPORT_ARM(uarmu)) {
-		if (donning(otmp)) cancel_don();
-		Your("underclothes vanish!");
-		(void) Shirt_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your underclothes!");
-			HPanicking += 1+rnd(6);
+		else if(((otmp = which_armor(mdef, W_ARMC)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARM)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARMU)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARMH)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARMG)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARMF)) && !obj_resists(otmp, 66, 90))
+			|| ((otmp = which_armor(mdef, W_ARMS)) && !obj_resists(otmp, 66, 90))
+		) {
+			obj_extract_and_unequip_self(otmp);
+			otmp->ox = mdef->mx;
+			otmp->oy = mdef->my;
+			randomly_place_obj(otmp);
 		}
-	} else if (TELEPORT_ARM(uarmh)) {
-		if (donning(otmp)) cancel_don();
-		Your("helmet vanishes!");
-		(void) Helmet_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your helmet!");
-			HPanicking += 1+rnd(6);
-		}
-	} else if (TELEPORT_ARM(uarmg)) {
-		if (donning(otmp)) cancel_don();
-		Your("gloves vanish!");
-		(void) Gloves_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		selftouch("You");
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your gloves!");
-			HPanicking += 1+rnd(6);
-		}
-	} else if (TELEPORT_ARM(uarmf)) {
-		if (donning(otmp)) cancel_don();
-		Your("boots vanish!");
-		(void) Boots_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your boots!");
-			HPanicking += 1+rnd(6);
-		}
-	} else if (TELEPORT_ARM(uarms)) {
-		if (donning(otmp)) cancel_don();
-		Your("shield vanishes!");
-		(void) Shield_off();
-		obj_extract_self(otmp);
-		dropy(otmp);
-		rloco(otmp);
-		if(roll_madness(MAD_TALONS)){
-			You("panic after losing your shield!");
-			HPanicking += 1+rnd(6);
-		}
-	} else {
-		return 0;		/* could not destroy anything */
 	}
 
 #undef TELEPORT_ARM
@@ -4258,6 +4359,61 @@ struct obj *armor;
 			if(youagr) morehungry(1);
 			lim++;
 			if(lim > 4) break;
+		}
+	}
+}
+
+void
+doscorpion(magr, armor)
+struct monst *magr;
+struct obj *armor;
+{
+	struct monst *mdef;
+	extern const int clockwisex[8];
+	extern const int clockwisey[8];
+	int i = rnd(8),j;
+	struct attack symbiote = { 0 };
+	boolean youagr = (magr == &youmonst);
+	boolean youdef;
+	if(check_carapace_mod(armor, CPROP_ILL_STING)){
+		symbiote = *attacktype_fordmg(&mons[PM_SCORPIUS], AT_STNG, AD_DISE);
+	}
+	else {
+		symbiote = *attacktype_fordmg(&mons[PM_SCORPION], AT_STNG, AD_DRST);
+	}
+	
+	for(j=8;j>=1;j--){
+		if(youagr && u.ustuck && u.uswallow)
+			mdef = u.ustuck;
+		else if(!isok(x(magr)+clockwisex[(i+j)%8], y(magr)+clockwisey[(i+j)%8]))
+			continue;
+		else mdef = m_u_at(x(magr)+clockwisex[(i+j)%8], y(magr)+clockwisey[(i+j)%8]);
+		
+		if(!mdef)
+			continue;
+
+		youdef = (mdef == &youmonst);
+		if(DEADMONSTER(mdef))
+			continue;
+		
+		if(youagr && (mdef->mpeaceful || rn2(11)))
+			continue;
+		if(youdef && (magr->mpeaceful || rn2(11)))
+			continue;
+		if(!youagr && !youdef && ((mdef->mpeaceful == magr->mpeaceful) || rn2(11)))
+			continue;
+
+		if(!youdef && nonthreat(mdef))
+			continue;
+
+		//Note: the armor avoids touching petrifying things even if you're immune
+		if(touch_petrifies(mdef->data)
+		 || mdef->mtyp == PM_MEDUSA
+		 || mdef->mtyp == PM_PALE_NIGHT
+		) continue;
+		if (mdef && magr_can_attack_mdef(magr, mdef, x(magr) + clockwisex[(i + j) % 8], y(magr) + clockwisey[(i + j) % 8], FALSE)){
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE);
+			break;
 		}
 	}
 }
@@ -5008,7 +5164,7 @@ struct obj *wep;
 			if (magr_can_attack_mdef(magr, mdef, i, j, FALSE)){
 				wep->otyp = CLAWED_HAND;
 				xmeleehity(magr, mdef, &symbiote, &wep, -1, 0, FALSE);
-				wep->otyp = CLUB;
+				wep->otyp = wep->oartifact == ART_AMALGAMATED_SKIES ? TWO_HANDED_SWORD : CLUB;
 				if(DEADMONSTER(magr))
 					return; //oops!
 			}
@@ -5028,8 +5184,8 @@ struct obj *wep;
 	boolean youdef, youagr = (magr == &youmonst);
 	boolean peaceSafe = youagr || magr->mpeaceful;
 	
-	for(i = x-BOLT_LIM; i < x+BOLT_LIM; i++)
-		for(j = y-BOLT_LIM; j < y+BOLT_LIM; j++){
+	for(i = x-BOLT_LIM; i <= x+BOLT_LIM; i++)
+		for(j = y-BOLT_LIM; j <= y+BOLT_LIM; j++){
 			if(!isok(i,j))
 				continue;
 			if(i == x && j == y)
@@ -5055,8 +5211,8 @@ struct obj *wep;
 		return;
 	targets = rn2(targets);
 	
-	for(i = x-BOLT_LIM; i < x+BOLT_LIM; i++)
-		for(j = y-BOLT_LIM; j < y+BOLT_LIM; j++){
+	for(i = x-BOLT_LIM; i <= x+BOLT_LIM; i++)
+		for(j = y-BOLT_LIM; j <= y+BOLT_LIM; j++){
 			if(!isok(i,j))
 				continue;
 			if(i == x && j == y)
@@ -5103,7 +5259,130 @@ break_outer_loop:
 			spelltype = FIRE_PILLAR;
 		break;
 	}
-	cast_spell(magr, mdef, &symbiote, spelltype, i, j);
+	cast_spell(magr, mdef, &symbiote, spelltype, x(mdef), y(mdef));
+}
+
+void
+dotwin_cast(magr)
+struct monst *magr;
+{
+	int x = x(magr), y = y(magr);
+	int i, j;
+	struct monst *mdef;
+	int	targets = 0;
+	struct attack symbiote = { AT_MAGC, AD_SPEL, 6, 6 };
+	boolean youdef, youagr = (magr == &youmonst);
+	boolean peaceSafe = youagr || magr->mpeaceful;
+	int range = 3;
+	
+	for(i = x-range; i <= x+range; i++)
+		for(j = y-range; j <= y+range; j++){
+			if(!isok(i,j))
+				continue;
+			if(i == x && j == y)
+				continue;
+			mdef = m_u_at(i,j);
+			if(!mdef || DEADMONSTER(mdef))
+				continue;
+			youdef = (mdef == &youmonst);
+			if(peaceSafe && (youdef || mdef->mpeaceful))
+				continue;
+			if(!peaceSafe && youdef && !mdef->mpeaceful)
+				continue;
+
+			if(!youdef && nonthreat(mdef))
+				continue;
+
+			if (magr_can_attack_mdef(magr, mdef, i, j, FALSE)){
+				targets++;
+			}
+		}
+
+	if(!targets)
+		return;
+	targets = rn2(targets);
+	
+	for(i = x-range; i <= x+range; i++)
+		for(j = y-range; j <= y+range; j++){
+			if(!isok(i,j))
+				continue;
+			if(i == x && j == y)
+				continue;
+			mdef = m_u_at(i,j);
+			if(!mdef || DEADMONSTER(mdef))
+				continue;
+			if(peaceSafe && (mdef == &youmonst || mdef->mpeaceful))
+				continue;
+			if(!peaceSafe && mdef != &youmonst && !mdef->mpeaceful)
+				continue;
+
+			if(!youdef && nonthreat(mdef))
+				continue;
+
+			if (magr_can_attack_mdef(magr, mdef, i, j, FALSE)){
+				if(targets)
+					targets--;
+				else
+					goto break_outer_loop;
+			}
+		}
+break_outer_loop:
+	if(!mdef)
+		return; //Shouldn't happen, but....
+	int spelltype;
+	if(youagr || canseemon(magr)){
+		if(youagr)
+			pline("Your chanting tentacles cast a spell!");
+		else
+			pline("%s chanting tentacles cast a spell!", s_suffix(Monnam(magr)));
+	}
+	switch(rnd(mlev(magr))){
+		case 30:
+		case 29:
+			spelltype = TURN_TO_STONE;
+			break;
+		case 28:
+		case 27:
+			spelltype = DEATH_TOUCH;
+			break;
+		case 26:
+		case 25:
+			spelltype = LIGHTNING;
+			break;
+		case 24:
+		case 23:
+		case 22:
+			spelltype = DESTRY_ARMR;
+			break;
+		case 21:
+		case 20:
+		case 19:
+			spelltype = DRAIN_ENERGY;
+			break;
+		case 18:
+		case 17:
+		case 16:
+			spelltype = BARF_BOLT;
+			break;
+		case 15:
+		case 14:
+		case 13:
+			if(!(HFast&INTRINSIC)){
+				spelltype = HASTE_SELF;
+				break;
+			}
+		case 12:
+		case 11:
+		case 10:
+			if(*hp(&youmonst) != *hpmax(&youmonst)){
+				spelltype = CURE_SELF;
+				break;
+			}
+		default:
+			spelltype = PSI_BOLT;
+			break;
+	}
+	cast_spell(magr, mdef, &symbiote, spelltype, x(mdef), y(mdef));
 }
 
 void

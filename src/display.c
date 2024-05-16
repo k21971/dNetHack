@@ -699,7 +699,7 @@ feel_location(x, y)
     /* draw monster on top if we can sense it */
     if ((x != u.ux || y != u.uy) && (mon = m_at(x,y)) && sensemon(mon))
 	display_monster(x, y, mon,
-		(tp_sensemon(mon) || MATCH_WARN_OF_MON(mon)) ? PHYSICALLY_SEEN : DETECTED,
+		(tp_sensemon(mon) || MATCH_WARN_OF_MON(mon) || rlyehian_sensemon(mon)) ? PHYSICALLY_SEEN : DETECTED,
 		is_worm_tail(mon));
 }
 
@@ -771,7 +771,7 @@ echo_location(x, y)
     /* draw monster on top if we can sense it */
 		if ((x != u.ux || y != u.uy) && (sensemon(mon) || sensemon(mon) || mon->m_ap_type))
 			display_monster(x, y, mon,
-				(tp_sensemon(mon) || MATCH_WARN_OF_MON(mon)) ? PHYSICALLY_SEEN : DETECTED,
+				(tp_sensemon(mon) || MATCH_WARN_OF_MON(mon) || rlyehian_sensemon(mon)) ? PHYSICALLY_SEEN : DETECTED,
 				is_worm_tail(mon));
 		else if (!(canspotmon(mon) || sensemon(mon) || mon->m_ap_type)) {
 			map_invisible(x, y);
@@ -843,7 +843,8 @@ newsym(x,y)
 	    worm_tail = is_worm_tail(mon);
 	    see_it = mon && (worm_tail
 		? (!mon->minvis || See_invisible(mon->mx, mon->my))
-		: (mon_visible(mon)) || tp_sensemon(mon) || MATCH_WARN_OF_MON(mon) || sense_by_scent(mon));
+		: (mon_visible(mon)) || tp_sensemon(mon) || MATCH_WARN_OF_MON(mon)
+		|| sense_by_scent(mon) || rlyehian_sensemon(mon));
 	    if (mon && (see_it || (!worm_tail && Detect_monsters))) {
 		if (mon->mtrapped) {
 		    struct trap *trap = t_at(x, y);
@@ -876,12 +877,13 @@ newsym(x,y)
 	    if (!restoring && senseself()) display_self();
 	}
 	else if ((mon = m_at(x,y))
-		&& ((see_it = (tp_sensemon(mon) || MATCH_WARN_OF_MON(mon)
-		    		|| ((see_with_infrared(mon) || see_with_bloodsense(mon) || see_with_lifesense(mon) || see_with_senseall(mon))
-				&& mon_visible(mon)) || see_with_earthsense(mon)))
-		    || Detect_monsters
-			|| sense_by_scent(mon))
-		&& !is_worm_tail(mon)) {
+		 && ((see_it = (tp_sensemon(mon) || MATCH_WARN_OF_MON(mon) || rlyehian_sensemon(mon)
+				|| ((see_with_infrared(mon) || see_with_bloodsense(mon)
+				     || see_with_lifesense(mon) || see_with_senseall(mon))
+				    && mon_visible(mon)) || see_with_earthsense(mon)))
+		     || Detect_monsters
+		     || sense_by_scent(mon))
+		 && !is_worm_tail(mon)) {
 	    /* Monsters are printed every time. */
 	    /* This also gets rid of any invisibility glyph */
 	    display_monster(x, y, mon, see_it ? 0 : DETECTED, 0);
@@ -1337,6 +1339,23 @@ see_traps()
 }
 
 /*
+ * Update hallucinated altars.
+ */
+void
+see_altars()
+{
+	int x, y;
+	struct rm* lev;
+	clear_glyph_buffer();
+	for (x = 1; x < COLNO; x++) {
+		lev = &levl[x][0];
+		for (y = 0; y < ROWNO; y++, lev++)
+			if (lev->glyph != cmap_to_glyph(S_stone))
+				show_glyph(x,y,lev->glyph);
+	}
+}
+
+/*
  * Put the cursor on the hero.  Flush all accumulated glyphs before doing it.
  */
 void
@@ -1441,6 +1460,8 @@ show_glyph(x,y,glyph)
 	    text = "warning";		offset = glyph - GLYPH_WARNING_OFF;
 	} else if (glyph >= GLYPH_SWALLOW_OFF) {	/* swallow border */
 	    text = "swallow border";	offset = glyph - GLYPH_SWALLOW_OFF;
+	} else if (glyph >= GLYPH_CLOUD_OFF) {		/* cloud */
+	    text = "cloud";		offset = glyph - GLYPH_CLOUD_OFF;
 	} else if (glyph >= GLYPH_ZAP_OFF) {		/* zap beam */
 	    text = "zap beam";		offset = glyph - GLYPH_ZAP_OFF;
 	} else if (glyph >= GLYPH_EXPLODE_OFF) {	/* explosion */
@@ -1605,6 +1626,8 @@ int glyph;
     } else if ((offset = (glyph - GLYPH_SWALLOW_OFF)) >= 0) {	/* swallow */
 	/* see swallow_to_glyph() in display.c */
 	ch = (uchar) defsyms[S_sw_tl + (offset & 0x7)].sym;
+    } else if ((offset = (glyph - GLYPH_ZAP_OFF)) >= 0) {	/* cloud */
+	ch = defsyms[S_cloud].sym;
     } else if ((offset = (glyph - GLYPH_ZAP_OFF)) >= 0) {	/* zap beam */
 	/* see zapdir_to_glyph() in display.c */
 	ch = defsyms[S_vbeam + (offset & 0x3)].sym;
@@ -1666,6 +1689,9 @@ int style;
     /* D: botl.c has a closer approximation to the size, but we'll go with
      *    this */
     char buf[400], *ptr;
+    /* Make sure all status effects are shown in dump */
+    long long save_statuseffects = iflags.statuseffects;
+    iflags.statuseffects = ~0;
     if (style == 0) {
 	for (y = 0; y < ROWNO; y++) {
 	    lastc = 0;
@@ -1709,6 +1735,8 @@ int style;
 	bot3str(buf, FALSE, 0);
 	dump("", buf);
     }
+    /* Restore value of statuseffects option */
+    iflags.statuseffects = save_statuseffects;
 }
 #endif /* DUMP_LOG */
 
@@ -1776,12 +1804,19 @@ back_to_glyph(x,y)
 	case POOL:
 	case MOAT:		idx = S_pool;	  break;
 	case STAIRS:
-	    idx = (ptr->ladder & LA_DOWN) ? S_dnstair : S_upstair;
-	    break;
+		if (x == sstairs.sx && y == sstairs.sy && sstairs.u_traversed)
+			idx = (ptr->ladder & LA_DOWN) ? S_brdnstair : S_brupstair;
+		else
+			idx = (ptr->ladder & LA_DOWN) ? S_dnstair : S_upstair;
+		break;
 	case LADDER:
-	    idx = (ptr->ladder & LA_DOWN) ? S_dnladder : S_upladder;
-	    break;
+		if (x == sstairs.sx && y == sstairs.sy && sstairs.u_traversed)
+			idx = (ptr->ladder & LA_DOWN) ? S_brdnladder : S_brupladder;
+		else
+			idx = (ptr->ladder & LA_DOWN) ? S_dnladder : S_upladder;
+		break;
 	case FOUNTAIN:		idx = S_fountain; break;
+	case FORGE:		idx = S_forge; break;
 	case SINK:		idx = S_sink;     break;
 	case ALTAR:		idx = S_altar;    break;
 	case GRAVE:		idx = S_grave;    break;
@@ -1914,7 +1949,7 @@ static const char *type_names[MAX_TYPE] = {
 	"DBWALL",	"SDOOR",	"SCORR",	"POOL",
 	"MOAT",		"WATER",	"DRAWBRIDGE_UP","LAVAPOOL",
 	"DEADTREE", "DOOR",		"CORR",		"ROOM",		"STAIRS",
-	"LADDER",	"FOUNTAIN",	"THRONE",	"SINK",
+	"LADDER",	"FOUNTAIN",	"FORGE",	"THRONE",	"SINK",
 	"ALTAR",	"ICE",		"GRASS",	"SOIL",	"SAND",	
 	"DRAWBRIDGE_DOWN","AIR", "CLOUD", "FOG", "DUST_CLOUD", "PUDDLE"
 };

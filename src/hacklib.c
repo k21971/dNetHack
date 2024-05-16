@@ -20,6 +20,7 @@ NetHack, except that rounddiv may call panic().
 	char *		eos		(char *)
 	char *		strkitten	(char *,char)
 	char *		s_suffix	(const char *)
+	char *		ing_suffix	(const char *)
 	char *		xcrypt		(const char *, char *)
 	boolean		onlyspace	(const char *)
 	char *		tabexpand	(char *)
@@ -176,6 +177,43 @@ s_suffix(s)		/* return a name converted to possessive */
 	Strcat(buf[i], "'s");
     return buf[i];
 #undef SSUFFIX_BUFFERS
+}
+
+/* construct a gerund (a verb formed by appending "ing" to a noun) */
+char *
+ing_suffix(const char *s)
+{
+    static const char vowel[] = "aeiouwy";
+    static char buf[BUFSZ];
+    char onoff[10];
+    char *p;
+
+    Strcpy(buf, s);
+    p = eos(buf);
+    onoff[0] = *p = *(p + 1) = '\0';
+    if ((p >= &buf[3] && !strcmpi(p - 3, " on"))
+        || (p >= &buf[4] && !strcmpi(p - 4, " off"))
+        || (p >= &buf[5] && !strcmpi(p - 5, " with"))) {
+        p = strrchr(buf, ' ');
+        Strcpy(onoff, p);
+        *p = '\0';
+    }
+    if (p >= &buf[2] && !strcmpi(p - 2, "er")) { /* slither + ing */
+        /* nothing here */
+    } else if (p >= &buf[3] && !strchr(vowel, *(p - 1))
+        && strchr(vowel, *(p - 2)) && !strchr(vowel, *(p - 3))) {
+        /* tip -> tipp + ing */
+        *p = *(p - 1);
+        *(p + 1) = '\0';
+    } else if (p >= &buf[2] && !strcmpi(p - 2, "ie")) { /* vie -> vy + ing */
+        *(p - 2) = 'y';
+        *(p - 1) = '\0';
+    } else if (p >= &buf[1] && *(p - 1) == 'e') /* grease -> greas + ing */
+        *(p - 1) = '\0';
+    Strcat(buf, "ing");
+    if (onoff[0])
+        Strcat(buf, onoff);
+    return buf;
 }
 
 char *
@@ -511,24 +549,9 @@ setrandom()
 #ifdef RANDOM	/* srandom() from sys/share/random.c */
 	srandom((unsigned int) time((time_t *)0));
 #else
-# if defined(__APPLE__) || defined(BSD) || defined(LINUX) || defined(ULTRIX) || defined(CYGWIN32) /* system srandom() */
-#  if defined(BSD) && !defined(POSIX_TYPES)
-#   if defined(SUNOS4)
-	(void)
-#   endif
-		srandom((int) time((long *)0));
-#  else
-	srandom((int) (time((time_t *)0)) + rnd[0]);
-#  endif
-# else
-#  ifdef UNIX	/* system srand48() */
-	srand48((long) time((time_t *)0));
-#  else		/* poor quality system routine */
-	srand((int) time((time_t *)0));
-#  endif
-# endif
+	srandom((unsigned int) (time((time_t *)0)) + rnd[0]);
 #endif
-	srand((int) time((time_t *)0)); /*The basic rand function is always used in a few places, so seed it*/
+	srand((unsigned int) time((time_t *)0)); /*The basic rand function is always used in a few places, so seed it*/
 }
 
 static struct tm *

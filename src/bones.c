@@ -4,6 +4,7 @@
 
 #include "hack.h"
 #include "lev.h"
+#include "artifact.h"
 
 extern char bones[];	/* from files.c */
 #ifdef MFLOPPY
@@ -99,6 +100,20 @@ boolean restore;
 			otmp->oartifact = 0;
 			rem_ox(otmp, OX_ENAM);
 		} else if (otmp->oartifact && restore) {
+			/* Set appearance-based artifacts to their correct types in this game */
+			if(otmp->oartifact == ART_RING_OF_THROR
+			 || otmp->oartifact == ART_NARYA
+			 || otmp->oartifact == ART_NENYA
+			 || otmp->oartifact == ART_VILYA
+			 || otmp->oartifact == ART_LOMYA
+			 || otmp->oartifact == ART_MANTLE_OF_HEAVEN
+			 || otmp->oartifact == ART_VESTMENT_OF_HELL
+			 || otmp->oartifact == ART_CROWN_OF_THE_SAINT_KING
+			 || otmp->oartifact == ART_HELM_OF_THE_DARK_LORD
+			 || otmp->oartifact == ART_SHARD_FROM_MORGOTH_S_CROWN
+			){
+				otmp->otyp = artilist[otmp->oartifact].otyp;
+			}
 			artifact_exists(otmp,ONAME(otmp),TRUE);
 			/* otmp was gifted to the deceased adventurer, not you who just found it */
 			otmp->gifted = 0;
@@ -147,7 +162,7 @@ boolean restore;
 				    (mons[otmp->corpsenm].geno & G_UNIQ))
 				otmp->corpsenm = NON_PM;
 			} else if (otmp->otyp == CLAWED_HAND) {
-				otmp->otyp = CLUB;
+				otmp->otyp = otmp->oartifact == ART_AMALGAMATED_SKIES ? TWO_HANDED_SWORD : CLUB;
 			} else if (otmp->otyp == AMULET_OF_YENDOR) {
 			    /* no longer the real Amulet */
 			    otmp->otyp = FAKE_AMULET_OF_YENDOR;
@@ -180,6 +195,16 @@ boolean restore;
 				otmp->oartifact = 0;
 				rem_ox(otmp, OX_ENAM);
 				otmp->owt = weight(otmp);
+				//Hilt and focus gem
+				if(!otmp->cobj)
+				{
+					struct obj *gem = mksobj(rn2(6) ? SAPPHIRE : AQUAMARINE, NO_MKOBJ_FLAGS);
+					gem->quan = 1;
+					gem->owt = weight(gem);
+					add_to_container(otmp, gem);
+					container_weight(otmp);
+				}
+				otmp->ovar1_lightsaberHandle = random_saber_hilt();
 			}
 			if (otmp->oartifact == ART_HAND_OF_VECNA ||
 				otmp->oartifact == ART_EYE_OF_VECNA

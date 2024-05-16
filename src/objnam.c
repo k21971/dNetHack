@@ -4,6 +4,7 @@
 
 #include "hack.h"
 #include "artifact.h"
+#include "xhity.h"
 
 /* "an uncursed greased partly eaten guardian naga hatchling [corpse]" */
 #define PREFIX	125	/* (56) */
@@ -16,7 +17,7 @@ static boolean FDECL(wishymatch, (const char *,const char *,BOOLEAN_P));
 #endif
 static char *NDECL(nextobuf);
 static void FDECL(add_erosion_words, (struct obj *, char *));
-char * doxname(struct obj *, BOOLEAN_P, BOOLEAN_P, BOOLEAN_P);
+char * doxname(struct obj *, BOOLEAN_P, BOOLEAN_P, BOOLEAN_P, BOOLEAN_P);
 #ifdef SORTLOOT
 char * FDECL(xname2, (struct obj *,BOOLEAN_P));
 boolean FDECL(an_bool, (const char *));
@@ -278,6 +279,7 @@ const char *
 lightsaber_colorText(otmp)
 struct obj *otmp;
 {
+	struct obj *gem = otmp->cobj;
 	if(otmp->oartifact) switch(otmp->oartifact){
 		case ART_ANNULUS: return Hallucination ? hcolor(0) : "cerulean";
 		case ART_INFINITY_S_MIRRORED_ARC:
@@ -304,16 +306,20 @@ struct obj *otmp;
 				return "bladeless";
 			}
 			break;
-		case ART_ARKENSTONE: return Hallucination ? hcolor(0) : "rainbow-glinting sparking white";
-		case ART_FLUORITE_OCTAHEDRON: return Hallucination ? hcolor(0) : "burning cobalt";
-		case ART_HEART_OF_AHRIMAN: return Hallucination ? hcolor(0) : "pulsing and shimmering ruby";
-		case ART_GLITTERSTONE: return Hallucination ? hcolor(0) : "glittering gold";
-		
-		default: return Hallucination ? hcolor(0) : LightsaberColor[((int)otmp->cobj->otyp) - MAGICITE_CRYSTAL].colorText;
 	}
 	if(otmp->otyp == KAMEREL_VAJRA)
 		return "lightning bladed";
-	return Hallucination ? hcolor(0) : LightsaberColor[((int)otmp->cobj->otyp) - MAGICITE_CRYSTAL].colorText;
+	if(gem){
+		switch(gem->oartifact){
+			case ART_ARKENSTONE: return Hallucination ? hcolor(0) : "rainbow-glinting sparking white";
+			case ART_FLUORITE_OCTAHEDRON: return Hallucination ? hcolor(0) : "burning cobalt";
+			case ART_HEART_OF_AHRIMAN: return Hallucination ? hcolor(0) : "pulsing and shimmering ruby";
+			case ART_GLITTERSTONE: return Hallucination ? hcolor(0) : "glittering gold";
+			
+			default: return Hallucination ? hcolor(0) : LightsaberColor[((int)gem->otyp) - MAGICITE_CRYSTAL].colorText;
+		}
+	}
+	return "404";
 }
 
 int
@@ -603,7 +609,7 @@ char *
 xname(obj)
 register struct obj *obj;
 {
-	return doxname(obj, FALSE, FALSE, FALSE);
+	return doxname(obj, FALSE, FALSE, FALSE, FALSE);
 }
 
 static void
@@ -1003,6 +1009,9 @@ boolean dofull;
 		if (check_oprop(obj, OPROP_LESSER_PSIOW)){
 			if (Blind_telepat) Strcat(buf, "rustling ");
 		}
+		if (check_oprop(obj, OPROP_RLYHW)){
+			if (Blind_telepat) Strcat(buf, "slithering ");
+		}
 		if (check_oprop(obj, OPROP_DEEPW)){
 			if (Blind_telepat && obj->spe < 8) Strcat(buf, "mumbling ");
 		}
@@ -1020,7 +1029,7 @@ boolean dofull;
 				Strcat(buf, "silver-feather-encrusted ");
 		}
 		
-		if (check_oprop(obj, OPROP_WRTHW) && obj->known)
+		if (check_oprop(obj, OPROP_WRTHW) && obj->known && !check_oprop(obj, OPROP_ELFLW))
 			Strcat(buf, "wrathful ");
 		
 		if (check_oprop(obj, OPROP_ELFLW))
@@ -1074,6 +1083,36 @@ boolean dofull;
 			}
 		}
 		
+		if (check_oprop(obj, OPROP_SOTHW)){
+			switch(soth_weapon_damage_turn(obj)){
+				case AD_STTP:
+					Strcat(buf, "starry ");
+				break;
+				case AD_VAMP:
+					Strcat(buf, "grasping ");
+				break;
+				case AD_FIRE:
+					Strcat(buf, "groaning ");
+				break;
+				case AD_POLY:
+					Strcat(buf, "bubbling ");
+				break;
+				case AD_DESC:
+					Strcat(buf, "auroral ");
+				break;
+				case AD_DRST:
+					Strcat(buf, "stinking ");
+				break;
+				case AD_MAGM:
+					if(obj->oartifact != ART_ANNULUS || !litsaber(obj))
+						Strcat(buf, "cerulean ");
+				break;
+				case AD_MADF:
+					Strcat(buf, "magenta-burning ");
+				break;
+			}
+		}
+		
 		if (check_oprop(obj, OPROP_MAGCW))
 			Strcat(buf, "sparkling ");
 		if (check_oprop(obj, OPROP_LESSER_MAGCW))
@@ -1099,7 +1138,7 @@ boolean dofull;
 			Strcat(buf, "living ");
 		
 		if (check_oprop(obj, OPROP_GSSDW))
-			Strcat(buf, u.uinsight >= 50 ? "rushing " : u.uinsight >= 25 ? "flowing " : "rippling ");
+			Strcat(buf, u.uinsight >= 50 ? "rushing " : u.uinsight >= 25 ? "flowing " : u.uinsight > 0 ? "rippling " : "");
 
 		if (check_oprop(obj, OPROP_BRIL) && !obj->known)
 			Strcat(buf, "ornate ");
@@ -1327,10 +1366,14 @@ char *buf;
 			Strcat(buf, "blood-drenched ");
 	}
 	if (obj->otyp == ISAMUSEI){
-		if(u.uinsight >= 45)
+		if(u.uinsight >= 70)
 			Strcat(buf, "circular ");
+		else if(u.uinsight >= 57)
+			Strcat(buf, "tredecile ");
+		else if(u.uinsight >= 45)
+			Strcat(buf, "crossed ");
 		else if(u.uinsight >= 22)
-			Strcat(buf, "twisting ");
+			Strcat(buf, "reflected ");
 	}
 	if (obj->otyp == CLUB && check_oprop(obj, OPROP_CCLAW)){
 		if(u.uinsight >= 30)
@@ -1350,7 +1393,7 @@ char *buf;
 		else if(u.uinsight >= 5)
 			Strcat(buf, "spinning ");
 	}
-	if (is_mercy_blade(obj)){
+	if (mercy_blade_prop(obj)){
 		//Note: Brain fluid
 		if(u.uinsight >= 50)
 			Strcat(buf, "sticky ");
@@ -1359,6 +1402,25 @@ char *buf;
 		else if(!u.veil)
 			Strcat(buf, "twinkling ");
 	}
+
+	if (obj->otyp == HOLY_SYMBOL_OF_THE_BLACK_MOTHE){
+		if (u.shubbie_credit < 50)
+			return;
+		else if (u.shubbie_devotion < 25*(10 + (u.ucultsval * u.ucultsval * 2 / 25)))
+			Strcat(buf, "glistening ");
+		else
+			Strcat(buf, "drooling ");
+	}
+
+	if (obj->otyp == PURIFIED_MIRROR){
+		if (u.silver_credit < 50)
+			return;
+		else if (u.silver_devotion < 25*(10 + (u.ucultsval * u.ucultsval * 2 / 25)))
+			Strcat(buf, "glinting ");
+		else
+			Strcat(buf, "shining ");
+	}
+
 }
 
 static void
@@ -1637,6 +1699,8 @@ char *buf;
 			return;
 	}
 force_add_material_name:
+	if (check_oprop(obj, OPROP_ELFLW))
+		return;
 	/* add on the adjective form of the object's material */
 	Strcat(buf, material_name(obj, TRUE));
 	Strcat(buf, " ");
@@ -1687,11 +1751,12 @@ char *buf;
  * "a cursed -1 lightning bladed kamerel vajra"
  */
 char *
-doxname(obj, dofull, ignore_oquan, with_price)
+doxname(obj, dofull, ignore_oquan, with_price, getting_obj_base_desc)
 struct obj * obj;
 boolean dofull;
 boolean ignore_oquan;
 boolean with_price;
+boolean getting_obj_base_desc;
 {
 	register char *buf;
 	register int typ = obj->otyp;
@@ -1703,7 +1768,6 @@ boolean with_price;
 	register const char *un = ocl->oc_uname;		/* what you have named the otyp */
 	char tbuf[BUFSZ];
 	const struct artifact *oart = 0;
-	static int getting_obj_base_desc = 0;
 	if (obj && obj->oartifact) oart = &artilist[(obj)->oartifact];
 
 	buf = nextobuf() + PREFIX;	/* leave room for "17 -3 " */
@@ -1731,7 +1795,6 @@ boolean with_price;
 	if (Role_if(PM_PRIEST)) obj->bknown = TRUE;
 	if (u.sealsActive&SEAL_ANDROMALIUS) obj->sknown = TRUE;
 	//if (obj_is_pname(obj)) goto nameit;
-
 	if (!getting_obj_base_desc) {
 		if (dofull) add_determiner_words(obj, buf);	// quantity or "a" or "the"
 		/* general descriptors */
@@ -1757,12 +1820,10 @@ boolean with_price;
 	
 	if (obj->oartifact && !(is_lightsaber(obj) && obj->cobj && obj->cobj->oartifact == obj->oartifact) && undiscovered_artifact(obj->oartifact) && oart->desc && !getting_obj_base_desc) {
 		if (strstri(oart->desc, "%s")) {
-			getting_obj_base_desc = TRUE;
 			char * buf2 = nextobuf();
 			if (obj->oartifact == ART_STAR_OF_HYPERNOTUS) Sprintf(buf2, oart->desc, (objects[obj->sub_material].oc_name_known) ? OBJ_NAME(objects[obj->sub_material]) : "stone");
-			else Sprintf(buf2, oart->desc, xname(obj));
+			else Sprintf(buf2, oart->desc, xname_bland(obj)); /* gets just base obj desc no modifiers */
 			Strcat(buf, buf2);
-			getting_obj_base_desc = FALSE;
 		}
 		else {
 			Strcat(buf, oart->desc);
@@ -1874,10 +1935,11 @@ boolean with_price;
 			}
 			if ((typ == VICTORIAN_UNDERWEAR && nn) ||
 				(typ == JUMPSUIT && !nn) ||
-				(typ == BODYGLOVE && !nn) ||
+				(typ == BODYGLOVE && !nn)
 				/* depends on order of dragon scales */
-				(typ >= GRAY_DRAGON_SCALES && typ <= YELLOW_DRAGON_SCALES) ||
-				(typ == BANDS)
+				|| (typ >= GRAY_DRAGON_SCALES && typ <= YELLOW_DRAGON_SCALES)
+				|| (typ == BANDS)
+				|| (typ == SHACKLES)
 				) {
 				Strcat(buf, "set of ");
 			}
@@ -2014,6 +2076,9 @@ boolean with_price;
 				if (obj->quan == 8) Strcat(buf, "Fluorite Octet");
 				else if (obj->quan > 1) Strcat(buf, "Fluorite Octahedra");
 				else Strcat(buf, "Fluorite Octahedron");
+			}
+			else if (obj_is_pname(obj) && obj->known && (obj->oartifact == ART_LANCE_OF_LONGINUS) && (obj->otyp == SCALPEL || obj->otyp == LIGHTSABER)){
+				Strcat(buf, "Lancet of Longinus");
 			}
 			else if (obj_is_pname(obj) && obj->known && !strncmpi(ONAME(obj), "the ", 4))
 				Strcat(buf, ONAME(obj) + 4);
@@ -2208,8 +2273,6 @@ weapon:
 			}
 			break;
 		case TOOL_CLASS:
-			if (obj->oartifact == ART_MIRRORED_MASK)
-				Sprintf(eos(buf), " (%s)", obj->corpsenm != NON_PM ? mons[obj->corpsenm].mname : "blank");
 			if (obj->owornmask & (W_TOOL /* blindfold */
 #ifdef STEED
 				| W_SADDLE
@@ -2302,6 +2365,14 @@ weapon:
 				if (obj->opoisoned & OPOISON_ACID)  Strcat(buf, " (acid injecting)");
 				if (obj->opoisoned & OPOISON_SILVER)  Strcat(buf, " (star-water injecting)");
 				if (obj->opoisoned & OPOISON_HALLU)  Strcat(buf, " (ergot injecting)");
+			}
+			if (obj->known && obj->oartifact &&
+				(oart->inv_prop == MORGOTH)
+				){
+				Sprintf(eos(buf), " (%s)",
+					objects[obj->otyp].oc_name_known
+					? OBJ_NAME(objects[obj->otyp])
+					: OBJ_DESCR(objects[obj->otyp]));
 			}
 			break;
 		case FOOD_CLASS:
@@ -2407,7 +2478,14 @@ xname2(obj, ignore_oquan)
 register struct obj *obj;
 boolean ignore_oquan;
 {
-	return doxname(obj, FALSE, ignore_oquan, FALSE);
+	return doxname(obj, FALSE, ignore_oquan, FALSE, FALSE);
+}
+
+char *
+xname_bland(obj)
+register struct obj *obj;
+{
+	return doxname(obj, FALSE, FALSE, FALSE, TRUE);
 }
 
 /* xname() output augmented for multishot missile feedback */
@@ -2453,7 +2531,7 @@ doname_base(obj, with_price)
 register struct obj *obj;
 boolean with_price;
 {
-	return doxname(obj, TRUE, FALSE, with_price);
+	return doxname(obj, TRUE, FALSE, with_price, FALSE);
 }
 
 /** Wrapper function for vanilla behaviour. */
@@ -2829,6 +2907,7 @@ static const char * const special_subjs[] = {
 	"amnesia",
 	"paralysis",
 	"dress",
+	"diskos",
 	0
 };
 
@@ -3313,6 +3392,7 @@ STATIC_OVL NEARDATA const struct o_range o_ranges[] = {
 	{ "dragon scale mail",
 			ARMOR_CLASS,  GRAY_DRAGON_SCALE_MAIL, YELLOW_DRAGON_SCALE_MAIL },
 	{ "sword",	WEAPON_CLASS, SHORT_SWORD,    KATANA },
+	{ "melee",	WEAPON_CLASS, SPEAR,    KATAR },
 //#ifdef FIREARMS
 	{ "firearm", 	WEAPON_CLASS, PISTOL, AUTO_SHOTGUN },
 	{ "gun", 	WEAPON_CLASS, PISTOL, AUTO_SHOTGUN },
@@ -3322,6 +3402,8 @@ STATIC_OVL NEARDATA const struct o_range o_ranges[] = {
 	{ "venom",	VENOM_CLASS,  BLINDING_VENOM, ACID_VENOM },
 #endif
 	{ "slab",	TILE_CLASS,    FIRST_WORD,      NURTURING_WORD },
+	{ "glyph",	TILE_CLASS,    ANTI_CLOCKWISE_METAMORPHOSIS_G,      ORRERY_GLYPH },
+	{ "syllable",	TILE_CLASS,SYLLABLE_OF_STRENGTH__AESH,   SYLLABLE_OF_SPIRIT__VAUL },
 	{ "gray stone",	GEM_CLASS,    LUCKSTONE,      SPIRITUAL_SOULSTONE },
 	{ "grey stone",	GEM_CLASS,    LUCKSTONE,      SPIRITUAL_SOULSTONE },
 	{ "soulstone",	GEM_CLASS,    VITAL_SOULSTONE,      SPIRITUAL_SOULSTONE },
@@ -3358,7 +3440,7 @@ const char *oldstr;
 		(p = strstri(bp, " labelled ")) != 0 ||
 		(p = strstri(bp, " called ")) != 0) {
 		/* don't singularize these: */
-		if (!BSTRNCMPI(bp, p- 4, "Eyes of the Overworld", 21)
+		if (!BSTRNCMPI(bp, p- 4, "Eye of the Overworld", 20)
 			|| !BSTRNCMPI(bp, p-11, "Great Claws of Urdlen", 21)
 			|| !BSTRNCMPI(bp, p- 5, "Claws of the Revenancer", 23)
 			|| !BSTRNCMPI(bp, p-12, "Steel Scales of Kurtulmak", 25)
@@ -3424,13 +3506,19 @@ const char *oldstr;
 			if (!BSTRCMP(bp, p-6, "gloves") ||
 			    !BSTRCMP(bp, p-6, "lenses") ||
 			    !BSTRCMP(bp, p-10, "sunglasses") ||
+			    !BSTRCMP(bp, p-9, "soul-lens") ||
 			    !BSTRCMPI(bp, p-8, "shackles") ||
 			    !BSTRCMP(bp, p-5, "shoes") ||
 				!BSTRCMPI(bp, p-9, "vs curses") ||
 				!BSTRCMPI(bp, p-13, "versus curses") ||
+			    !BSTRCMPI(bp, p-12, "vs evil eyes") ||
+			    !BSTRCMPI(bp, p-16, "versus evil eyes") ||
+			    !BSTRCMPI(bp, p-8, "vs gazes") ||
+			    !BSTRCMPI(bp, p-12, "versus gazes") ||
 			    !BSTRCMPI(bp, p-6, "scales") ||
 				!BSTRCMP(bp, p-6, "wishes") ||	/* ring */
 				!BSTRCMPI(bp, p-10, "Lost Names") || /* book */
+			    !BSTRCMPI(bp, p-17, "Amalgamated Skies") || /* sword (wizmode) */
 				!BSTRCMPI(bp, p-9, "mandibles"))
 				return bp;
 
@@ -3475,6 +3563,7 @@ const char *oldstr;
 			   !BSTRCMPI(bp, p-6, "talons") || /* set of knives */
 			   !BSTRCMPI(bp, p-6, "Thorns") || /* artifact */
 			   !BSTRCMPI(bp, p-9, "Soul Lens") || /* artifact */
+			   !BSTRCMPI(bp, p-9, "soul-lens") || /* item */
 			   !BSTRCMPI(bp, p-19, "Seal of the Spirits") || /* artifact */
 			   !BSTRCMPI(bp, p-20, "wind and fire wheels") || /* boots. Yeah. */
 			   !BSTRCMPI(bp, p-10, "eucalyptus") ||
@@ -3610,8 +3699,12 @@ struct alt_spellings {
 	{ "mattock", DWARVISH_MATTOCK },
 	{ "amulet of poison resistance", AMULET_VERSUS_POISON },
 	{ "amulet of curse resistance", AMULET_VERSUS_CURSES },
+	{ "amulet of gaze resistance", AMULET_VERSUS_EVIL_EYES },
 	{ "amulet vs poison", AMULET_VERSUS_POISON },
 	{ "amulet vs curses", AMULET_VERSUS_CURSES },
+	{ "amulet vs evil eyes", AMULET_VERSUS_EVIL_EYES },
+	{ "amulet vs gazes", AMULET_VERSUS_EVIL_EYES },
+	{ "amulet versus gazes", AMULET_VERSUS_EVIL_EYES },
 	{ "stone", ROCK },
 	{ "crystal", ROCK },
 #ifdef TOURIST
@@ -3776,7 +3869,9 @@ int wishflags;
 		lolth_symbol = FALSE,
 		kiaransali_symbol = FALSE,
 		eilistraee_symbol = FALSE,
-		sizewished = FALSE;
+		sizewished = FALSE,
+		male = FALSE,
+		female = FALSE;
 	int item_color = -1;
 	int objsize = (from_user ? youracedata->msize : MZ_MEDIUM);
 	long bodytype = 0L;
@@ -4201,7 +4296,7 @@ int wishflags;
 			&& strncmpi(bp, "silver spellbook", 16)
 			&& strncmpi(bp, "silver wand", 11) && strncmpi(bp, "silver slingstone", 17)
 			&& strncmpi(bp, "silver stone", 12) && strncmpi(bp, "Silver Key", 10)
-			&& strncmpi(bp, "Silver Starlight", 16)
+			&& strncmpi(bp, "Silver Starlight", 16) && strncmpi(bp, "Silver Sky", 10)
 		) {
 			mat = SILVER;
 		} else if ((!strncmpi(bp, "golden ", l=7) || !strncmpi(bp, "gold ", l=5))
@@ -4325,6 +4420,9 @@ int wishflags;
 		} else if (!strncmpi(bp, "apodictic ", l=10)) {
 			add_oprop_list(oprop_list, OPROP_LESSER_AXIOW);
 
+		} else if (!strncmpi(bp, "flowing ", l=8)) {
+			add_oprop_list(oprop_list, OPROP_GSSDW);
+
 		} else if (!strncmpi(bp, "flaming ", l=8)) {
 			add_oprop_list(oprop_list, OPROP_FIREW);
 		} else if (!strncmpi(bp, "forge-hot ", l=10)) {
@@ -4363,6 +4461,8 @@ int wishflags;
 			add_oprop_list(oprop_list, OPROP_PSIOW);
 		} else if (!strncmpi(bp, "rustling ", l=9)) {
 			add_oprop_list(oprop_list, OPROP_LESSER_PSIOW);
+		} else if (!strncmpi(bp, "slithering ", l=11)) {
+			add_oprop_list(oprop_list, OPROP_RLYHW);
 
 		} else if ((!strncmpi(bp, "deep ", l=5) && strncmpi(bp, "deep sea", 8) && strncmpi(bp, "deep dragon", 11)) || !strncmpi(bp, "mumbling ", l=9)) {
 			add_oprop_list(oprop_list, OPROP_DEEPW);
@@ -4374,6 +4474,12 @@ int wishflags;
 
 		} else if (!strncmpi(bp, "drooling ", l=9) || !strncmpi(bp, "lashing ", l=8) || !strncmpi(bp, "staring ", l=8) || !strncmpi(bp, "stormwrapped ", l=8)) {
 			add_oprop_list(oprop_list, OPROP_GOATW);
+
+		} else if (!strncmpi(bp, "sothoth_weapon ", l=15)) {
+			add_oprop_list(oprop_list, OPROP_SOTHW);
+
+		} else if (!strncmpi(bp, "club_claw ", l=10)) {
+			add_oprop_list(oprop_list, OPROP_CCLAW);
 
 		} else if (!strncmpi(bp, "tactile ", l=8)) {
 			add_oprop_list(oprop_list, OPROP_TACTB);
@@ -4428,6 +4534,9 @@ int wishflags;
 		} else if (!strncmpi(bp, "wrathful ", l=9) && strncmpi(bp, "Wrathful Wind", 13) && strncmpi(bp, "Wrathful Spider", 15)) {
 			add_oprop_list(oprop_list, OPROP_WRTHW);
 
+		} else if (!strncmpi(bp, "luminous ", l=9) || !strncmpi(bp, "radiant ", l=8)) {
+			add_oprop_list(oprop_list, OPROP_ELFLW);
+
 		} else if (!strncmpi(bp, "flaying ", l=8)) {
 			add_oprop_list(oprop_list, OPROP_FLAYW);
 		} else if (!strncmpi(bp, "excoriating ", l=12)) {
@@ -4439,6 +4548,9 @@ int wishflags;
 			&& strncmpi(bp, "living mask", 11) && strncmpi(bp, "living arm", 10)
 		) {
 			add_oprop_list(oprop_list, OPROP_LIVEW);
+
+		} else if (!strncmpi(bp, "insightful ", l=11)) {
+			add_oprop_list(oprop_list, OPROP_INSTW);
 
 		} else if (!strncmpi(bp, "spiked ", l=7)) {
 			add_oprop_list(oprop_list, OPROP_SPIKED);
@@ -4515,6 +4627,10 @@ int wishflags;
 			mat = GEMSTONE; gemtype = AGATE;
 		} else if (!strncmpi(bp, "jade ", l=5) && strncmpi(bp, "jade ring", 9)) {
 			mat = GEMSTONE; gemtype = JADE;
+		} else if (!strncmpi(bp, "male ", l=5)) {
+			male = TRUE;
+		} else if (!strncmpi(bp, "female ", l=7)) {
+			female = TRUE;
 		} else
 			break;
 		bp += l;
@@ -5166,6 +5282,14 @@ srch:
 			*wishreturn = WISH_SUCCESS;
 			return(&zeroobj);
 		}
+		if (!BSTRCMPI(bp, p - 5, "forge")) {
+			levl[u.ux][u.uy].typ = FORGE;
+			level.flags.nforges++;
+			pline("A forge.");
+			newsym(u.ux, u.uy);
+			*wishreturn = WISH_SUCCESS;
+			return(&zeroobj);
+		}
 		if(!BSTRCMP(bp, p-6, "throne")) {
 			levl[u.ux][u.uy].typ = THRONE;
 			pline("A throne.");
@@ -5453,6 +5577,10 @@ typfnd:
 		case FIGURINE:
 			//if (!(mons[mntmp].geno & G_UNIQ) && !is_unwishable(&mons[mntmp]))
 			otmp->corpsenm = mntmp;
+			if (male && !female)
+				otmp->spe = FIGURINE_MALE;
+			if (female && !male)
+				otmp->spe = FIGURINE_FEMALE;
 			break;
 		case EGG:
 			mntmp = can_be_hatched(mntmp);
@@ -5473,6 +5601,10 @@ typfnd:
 			if (Has_contents(otmp) && verysmall(&mons[mntmp]))
 			    delete_contents(otmp);	/* no spellbook */
 			otmp->spe = ishistoric ? STATUE_HISTORIC : 0;
+			if (male && !female)
+				otmp->spe |= STATUE_MALE;
+			if (female && !male)
+				otmp->spe |= STATUE_FEMALE;			
 			break;
 		case FOSSIL:
 			if(wizwish)
@@ -5701,6 +5833,11 @@ typfnd:
 
 			if (otmp->oartifact) {
 				isartifact = TRUE;
+			} else {
+				obfree(otmp, (struct obj *) 0);		// Is this necessary?
+				otmp = &zeroobj;					// Is this necessary?
+				*wishreturn = WISH_ARTEXISTS;
+				return &zeroobj;
 			}
 		}
 		/* if not artifact, use given name */
@@ -5709,26 +5846,21 @@ typfnd:
 	}
 	if (otmp->oartifact && from_user) {
 		/* check that they were allowed to wish for that artifact */
-		if (!wizwish
-			&& ((is_quest_artifact(otmp)						//redundant failsafe.  You can't wish for ANY quest artifacts
-			|| (artilist[otmp->oartifact].gflags&ARTG_NOWISH)	// non-wishable artifacts should be marked as such.
-			|| !touch_artifact(otmp, &youmonst, TRUE)			//Auto-fail a wish for an artifact you wouldn't be able to touch (mercy rule)
-			|| !allow_artifact									// pre-determined if any artifact wish is allowed
-			)))
-			// depreciated criteria:
-			// (otmp->oartifact >= ART_ROD_OF_SEVEN_PARTS) //No wishing for quest artifacts, unique monster artifacts, etc.
-			// (otmp->oartifact && rn2((int)(u.uconduct.wisharti)) > 1) //Limit artifact wishes per game
-			// (otmp->oartifact >= ART_ITLACHIAYAQUE && otmp->oartifact <= ART_EYE_OF_THE_AETHIOPICA) || //no wishing for quest artifacts
-			// (otmp->oartifact >= ART_ROD_OF_SEVEN_PARTS && otmp->oartifact <= ART_SILVER_KEY) || //no wishing for alignment quest artifacts
-			// (otmp->oartifact >= ART_SWORD_OF_ERATHAOL && otmp->oartifact <= ART_HAMMER_OF_BARQUIEL) || //no wishing for angel artifacts
-			// (otmp->oartifact >= ART_GENOCIDE && otmp->oartifact <= ART_DOOMSCREAMER) || //no wishing for demon artifacts
-			// (otmp->oartifact >= ART_STAFF_OF_THE_ARCHMAGI && otmp->oartifact <= ART_SNICKERSNEE)
+
+//redundant failsafe.  You can't wish for ANY quest artifacts
+// non-wishable artifacts should be marked as such.
+#define NOWISH (is_quest_artifact(otmp) || (artilist[otmp->oartifact].gflags&ARTG_NOWISH))
+// pre-determined if any artifact wish is allowed
+#define NOJUICE (!allow_artifact)
+//Auto-fail a wish for an artifact you wouldn't be able to touch (mercy rule)
+#define MERCY (!touch_artifact(otmp, &youmonst, TRUE))
+		if (!wizwish && (NOWISH || MERCY || NOJUICE))
 		{
+			*wishreturn = (NOWISH) ? WISH_DENIED : ((NOJUICE) ? WISH_OUTOFJUICE : WISH_MERCYRULE);
 			/* wish failed */
 			artifact_exists(otmp, ONAME(otmp), FALSE);	// Is this necessary?
 			obfree(otmp, (struct obj *) 0);		// Is this necessary?
 			otmp = &zeroobj;					// Is this necessary?
-			*wishreturn = WISH_DENIED;
 			return &zeroobj;
 		}
 		else {
@@ -5736,21 +5868,12 @@ typfnd:
 			if(!wizwish){
 				u.uconduct.wisharti++;	/* KMH, conduct */
 
-				/* characters other than priests also have their god's likelyhood to grant artifacts decreased */
-				if(!Role_if(PM_PRIEST))
+				/* characters other than priests also have their god's likelyhood to grant artifacts decreased, as well as future cult gifts made more rare */
+				if(!Role_if(PM_PRIEST)){
 					u.uartisval += arti_value(otmp);
+					u.ucultsval += arti_value(otmp);
+				}
 			}
-		}
-	}
-	/* even more wishing abuse: if we tried to create an artifact but failed (it was already generated) we may need a new otyp */
-	else if (isartifact && !otmp->oartifact) {
-		switch (otmp->otyp) {
-		case BEAMSWORD:
-			otmp = poly_obj(otmp, BROADSWORD);
-			break;
-		case UNIVERSAL_KEY:
-			otmp = poly_obj(otmp, SKELETON_KEY);
-			break;
 		}
 	}
 

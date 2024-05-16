@@ -4,6 +4,7 @@
 #include "hack.h"
 #include "wincurs.h"
 #include "cursdial.h"
+#include "curswins.h"
 #include "func_tab.h"
 #include <ctype.h>
 
@@ -107,6 +108,7 @@ curses_line_input_dialog(const char *prompt, char *answer, int buffer)
                 height++;
             }
         }
+        free(tmpstr);
     }
 
     if (iflags.window_inited) {
@@ -388,7 +390,8 @@ curses_ext_cmd()
             break;
         }
 
-        if ((letter == '\b') || (letter == KEY_BACKSPACE)) {
+        /* \177 is delete */
+        if ((letter == '\b') || (letter == KEY_BACKSPACE) || (letter == '\177')) {
             if (prompt_width == 0) {
                 ret = -1;
                 break;
@@ -447,15 +450,22 @@ curses_create_nhmenu(winid wid)
         if (menu_item_ptr != NULL) {
             while (menu_item_ptr->next_item != NULL) {
                 tmp_menu_item = menu_item_ptr->next_item;
+                free((char *) menu_item_ptr->str);
                 free(menu_item_ptr);
                 menu_item_ptr = tmp_menu_item;
             }
+            free((char *) menu_item_ptr->str);
             free(menu_item_ptr);        /* Last entry */
             new_menu->entries = NULL;
         }
         if (new_menu->prompt != NULL) { /* Reusing existing menu */
             free((char *) new_menu->prompt);
+            new_menu->prompt = NULL;
         }
+        new_menu->num_pages = 0;
+        new_menu->height = 0;
+        new_menu->width = 0;
+        new_menu->reuse_accels = FALSE;
         return;
     }
 
@@ -673,9 +683,11 @@ curses_del_menu(winid wid)
     if (menu_item_ptr != NULL) {
         while (menu_item_ptr->next_item != NULL) {
             tmp_menu_item = menu_item_ptr->next_item;
+            free((void *)menu_item_ptr->str);
             free(menu_item_ptr);
             menu_item_ptr = tmp_menu_item;
         }
+        free((void *)menu_item_ptr->str);
         free(menu_item_ptr);    /* Last entry */
         current_menu->entries = NULL;
     }
@@ -692,6 +704,9 @@ curses_del_menu(winid wid)
         tmpmenu->prev_menu = current_menu->prev_menu;
     }
 
+    if (current_menu->prompt) {
+        free((char *) current_menu->prompt);
+    }
     free(current_menu);
 
     curses_del_wid(wid);
@@ -997,12 +1012,15 @@ menu_display_page(nhmenu *menu, WINDOW * win, int page_num)
         }
         if (menu_item_ptr->glyph != NO_GLYPH && iflags.use_menu_glyphs) {
             unsigned bgcolor;   /*notused */
-			glyph_t curglyph = (glyph_t)curletter;//Note: a glyph is a long int
+            glyph_t curglyph = (glyph_t)curletter;//Note: a glyph is a long int
             mapglyph(menu_item_ptr->glyph, &curglyph, &color, &bgcolor, u.ux, u.uy);
-			curletter = (int)curglyph;//This seems bad, but it makes explicit what this code was always doing...
-            curses_toggle_color_attr(win, color, NONE, ON);
-            mvwaddch(win, menu_item_ptr->line_num + 1, start_col, curletter);
-            curses_toggle_color_attr(win, color, NONE, OFF);
+            curletter = (int)curglyph;//This seems bad, but it makes explicit what this code was always doing...
+            nethack_char nch;
+            nch.ch = curletter;
+            nch.color = color;
+            nch.attr = NONE;
+            /* curses_write_char takes coordinates in x,y order, but mvwaddch takes them in y,x order */
+            curses_write_char(win, start_col, menu_item_ptr->line_num + 1, nch);
             mvwaddch(win, menu_item_ptr->line_num + 1, start_col + 1, ' ');
             entry_cols -= 2;
             start_col += 2;

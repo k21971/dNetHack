@@ -3,6 +3,7 @@
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
+#include "artifact.h"
 
 STATIC_DCL void NDECL(binderdown);
 STATIC_DCL int FDECL(enermod, (int));
@@ -194,6 +195,19 @@ more_experienced(exp, rexp)
 		exp *= 1.3;
 		rexp *= 1.3;
 	}
+	if(flags.descendant && flags.beginner){
+		if(Role_if(PM_CONVICT)
+		|| (Role_if(PM_HEALER) && Race_if(PM_DROW))
+		|| Role_if(PM_MADMAN)
+		){
+			exp = (exp+1)/2;
+			rexp = (rexp+1)/2;
+		}
+		else {
+			exp = (exp+9)/10;
+			rexp = (rexp+9)/10;
+		}
+	}
 	if(u.ulevel < u.ulevelmax){
 		//if you have lost levels to level drain, gain XP at 5x rate.
 		//if you are about to regain the last drained level, gain at least the base xp total
@@ -203,6 +217,16 @@ more_experienced(exp, rexp)
 			u.uexp += exp*5;
 		}
 	} else u.uexp += exp;
+	if(uarm && uarm->oartifact == ART_SCORPION_CARAPACE){
+		artinstance[ART_SCORPION_CARAPACE].CarapaceXP += exp;
+		if(artinstance[ART_SCORPION_CARAPACE].CarapaceLevel < 30
+			&& newuexp(artinstance[ART_SCORPION_CARAPACE].CarapaceLevel) <= artinstance[ART_SCORPION_CARAPACE].CarapaceXP
+		){
+			artinstance[ART_SCORPION_CARAPACE].CarapaceLevel++;
+			artinstance[ART_SCORPION_CARAPACE].CarapaceXP = min(artinstance[ART_SCORPION_CARAPACE].CarapaceXP, newuexp(artinstance[ART_SCORPION_CARAPACE].CarapaceLevel) - 1);
+			artinstance[ART_SCORPION_CARAPACE].CarapacePoints++;
+		}
+	}
 	u.urexp += 4*exp + rexp;
 	if(exp
 #ifdef SCORE_ON_BOTL
@@ -211,6 +235,22 @@ more_experienced(exp, rexp)
 	   ) flags.botl = 1;
 	if (u.urexp >= (Role_if(PM_WIZARD) ? 1000 : 2000))
 		flags.beginner = 0;
+}
+
+void
+lose_experience(exp)
+	register int exp;
+{
+	if(!exp)
+		return;
+	u.uexp = max(u.uexp - exp, 0);
+	if(exp
+#ifdef SCORE_ON_BOTL
+	   || flags.showscore
+#endif
+	   ) flags.botl = 1;
+	if (u.ulevel > 1 && u.uexp < newuexp(u.ulevel-1))
+	    losexp("lost experience",FALSE,FALSE,FALSE);
 }
 
 void
@@ -250,10 +290,25 @@ boolean expdrain; /* attack drains exp as well */
 	u.uhprolled -= num;
 	if (u.uhprolled < 1) u.uhprolled = 1;
 	u.uhp -= num + conplus(ACURR(A_CON));
+
+	if (Upolyd) {
+		/* loosely - pretends you rolled exactly average on every hit die
+		 * will therefore average out over all levels, making it functionally impossible
+		 * to drain4gain with polyforms past a certain maximum value
+		 */
+		num = u.mhrolled / (u.ulevel + mons[u.umonnum].mlevel);
+		u.mhrolled -= num;
+		u.mh -= num + conplus(ACURR(A_CON));
+		if((int)(conplus(ACURR(A_CON))) != conplus(ACURR(A_CON))){
+			/* Remainder (just lose an extra HP of healing)*/
+			u.mh--;
+		}
+	}
+
 	calc_total_maxhp();
 	
 	if (u.uhp < 1) u.uhp = 1;
-
+	if (u.mh < 1) u.mh = 1;
 	
 	num = newen();
 	u.uenrolled -= num;
@@ -381,15 +436,8 @@ boolean incr;	/* true iff via incremental experience growth */
 	register int num;
 
 	if (!incr) You_feel("more experienced.");
-	num = newhp();
-	u.uhprolled += num;
-	u.uhp += num + conplus(ACURR(A_CON));
-	if((int)(conplus(ACURR(A_CON))) != conplus(ACURR(A_CON))){
-		/* Remainder (just give an extra HP of healing)*/
-		u.uhp++;
-	}
 	if (Upolyd) {
-	    num = rnd(8);
+	    num = rnd(hd_size(youracedata));
 	    u.mhrolled += num;
 	    u.mh += num + conplus(ACURR(A_CON));
 		if((int)(conplus(ACURR(A_CON))) != conplus(ACURR(A_CON))){
@@ -397,10 +445,17 @@ boolean incr;	/* true iff via incremental experience growth */
 			u.mh++;
 		}
 	}
-	num = newen();
-	u.uenrolled += num;
-	u.uen += num + ACURR(A_INT)/4;
 	if (u.ulevel < MAXULEV) {
+		num = newhp();
+		u.uhprolled += num;
+		u.uhp += num + conplus(ACURR(A_CON));
+		if((int)(conplus(ACURR(A_CON))) != conplus(ACURR(A_CON))){
+			/* Remainder (just give an extra HP of healing)*/
+			u.uhp++;
+		}
+		num = newen();
+		u.uenrolled += num;
+		u.uen += num + ACURR(A_INT)/4;
 	    if (incr) {
 		long tmp = newuexp(u.ulevel + 1);
 		if (u.uexp >= tmp) u.uexp = tmp - 1;
@@ -412,6 +467,12 @@ boolean incr;	/* true iff via incremental experience growth */
 	    pline("Welcome to experience level %d.", u.ulevel);
 	    adjabil(u.ulevel - 1, u.ulevel);	/* give new intrinsics */
 	    reset_rndmonst(NON_PM);		/* new monster selection */
+	}
+	else {
+		num = newhp();
+		u.uhpbonus += num;
+		num = newen();
+		u.uenbonus += num;
 	}
 	if(Role_if(PM_EXILE)) binderup();
 

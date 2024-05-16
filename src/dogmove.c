@@ -131,7 +131,7 @@ boolean check_if_better;
 		 (otmp->oartifact
 			|| !check_oprop(otmp, OPROP_NONE)
 			|| (rakuyo_prop(otmp) && u.uinsight >= 20)
-			|| (is_mercy_blade(otmp) && !u.veil)
+			|| (mercy_blade_prop(otmp) && !u.veil)
 			|| (otmp->otyp == ISAMUSEI && u.uinsight >= 22)
 			|| (otmp->otyp == DISKOS && u.uinsight >= 10)
 		 ) ||
@@ -173,6 +173,7 @@ boolean check_if_better;
 	     otmp->otyp == POT_BLINDNESS ||
 	     otmp->otyp == POT_CONFUSION ||
 	     otmp->otyp == POT_AMNESIA ||
+	     (otmp->otyp == POT_WATER && otmp->blessed) ||
 	     otmp->otyp == POT_ACID ||
 	     otmp->otyp == FROST_HORN ||
 	     otmp->otyp == FIRE_HORN ||
@@ -218,7 +219,7 @@ register struct monst *mon;
 	if(on_level(&valley_level, &u.uz))
 		return (struct obj *)0; //The Dead hold on to their possessions (prevents the "drop whole inventory" bug
 	
-	if(is_eeladrin(mon->data))
+	if(is_eeladrin(mon->data) || (mon->mtyp != PM_UNEARTHLY_DROW && is_yochlol(mon->data)))
 		return (struct obj *)0; //Eladrin don't drop objects in their energy form.
 	
 	rwep = mon_attacktype(mon, AT_WEAP) ? propellor : &zeroobj;
@@ -317,6 +318,8 @@ struct obj *obj;
 			mtmp->meating = objects[obj->otyp].oc_delay;
 			nutrit = objects[obj->otyp].oc_nutrition;
 	    }
+		if(mtmp->mtyp == PM_DRACAE_ELADRIN && HAS_ESMT(mtmp))
+			ESMT(mtmp)->smith_biomass_stockpile += nutrit;
 	    switch(mtmp->data->msize) {
 		case MZ_TINY: nutrit *= 8; break;
 		case MZ_SMALL: nutrit *= 6; break;
@@ -580,11 +583,7 @@ register struct edog *edog;
 {
 	if (monstermoves+900 > edog->hungrytime && (
 		(!carnivorous(mtmp->data) && !herbivorous(mtmp->data)) || 
-		(In_quest(&u.uz) && 
-			((Is_qtown(&u.uz) && !flags.stag) || 
-			 (Is_nemesis(&u.uz) && flags.stag)) &&
-		 !(Race_if(PM_DROW) && Role_if(PM_NOBLEMAN) && !flags.initgend)
-		)
+		Is_town_level(&u.uz)
 	)) {
 		/* Pets don't get hungery on quest home */
 		edog->hungrytime = monstermoves + 1000;
@@ -782,8 +781,10 @@ int udist;
 			*/
 		    if (edog->hungrytime < monstermoves + DOG_SATIATED || 
 				(!mindless_mon(mtmp) && 
-					((YouHunger < HUNGRY && edog->hungrytime < monstermoves + DOG_SATIATED/3) || 
-					(YouHunger < WEAK && edog->hungrytime < monstermoves))
+					(
+						(YouHunger > 150*get_uhungersizemod() && edog->hungrytime < monstermoves + DOG_SATIATED/3) ||
+						(YouHunger > 50*get_uhungersizemod() && edog->hungrytime < monstermoves)
+					)
 				)
 			) 
 #endif /* PET_SATIATION */
@@ -1007,6 +1008,14 @@ boolean ranged;
 	
 	if(nonthreat(mtmp2)) return FALSE;
 	
+	if(mtmp->mhp*4 < mtmp->mhpmax && u.uhp*2 >= u.uhpmax)
+		return FALSE;
+	
+	if(get_mx(mtmp, MX_EDOG) && (monstermoves - EDOG(mtmp)->whistletime < 5))
+		return FALSE;
+
+	if(mtmp->mpassive)
+		return FALSE;
 	if(mtmp->mtame && u.peaceful_pets && mtmp2->mpeaceful)
 		return FALSE;
 
@@ -1267,7 +1276,11 @@ register int after;	/* this is extra fast monster movement */
 		if (m_carrying(mtmp, SKELETON_KEY)||m_carrying(mtmp, UNIVERSAL_KEY)) allowflags |= UNLOCKDOOR;
 	}
 	if (species_busts_doors(mtmp->data)) allowflags |= BUSTDOOR;
-	if (tunnels(mtmp->data)) allowflags |= ALLOW_DIG;
+	if (tunnels(mtmp->data)
+#ifdef REINCARNATION
+	    && !Is_rogue_level(&u.uz)	/* same restriction as m_move() */
+#endif
+		) allowflags |= ALLOW_DIG;
 	cnt = mfndpos(mtmp, poss, info, allowflags);
 
 	/* Normally dogs don't step on cursed items, but if they have no

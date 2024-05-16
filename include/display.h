@@ -24,16 +24,22 @@
  * Returns true if the hero can sense the given monster.  This includes
  * monsters that are hiding or mimicing other monsters.
  */
+
+#define etele_dist ((uarmh && uarmh->oartifact == ART_ENFORCED_MIND) ? (BOLT_LIM * BOLT_LIM * 4) : (BOLT_LIM * BOLT_LIM))
 #define tp_sensemon(mon) (	/* The hero can always sense a monster IF:  */\
     (!mindless_mon(mon)) &&	/* 1. the monster has a brain to sense AND  */\
       ((Blind && Blind_telepat) ||	/* 2a. hero is blind and telepathic OR	    */\
 				/* 2b. hero is using a telepathy inducing   */\
 				/*	 object and in range		    */\
-      (Unblind_telepat &&					      \
-	(distu(mon->mx, mon->my) <= (BOLT_LIM * BOLT_LIM))))		      \
-)
+      (Unblind_telepat && (distu(mon->mx, mon->my) <= etele_dist))))
+/* R'lyehian psychic sight, see minds, blocked by water */
+#define rlyehian_sensemon(mon)						\
+	(rlyehiansight(youracedata) && !mindless_mon(mon)		\
+	 && (!is_pool(u.ux, u.uy, FALSE) || Flying || Levitation || Wwalking) \
+	 && (!is_pool(mon->mx, mon->my, FALSE) || !is_underswimmer(mon->data) || \
+	      mon_resistance(mon,FLYING) || mon_resistance(mon,LEVITATION)))
 
-#define sensemon(mon) (tp_sensemon(mon) || Detect_monsters || MATCH_WARN_OF_MON(mon) || sense_by_scent(mon))
+#define sensemon(mon) (tp_sensemon(mon) || Detect_monsters || MATCH_WARN_OF_MON(mon) || sense_by_scent(mon) || rlyehian_sensemon(mon))
 
 /*
  * mon_warning() is used to warn of any dangerous monsters in your
@@ -307,6 +313,8 @@
  *		The beam type is shifted over 2 positions and the direction
  *		is stored in the lower 2 bits.	Count: NUM_ZAP << 2
  *
+ * cloud	A unqiue cloud type
+ *
  * swallow	A set of eight for each monster.  The eight positions rep-
  *		resent those surrounding the hero.  The monster number is
  *		shifted over 3 positions and the swallow position is stored
@@ -317,6 +325,7 @@
  * The following are offsets used to convert to and from a glyph.
  */
 #define NUM_ZAP CLR_MAX	/* number of zap beam types */
+#define NUM_CLOUDS NUM_AD_TYPES	/* number of cloud display types */
 
 #define GLYPH_MON_OFF		0
 #define GLYPH_PET_OFF		(NUMMONS	+ GLYPH_MON_OFF)
@@ -330,7 +339,8 @@
 #define GLYPH_CMAP_OFF		((NUM_OBJECTS << 4)	+ GLYPH_OBJ_OFF)
 #define GLYPH_EXPLODE_OFF	((MAXPCHARS - MAXEXPCHARS) + GLYPH_CMAP_OFF)
 #define GLYPH_ZAP_OFF		((MAXEXPCHARS * EXPL_MAX) + GLYPH_EXPLODE_OFF)
-#define GLYPH_SWALLOW_OFF	((NUM_ZAP << 2) + GLYPH_ZAP_OFF)
+#define GLYPH_CLOUD_OFF		((NUM_ZAP << 2) + GLYPH_ZAP_OFF)
+#define GLYPH_SWALLOW_OFF	((NUM_CLOUDS) + GLYPH_CLOUD_OFF)
 #define GLYPH_WARNING_OFF	((NUMMONS << 3) + GLYPH_SWALLOW_OFF)
 #define MAX_GLYPH		(WARNCOUNT      + GLYPH_WARNING_OFF)
 
@@ -339,6 +349,7 @@
 #define GLYPH_INVISIBLE GLYPH_INVIS_OFF
 
 #define warning_to_glyph(mwarnlev) ((mwarnlev)+GLYPH_WARNING_OFF)
+#define cloud_to_glyph(adtyp) ((adtyp)+GLYPH_CLOUD_OFF)
 #define mon_to_glyph(mon) ((int) what_mon((mon)->mtyp, mon)+GLYPH_MON_OFF)
 #define detected_mon_to_glyph(mon) ((int) what_mon((mon)->mtyp, mon)+GLYPH_DETECT_OFF)
 #define ridden_mon_to_glyph(mon) ((int) what_mon((mon)->mtyp, mon)+GLYPH_RIDDEN_OFF)
@@ -401,6 +412,9 @@
 #define glyph_to_cmap(glyph)						\
 	(glyph_is_cmap(glyph) ? ((glyph) - GLYPH_CMAP_OFF) :		\
 	NO_GLYPH)
+#define glyph_to_cloud_type(glyph)						\
+	(glyph_is_cloud(glyph) ? (((glyph) - GLYPH_CLOUD_OFF)) : \
+	0)
 #define glyph_to_swallow(glyph)						\
 	(glyph_is_swallow(glyph) ? (((glyph) - GLYPH_SWALLOW_OFF) & 0x7) : \
 	0)
@@ -444,6 +458,8 @@
      (glyph) <	(GLYPH_CMAP_OFF+trap_to_defsym(1)+TRAPNUM))
 #define glyph_is_cmap(glyph)						\
     ((glyph) >= GLYPH_CMAP_OFF && (glyph) < (GLYPH_CMAP_OFF+MAXPCHARS))
+#define glyph_is_cloud(glyph)	\
+    ((glyph) >= GLYPH_CLOUD_OFF && (glyph) < (GLYPH_CLOUD_OFF + NUM_CLOUDS))
 #define glyph_is_swallow(glyph) \
     ((glyph) >= GLYPH_SWALLOW_OFF && (glyph) < (GLYPH_SWALLOW_OFF+(NUMMONS << 3)))
 #define glyph_is_warning(glyph)	\

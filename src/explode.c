@@ -141,7 +141,7 @@ int dam;
 int color;
 int radius;
 {
-	explode_full(x, y, adtyp, olet, dam, color, radius, (struct permonst *) 0, 0);
+	explode_full(x, y, adtyp, olet, dam, color, radius, 0, !flags.mon_moving, (struct permonst *) 0);
 }
 
 void
@@ -154,7 +154,7 @@ int color;
 int radius;
 int dest;
 {
-	explode_full(x, y, adtyp, olet, dam, color, radius, (struct permonst *) 0, dest);
+	explode_full(x, y, adtyp, olet, dam, color, radius, dest, !flags.mon_moving, (struct permonst *) 0);
 }
 
 void
@@ -167,43 +167,9 @@ int color;
 int radius;
 struct permonst *pa;
 {
-	explode_full(x, y, adtyp, olet, dam, color, radius, pa, 0);
+	explode_full(x, y, adtyp, olet, dam, color, radius, 0, !flags.mon_moving, pa);
 }
 
-void
-explode_full(x, y, adtyp, olet, dam, color, radius, pa, dest)
-int x, y;
-int adtyp; /* the same as in zap.c */
-int olet;
-int dam;
-int color;
-int radius;
-struct permonst *pa;
-int dest;
-{
-	ExplodeRegion *area;
-	area = create_explode_region();
-	if (radius == 0)
-	{
-		if (isok(x, y))
-			add_location_to_explode_region(x, y, area);
-	}
-	else if (radius == 1)
-	{	// can use simple method of creating explosions
-		int i, j;
-		for (i = -1; i <= 1; i++)
-		for (j = -1; j <= 1; j++)
-			if (isok(x + i, y + j))
-				add_location_to_explode_region(x + i, y + j, area);
-	}
-	else
-	{	// use circles
-		do_clear_area(x, y, radius, add_location_to_explode_region, (genericptr_t)(area));
-	}
-
-	do_explode(x, y, area, adtyp, olet, dam, color, dest, !flags.mon_moving, pa);
-	free_explode_region(area);
-}
 
 void
 explode_yours(x, y, adtyp, olet, dam, color, radius, yours)
@@ -215,6 +181,25 @@ int color;
 int radius;
 boolean yours; /* is it your fault (for killing monsters) */
 {
+	/* assumes you don't want sound,
+	 * this is used for not-player-caused explosions on the player's turn,
+	 * print your own sound effects
+	 */
+	explode_full(x, y, adtyp, olet, dam, color, radius, 0, yours, (struct permonst *)0);
+}
+
+void
+explode_full(x, y, adtyp, olet, dam, color, radius, dest, yours, pa)
+int x, y;
+int adtyp; /* the same as in zap.c */
+int olet;
+int dam;
+int color;
+int radius;
+int dest;
+boolean yours;
+struct permonst *pa;
+{
 	ExplodeRegion *area;
 	area = create_explode_region();
 	if (radius == 0)
@@ -235,7 +220,7 @@ boolean yours; /* is it your fault (for killing monsters) */
 		do_clear_area(x, y, radius, add_location_to_explode_region, (genericptr_t)(area));
 	}
 
-	do_explode(x, y, area, adtyp, olet, dam, color, 0, yours, (struct permonst *)0);
+	do_explode(x, y, area, adtyp, olet, dam, color, dest, yours, pa);
 	free_explode_region(area);
 }
 
@@ -324,7 +309,15 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 		case AD_MAGM: str = "magical blast";
 			break;
 		case AD_EFIR:
-		case AD_FIRE: str = (olet != BURNING_OIL ? olet != SCROLL_CLASS ? "fireball" : "tower of flame" : "burning oil");
+		case AD_FIRE:
+			if(olet == FORGE_EXPLODE)
+				str = "exploding forge";
+			else if(olet == BURNING_OIL)
+				str = "burning oil";
+			else if(olet == SCROLL_CLASS)
+				str = "tower of flame";
+			else
+				str = "fireball";
 			break;
 		case AD_COLD: str = "ball of cold";
 			break;
@@ -352,6 +345,8 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			break;
 		case AD_WET: str = "wall of water";
 			break;
+		case AD_MADF: str = "magenta fireball";
+			break;
 		default:
 			impossible("unaccounted-for explosion damage type in do_explode: %d", adtyp);
 			str = "404 BLAST NOT FOUND";
@@ -373,6 +368,9 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			case AD_EFIR:
 			case AD_FIRE:
 				explmask = !!Fire_resistance;
+				break;
+			case AD_MADF:
+				explmask = (Fire_resistance && Antimagic);
 				break;
 			case AD_ECLD:
 			case AD_COLD:
@@ -439,6 +437,9 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			case AD_EFIR:
 			case AD_FIRE:
 				explmask |= resists_fire(mtmp);
+				break;
+			case AD_MADF:
+				explmask |= (resists_fire(mtmp) && resists_magm(mtmp));
 				break;
 			case AD_ECLD:
 			case AD_COLD:
@@ -570,6 +571,7 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 				      Monnam(u.ustuck),
 				      (adtyp == AD_EFIR) ? "heartburn" :
 				      (adtyp == AD_FIRE) ? "heartburn" :
+				      (adtyp == AD_MADF) ? "heartburn" :
 				      (adtyp == AD_ECLD) ? "chilly" :
 				      (adtyp == AD_COLD) ? "chilly" :
 				      (adtyp == AD_DISN) ? "perforated" :
@@ -590,6 +592,7 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 				      Monnam(u.ustuck),
 				      (adtyp == AD_EFIR) ? "toasted" :
 				      (adtyp == AD_FIRE) ? "toasted" :
+				      (adtyp == AD_MADF) ? "toasted" :
 				      (adtyp == AD_ECLD) ? "chilly" :
 				      (adtyp == AD_COLD) ? "chilly" :
 				      (adtyp == AD_DISN) ? "perforated" :
@@ -617,6 +620,34 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			idamnonres += destroy_item(mtmp, POTION_CLASS, (int) adtyp);
 			idamnonres += destroy_item(mtmp, WAND_CLASS, (int) adtyp);
 			idamnonres += destroy_item(mtmp, RING_CLASS, (int) adtyp);
+			if(adtyp == AD_MADF && !Fire_res(mtmp)){
+				destroy_item(mtmp, SCROLL_CLASS, AD_FIRE);
+				destroy_item(mtmp, SPBOOK_CLASS, AD_FIRE);
+				idamnonres += destroy_item(mtmp, POTION_CLASS, AD_FIRE);
+			}
+		}
+
+		//Share madness
+		if(adtyp == AD_MADF){
+			if(yours && mtmp == &youmonst); //Can't share madness with self
+			else if(mtmp == &youmonst){
+				if(!save_vs_sanloss()){
+					change_usanity(-1*d(3,6), TRUE);
+				}
+			}
+			else if(yours){
+				if(!mindless_mon(mtmp) && (mon_resistance(mtmp,TELEPAT) || tp_sensemon(mtmp) || !rn2(5)) && roll_generic_madness(FALSE)){
+					//reset seen madnesses
+					mtmp->seenmadnesses = 0L;
+					you_inflict_madness(mtmp);
+				}
+			}
+			else {
+				if(!mindless_mon(mtmp) && (mon_resistance(mtmp,TELEPAT) || !rn2(5))){
+					if(!resist(mtmp, '\0', 0, FALSE))
+						mtmp->mcrazed = TRUE;
+				}
+			}
 		}
 
 		if (area->locations[i].shielded) {
@@ -674,7 +705,9 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 
 			if (resists_cold(mtmp) && (adtyp == AD_FIRE || adtyp == AD_EFIR))
 				mdam *= 2;
-			else if (resists_fire(mtmp) && adtyp == (adtyp == AD_COLD || adtyp == AD_ECLD))
+			else if (resists_fire(mtmp) && (adtyp == AD_COLD || adtyp == AD_ECLD))
+				mdam *= 2;
+			else if (resists_cold(mtmp) && !resists_fire(mtmp) && adtyp == AD_MADF)
 				mdam *= 2;
 			else if (Dark_vuln(mtmp) && adtyp == AD_DARK)
 				mdam *= 2;
@@ -696,7 +729,7 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			if(adtyp == AD_SLIM && !Slime_res(mtmp) &&
 				(!resists_acid(mtmp) ? (mtmp->mhp <= mdam*2) : (mtmp->mhp <= mdam))
 			){
-				(void)newcham(mtmp, PM_GREEN_SLIME, FALSE, canseemon(mtmp));
+				monslime(mtmp);
 				mtmp->mstrategy &= ~STRAT_WAITFORU;
 			} else {
 				mtmp->mhp -= mdam;
@@ -741,7 +774,7 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			damu += u.ulevel;
 		}
 		/* do property damage first, in case we end up leaving bones */
-		if (adtyp == AD_FIRE || adtyp == AD_EFIR){
+		if (adtyp == AD_FIRE || adtyp == AD_EFIR || adtyp == AD_MADF){
 			burn_away_slime();
 			melt_frozen_air();
 		}
@@ -751,7 +784,7 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 		} else {
 			damu = reduce_dmg(&youmonst,damu,TRUE,FALSE);
 		}
-		if (adtyp == AD_FIRE || adtyp == AD_EFIR) (void) burnarmor(&youmonst, FALSE);
+		if (adtyp == AD_FIRE || adtyp == AD_EFIR || adtyp == AD_MADF) (void) burnarmor(&youmonst, FALSE);
 		if(uhurt == 2){
 			destroy_item(&youmonst, SCROLL_CLASS, (int) adtyp);
 			destroy_item(&youmonst, SPBOOK_CLASS, (int) adtyp);
@@ -787,13 +820,21 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 
 		if (u.uhp <= 0 || (Upolyd && u.mh <= 0)) {
 		    if (Upolyd) {
-			rehumanize();
+				rehumanize();
+				change_gevurah(1); //cheated death.
 		    } else {
 			if (olet == MON_EXPLODE) {
 			    /* killer handled by caller */
 			    if (str != killer_buf && !generic)
 				Strcpy(killer_buf, str);
 			    killer_format = KILLED_BY_AN;
+			} else if (olet == FORGE_EXPLODE) {
+			    killer_format = KILLED_BY_AN;
+			    Strcpy(killer_buf, str);
+			} else if (olet != SCROLL_CLASS && yours) {
+			    killer_format = NO_KILLER_PREFIX;
+			    Sprintf(killer_buf, "caught %sself in %s own %s",
+				    uhim(), uhis(), str);
 			} else if (olet != SCROLL_CLASS && yours) {
 			    killer_format = NO_KILLER_PREFIX;
 			    Sprintf(killer_buf, "caught %sself in %s own %s",
@@ -808,14 +849,14 @@ struct permonst *pa; /* permonst of the attacker (used for disease) */
 			killer = killer_buf;
 			/* Known BUG: BURNING suppresses corpse in bones data,
 			   but done does not handle killer reason correctly */
-			done((adtyp == AD_FIRE || adtyp == AD_EFIR) ? BURNING : DIED);
+			done((adtyp == AD_FIRE || adtyp == AD_EFIR || adtyp == AD_MADF) ? BURNING : DIED);
 		    }
 		}
 		if(uhurt == 2) exercise(A_STR, FALSE);
 	}
 
 	if (shopdamage) {
-		pay_for_damage((adtyp == AD_FIRE || adtyp == AD_EFIR) ? "burn away" :
+		pay_for_damage((adtyp == AD_FIRE || adtyp == AD_EFIR || adtyp == AD_MADF) ? "burn away" :
 			       (adtyp == AD_COLD || adtyp == AD_ECLD) ? "shatter" :
 			       adtyp == AD_DISN ? "disintegrate" : "destroy",
 			       FALSE);
@@ -978,7 +1019,8 @@ struct monst *shkp;		/* shopkeepr that owns the object (may be null) */
 					int loss_cost = 0;
 				    stmp->range--;
 					int dieroll = rnd(20);
-					if (tohitval((struct monst *)0, mtmp, (struct attack *)0, stmp->obj, (void *)0, HMON_PROJECTILE|HMON_FIRED, 0, (int *) 0) > dieroll || dieroll == 1) {
+					int hitvalu = tohitval((struct monst *)0, mtmp, (struct attack *)0, stmp->obj, (void *)0, HMON_PROJECTILE|HMON_FIRED, 0, (int *) 0);
+					if (hitvalu > dieroll || (dieroll == 1 && hitvalu > -10)) {
 						if (shkp) loss_cost = stolen_value(stmp->obj, sx, sy, TRUE, TRUE);
 						(void)hmon_with_unowned_obj(mtmp, s_p, dieroll);
 					}
@@ -998,7 +1040,7 @@ struct monst *shkp;		/* shopkeepr that owns the object (may be null) */
 					int hitu, hitvalu;
 					int dieroll;
 					hitvalu = tohitval((struct monst *)0, &youmonst, (struct attack *)0, stmp->obj, (void *)0, HMON_PROJECTILE|HMON_FIRED, 8, (int *) 0);
-					if (hitvalu > (dieroll = rnd(20)) || dieroll == 1) {
+					if (hitvalu > (dieroll = rnd(20)) || (dieroll == 1 && hitvalu > -10)) {
 						if (shkp) loss_cost = stolen_value(stmp->obj, sx, sy, TRUE, TRUE);
 						killer = "flying object";
 						killer_format = KILLED_BY_AN;
@@ -1333,6 +1375,7 @@ int adtyp;
 			return EXPL_FROSTY;
 		case AD_EELC:
 		case AD_ELEC:
+		case AD_MADF:
 			return EXPL_MAGICAL;
 		case AD_DISE:
 		case AD_DRST:

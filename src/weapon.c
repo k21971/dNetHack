@@ -45,8 +45,14 @@ STATIC_DCL int FDECL(enhance_skill, (boolean));
 #define PN_SHIEN				(-24)
 #define PN_NIMAN				(-25)
 #define PN_JUYO					(-26)
-#define PN_WAND_DAMAGE			(-27)
-#define PN_SHIELD				(-28)
+#define PN_SHIELD_BASH			(-27)
+#define PN_GREAT_WEP			(-28)
+#define PN_HALF_SWORD			(-29)
+#define PN_KNI_SACRED			(-30)
+#define PN_KNI_ELDRITCH			(-31)
+#define PN_KNI_RUNIC			(-32)
+#define PN_WAND_DAMAGE			(-33)
+#define PN_SHIELD				(-34)
 
 #define holy_damage(mon)	((mon == &youmonst) ? \
 							hates_holy(youracedata) :\
@@ -86,6 +92,8 @@ STATIC_VAR NEARDATA const short skill_names_indices[P_NUM_SKILLS] = {
 	PN_BEAST_MASTERY,
 	PN_SHII_CHO, PN_MAKASHI, PN_SORESU, PN_ATARU,
 	PN_DJEM_SO, PN_SHIEN, PN_NIMAN, PN_JUYO,
+	PN_SHIELD_BASH, PN_GREAT_WEP, PN_HALF_SWORD,
+	PN_KNI_SACRED, PN_KNI_ELDRITCH, PN_KNI_RUNIC,
 #ifdef STEED
 	PN_RIDING
 #endif
@@ -122,6 +130,12 @@ STATIC_VAR NEARDATA const char * const odd_skill_names[] = {
     "form V: Shien",
     "form VI: Niman",
     "form VII: Juyo",
+	"shield bashing",
+	"great weapon fighting",
+	"half-sword style",
+	"sacred weapon techniques",
+	"eldritch weapon techniques",
+	"runic weapon techniques",
     "wand damage",
     "shield",
 };
@@ -183,7 +197,7 @@ struct monst *magr;
 		ptr = youracedata;
 	
 	if (Is_weapon || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1_projectileSkill == -P_FIREARM)){
-		if(youagr && Race_if(PM_ORC) && otmp == uwep){
+		if(youagr && Race_if(PM_ORC) && otmp->where == OBJ_INVENT){
 			tmp += max((u.ulevel+2)/3, otmp->spe);
 		} else {
 			tmp += otmp->spe;
@@ -254,11 +268,15 @@ struct monst *magr;
 	if (otmp->oartifact == ART_LASH_OF_THE_COLD_WASTE){
 		if(youagr && u.uinsight){
 			tmp += rnd(min(u.uinsight, mlev(magr)));
-		} else if(magr && yields_insight(magr->data)) {
+		} else if(magr && insightful(magr->data)) {
 			tmp += rnd(mlev(magr));
 		}
 	}
-
+	
+	if(otmp->obj_material == MERCURIAL){
+		tmp += otmp->spe; //Doubles to-hit bonus from enchantment.
+	}
+	
 	return tmp;
 }
 
@@ -267,11 +285,13 @@ struct monst *magr;
  * 
  */
 int
-attack_mask(obj, otyp, oartifact)
+attack_mask(obj, otyp, oartifact, magr)
 struct obj * obj;
 int otyp;
 int oartifact;
+struct monst *magr;
 {
+	boolean youagr = magr == &youmonst;
 	int attackmask = WHACK;
 	if (obj)
 	{
@@ -286,8 +306,10 @@ int oartifact;
 		attackmask = objects[otyp].oc_dtyp;
 	}
 	if (oartifact == ART_IBITE_ARM){
-		//No claws! Just a flabby hand.
-		attackmask = WHACK;
+		if(check_mutation(SHUB_CLAWS))
+			attackmask |= WHACK; //Keep the claws
+		else
+			attackmask = WHACK; //No claws! Just a flabby hand.
 	}
 	if(oartifact == ART_JIN_GANG_ZUO){
 		attackmask = WHACK;
@@ -310,6 +332,12 @@ int oartifact;
 		){
 		attackmask |= WHACK;
 	}
+	if(obj && magr && !litsaber(obj) && is_chained_merc(obj) && (
+		(youagr && u.uinsight > 20 && YOU_MERC_SPECIAL)
+		|| (!youagr && insightful(magr->data) && is_chaotic_mon(magr))
+	)){
+		attackmask |= WHACK;
+	}
 	if (   oartifact == ART_ROGUE_GEAR_SPIRITS
 		|| oartifact == ART_DURIN_S_AXE
 		|| oartifact == ART_GREAT_CLAWS_OF_URDLEN
@@ -321,11 +349,16 @@ int oartifact;
 		))){
 		attackmask |= PIERCE;
 	}
+	if (youagr && otyp == LONG_SWORD && activeFightingForm(FFORM_HALF_SWORD)){
+		attackmask = PIERCE; // only thrusting
+	}
+
 	if (   oartifact == ART_LIECLEAVER
 		|| oartifact == ART_INFINITY_S_MIRRORED_ARC
 		|| oartifact == ART_GREAT_CLAWS_OF_URDLEN
 		|| oartifact == ART_CLAWS_OF_THE_REVENANCER
 		|| (obj && check_oprop(obj, OPROP_BLADED) && !litsaber(obj))
+		|| (obj && check_oprop(obj, OPROP_RLYHW) && u.uinsight >= 12)
 		|| (obj && !litsaber(obj) && is_streaming_merc(obj))
 		){
 		attackmask |= SLASH;
@@ -338,6 +371,7 @@ int oartifact;
 		|| oartifact == ART_FIRE_BRAND
 		|| oartifact == ART_FROST_BRAND
 		|| oartifact == ART_ARYFAERN_KERYM
+		|| (obj && check_oprop(obj, OPROP_RLYHW) && u.uinsight >= 24)
 		){
 		attackmask |= EXPLOSION;
 	}
@@ -413,12 +447,13 @@ struct monst *magr;
 	boolean lucky;
 	boolean exploding;
 	int explode_amt;
+	int ignore_rolls;
 	if (obj && (!valid_weapon(obj) || is_launcher(obj))){
 		struct weapon_dice nulldice = {0};
 		*wdice = nulldice;
 		ocn = wdice->oc_damn = 1;
 		ocd = wdice->oc_damd = 2;
-		bonn = bond = flat = lucky = exploding = explode_amt = 0;
+		bonn = bond = flat = lucky = exploding = explode_amt = ignore_rolls = 0;
 	}
 	else {
 		/* grab dice from the objclass definition */
@@ -431,11 +466,18 @@ struct monst *magr;
 		lucky =     	(wdice->lucky);
 		exploding = 	(wdice->exploding);
 		explode_amt =   (wdice->explode_amt);
+		ignore_rolls =   (wdice->ignore_rolls);
 	}
-
 	/* set dmod, if possible*/
 	if (obj){
 		dmod = obj->objsize - MZ_MEDIUM;
+
+		/* Use ldice for small cases as well and add 1 to ocn */
+		if(obj->oartifact == ART_DARK_CLAYMORE){
+			ocn = objects[otyp].oc_wldam.oc_damn + 1;
+			ocd = objects[otyp].oc_wldam.oc_damd;
+		}
+
 		if (obj->oartifact == ART_FRIEDE_S_SCYTHE)
 			dmod += 2;
 		else if (obj->oartifact == ART_HOLY_MOONLIGHT_SWORD && obj->lamplit)
@@ -450,11 +492,11 @@ struct monst *magr;
 		else if (obj->oartifact == ART_WAND_OF_ORCUS) {
 			ocn = 1;
 			ocd = 4;
-			spe_mult = 0;	/* it's a wand */
+			spe_mult = 0;	/* it's a wand, spe is charges */
 		}
 		else if (obj->oartifact == ART_ROGUE_GEAR_SPIRITS) {
 			ocn = 1;
-			ocd = (large ? 2 : 4);
+			ocd = (large ? 3 : 6);
 		}
 		else if (otyp == CARCOSAN_STING)
 		{
@@ -490,6 +532,20 @@ struct monst *magr;
 			ocd = max(4 + 2 * obj->ovar1_moonPhase + 2 * dmod, 2);	// die size is based on axe's phase of moon (0 <= ovar1_moonPhase <= 4)
 			if (!large && obj->ovar1_moonPhase == ECLIPSE_MOON)		// eclipse moon axe is surprisingly effective against small creatures (2d12)
 				ocd = max(12 + 2 * dmod, 2);
+		}
+
+		/* shield bash skill buffs shield damage to d4/6/8 with skill, affected by dmod */
+		if (is_shield(obj) && magr == &youmonst && activeFightingForm(FFORM_SHIELD_BASH)){
+			ocn = 1;
+			ocd = max(2, 2 * FightingFormSkillLevel(FFORM_SHIELD_BASH)); // 2-8 for unskilled-expert
+		} else if (magr == &youmonst && activeFightingForm(FFORM_GREAT_WEP) && (bimanual(obj, youracedata) || bimanual_mod(obj, &youmonst) > 1)) {
+			ignore_rolls = max(0, FightingFormSkillLevel(FFORM_GREAT_WEP) - 1); // 0-3 for unskilled-expert
+		}
+		
+		if(magr == &youmonst && obj->oartifact){
+			const struct artifact *weap = get_artifact(obj);
+			if((weap->inv_prop == GITH_ART || weap->inv_prop == AMALGUM_ART) && activeMentalEdge(GSTYLE_PENETRATE))
+				ignore_rolls += u.usanity > 50 ? 0 : u.usanity > 25 ? 1 : u.usanity > 10 ? 2 : 3;
 		}
 
 		if (otyp == HEAVY_IRON_BALL) {
@@ -554,6 +610,29 @@ struct monst *magr;
 					flat = 0;
 				}
 			}
+			/* Flowing sword: Rapidly-moving blade does extra damage, especially vs. large monsters */
+			if (obj && check_oprop(obj, OPROP_GSSDW)){
+				int *modnum;
+				if(large){
+					modnum = &dmod;
+				}
+				else {
+					modnum = &flat;
+				}
+				if(magr == &youmonst || (!magr && obj->where == OBJ_INVENT)){
+					*modnum += u.uinsight/10;
+					if (((moves)*(u.uinsight % 10)) / 10 > ((moves - 1)*(u.uinsight % 10)) / 10)
+						*modnum += 1;
+				}
+				else if(magr){
+					if(insightful(magr->data)){
+						*modnum += mlev(magr)/10;
+						if (((moves)*(mlev(magr) % 10)) / 10 > ((moves - 1)*(mlev(magr) % 10)) / 10)
+							*modnum += 1;
+					}
+				}
+			}
+
 			if (obj->obj_material != objects[obj->otyp].oc_material){
 				/* if something is made of an especially effective material 
 				 * and it normally isn't, it gets a dmod bonus 
@@ -798,22 +877,22 @@ struct monst *magr;
 	case ROD_OF_FORCE:			spe_mult *= 2; ocn *= 2; if(obj&&obj->altmode){ ocn*=2;    spe_mult *= 2;} break;	// external special case: lightsaber forms
 	case DISKOS:
 								if(u.uinsight >= 40){
-									ocn+=3;
-									flat+=ocd;
+									ocn+=1;
+									flat+=(ocd+1)/2;
 								} else if(u.uinsight >= 35){
-									ocn+=2;
-									flat+=ocd;
+									ocn+=1;
+									flat+=(ocd+3)/4;
 								} else if(u.uinsight >= 30){
-									ocn+=2;
-									flat+=3*ocd/4;
+									plus(1,3*ocd/4);
+									flat+=(ocd+3)/4;
 								} else if(u.uinsight >= 25){
-									ocn++;
-									flat+=3*ocd/4;
+									plus(1,(ocd+1)/2);
+									flat+=(ocd+3)/4;
 								} else if(u.uinsight >= 10){
-									ocn++;
-									flat+=ocd/2;
+									plus(1,(ocd+3)/4);
+									flat+=(ocd+3)/4;
 								} else if(u.uinsight >= 5){
-									flat+=ocd/2;
+									flat+=(ocd+3)/4;
 								}
 	break;
 	}
@@ -852,9 +931,9 @@ struct monst *magr;
 			}
 		}
 		else {
-			/* equivalent to small mace */
+			/* equivalent to small gold mace +1 for gold, -1 for size*/
 			ocn = 1;
-			ocd = 4;
+			ocd = 10;
 			flat = (large ? 0 : 1);
 		}
 	}
@@ -899,6 +978,12 @@ struct monst *magr;
 	if (obj && obj->oartifact == ART_TENTACLE_ROD)
 		spe_mult = 0;
 
+	/* the Ibite Arm gets more reliable dice (but doesn't scale them both with size) */
+	if (obj && obj->oartifact == ART_IBITE_ARM) {
+		ocn *= 2;
+		ocd = (ocd+1)/2;
+	}
+
 	/* safety checks */
 	/* we need at least one main die */
 	if (ocn < 1) {
@@ -932,6 +1017,7 @@ struct monst *magr;
 	(wdice->lucky)       = lucky;
 	(wdice->exploding)   = exploding;
 	(wdice->explode_amt) = explode_amt;
+	(wdice->ignore_rolls) = ignore_rolls;
 	return spe_mult;
 }
 
@@ -963,6 +1049,10 @@ struct weapon_dice * wdie;
 boolean youdef;
 {
 	int tmp = 0;
+	// on a d6 this is 3d
+	// 16%,33%,50% at i_r 1,2,3
+	// on a d6 this is 1/2/3 + d3, on a d10 its 1/3/5 + d5, d20 is 1/6/10 + d10, etc.
+	int igrolls = (x*wdie->ignore_rolls)/6;
 
 	/* verify there are appropriate dice to roll */
 	if (!n)
@@ -975,25 +1065,39 @@ boolean youdef;
 	/* determine function to use */
 	if (!wdie->exploding && !wdie->lucky) {
 		/* standard dice */
-		tmp += d(n, x);
+		if(x-igrolls > 1)
+			tmp += d(n, x-igrolls);
+		tmp += n*igrolls;
 	}
 	else if (wdie->exploding && !wdie->lucky) {
 		/* exploding non-lucky dice */
-		tmp += exploding_d(n, x, wdie->explode_amt);
+		/* great weapon fighting is a LARGE buff to these. possibly too strong */
+		if(x-igrolls > 1)
+			tmp += exploding_d(n, x-igrolls, wdie->explode_amt);
+		else igrolls = 2*x;
+
+		tmp += n*igrolls;
 	}
 	else if (!wdie->exploding && wdie->lucky) {
 		/* lucky non-exploding dice */
 		int i;
-		for (i = n; i; i--)
-		{
-			tmp += youdef ?
-				(rnl(x) + 1) :
-				(x - rnl(x));
+		if(x-igrolls > 1){
+			for (i = n; i; i--)
+			{
+				tmp += youdef ? (rnl(x-igrolls) + igrolls + 1) : (x - rnl(x-igrolls));
+			}
 		}
+		else tmp += n*igrolls;
 	}
 	else if (wdie->exploding && wdie->lucky) {
 		/* EXTEMELY POTENT exploding lucky dice */
-		tmp += (youdef ? unlucky_exploding_d : lucky_exploding_d)(n, x, wdie->explode_amt);
+		/* going to be honest - no CLUE what the distr with GWF turned on does,
+		 * but if you manage to get that, it's probably stupid or deserved */
+		if(x-igrolls > 1)
+			tmp += (youdef ? unlucky_exploding_d : lucky_exploding_d)(n, x-igrolls, wdie->explode_amt);
+		else igrolls = 10*x; //I think this is impossible, since this would be a Gith sword plus Fluorite Octet
+
+		tmp += n*igrolls;
 	}
 	return tmp;
 }
@@ -1249,7 +1353,7 @@ struct monst *magr;
 		}
 		else if (activeFightingForm(FFORM_DJEM_SO) && mon->mattackedu){
 			int sbon = ACURR(A_STR);
-			if (sbon >= STR19(19)) sbon -= 100; //remove percentile adjustment
+			if (sbon >= STR19(19)) sbon -= 20; //remove percentile adjustment
 			else if (sbon > 18) sbon = 18; //remove percentile adjustment
 			//else it is fine as is.
 			sbon = (sbon + 2) / 3; //1-9
@@ -1282,9 +1386,37 @@ struct monst *magr;
 		}
 	}
 
+	/*
+	 * shield bash morale damage
+	 * morale damag values _should_ be reasonable?
+	 * idk, I think with endgame dps builds you mostly kill things in <5 turns, so you're not really hitting max stacks.
+	 * plus, since this prevents you from running extra holy damage or smth
+	 * it also seems pretty reasonable vs. like demon lords/similar - anything that lives to -15 hits hard enough to deserve it
+	 */
+	if (is_shield(otmp) && magr == &youmonst && activeFightingForm(FFORM_SHIELD_BASH)){
+		switch (FightingFormSkillLevel(FFORM_SHIELD_BASH)){
+			case P_ISRESTRICTED:
+			case P_UNSKILLED:
+				if (mon->encouraged > 0) mon->encouraged -= 1;
+			break;
+			case P_BASIC:
+				if (mon->encouraged > -5) mon->encouraged -= 1;
+			break;
+			case P_SKILLED:
+				if (mon->encouraged > -10) mon->encouraged -= 2;
+			break;
+			case P_EXPERT:
+				if (mon->encouraged > -15) mon->encouraged -= 3;
+			break;
+		}
+	}
+
+
 	/* enchantment damage */
-	if ((otmp->oclass == WEAPON_CLASS) || is_weptool(otmp) || (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1_projectileSkill == -P_FIREARM))
-	{
+	if ((otmp->oclass == WEAPON_CLASS) || is_weptool(otmp)
+		|| (otmp->otyp >= LUCKSTONE && otmp->otyp <= ROCK && otmp->ovar1_projectileSkill == -P_FIREARM)
+		|| (is_shield(otmp) && magr == &youmonst && activeFightingForm(FFORM_SHIELD_BASH))
+	){
 		int dambon = otmp->spe;
 		/* player orcs can use their level as their weapon's enchantment */
 		if (otmp->where == OBJ_INVENT && Race_if(PM_ORC))
@@ -1296,9 +1428,6 @@ struct monst *magr;
 		if (tmp < 0)
 			tmp = 0;
 	}
-	/* Flaying weapons don't damage armored foes */
-	if ((check_oprop(otmp, OPROP_FLAYW) || check_oprop(otmp, OPROP_LESSER_FLAYW)) && mon && some_armor(mon))
-		tmp = 1;
 	/* Smaug gets stabbed */
 	if(is_stabbing(otmp) && ptr->mtyp == PM_SMAUG)
 		tmp += rnd(20);
@@ -2573,19 +2702,30 @@ struct monst * mon;
 		return;
 	}
 }
-int
-abon()		/* attack bonus for strength & dexterity */
-{
-	int sbon;
-	int str = ACURR(A_STR), dex = ACURR(A_DEX);
 
-	if (Upolyd) return(adj_lev(&mons[u.umonnum]) - 3);
+int
+str_abon()
+{
+	int sbon, str = ACURR(A_STR);
+
 	if (str < 6) sbon = -2;
 	else if (str < 8) sbon = -1;
 	else if (str < 17) sbon = 0;
 	else if (str <= STR18(50)) sbon = 1;	/* up to 18/50 */
 	else if (str < STR18(100)) sbon = 2;
 	else sbon = 3;
+
+	return sbon;
+}
+
+int
+abon()		/* attack bonus for strength & dexterity */
+{
+	int sbon;
+	int dex = ACURR(A_DEX);
+
+	if (Upolyd) return(adj_lev(&mons[u.umonnum]) - 3);
+	sbon = str_abon();
 
 	if (dex < 4) sbon = (sbon-3);
 	else if (dex < 6) sbon = (sbon-2);
@@ -2599,239 +2739,161 @@ abon()		/* attack bonus for strength & dexterity */
 #endif /* OVL0 */
 #ifdef OVL1
 
-int
-m_dbon(mon, otmp)		/* damage bonus for a monster's strength, only checks GoP */
-struct monst *mon;
+/*
+ * Specific modifier for that attribute for that otyp,
+ * written like this so it's usable for invent.c
+ */
+float
+atr_dbon(otmp, mtmp, atr)
 struct obj *otmp;
+struct monst *mtmp;
+int atr;
 {
-	int bonus = 0;
-	struct obj *arm;
-	struct obj *arms;
-	struct obj *mwp;
-	struct obj *mswp;
-	
-	arm = which_armor(mon, W_ARMG);
-	arms = which_armor(mon, W_ARMS);
-	mwp = MON_WEP(mon);
-	mswp = MON_SWEP(mon);
-	
-	if(arm && (arm->otyp == GAUNTLETS_OF_POWER || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GOPOWER))))
-		bonus += 8;
-	
-	if(otmp){
-		if((bimanual(otmp,mon->data)||
-				(otmp->oartifact==ART_PEN_OF_THE_VOID && otmp->ovar1_seals&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0)
-			) && !arms && !mswp
-		) bonus *= 2;
-		else if(otmp->otyp == FORCE_SWORD && !arms && !mswp)
-			bonus *= 2;
-		else if(otmp->otyp == DISKOS && !arms && !mswp)
-			bonus *= 2;
-		else if(is_spear(otmp) && !arms && !mswp)
-			bonus *= 1.5;
-		else if(otmp->otyp == ISAMUSEI && !arms && !mswp)
-			bonus *= 1.5;
-		else if(otmp->otyp == KATANA && !arms && !mswp)
-			bonus *= 1.5;
-		else if(is_vibrosword(otmp) && !arms && !mswp)
-			bonus *= 1.5;
-		
-		if(otmp==mwp 
-		&& (is_rapier(otmp) || is_rakuyo(otmp)
-			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1_lightsaberHandle == 0)
-			|| otmp->otyp == SET_OF_CROW_TALONS
-			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
-			|| is_mercy_blade(otmp)
-		)){
-			if(is_rakuyo(otmp))
-				bonus = 0;
-			else bonus /= 2; /*Half strength bonus/penalty*/
-			
-			arm = which_armor(mon, W_ARMG);
-			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
-			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
-			) bonus += (arm->spe)/2;
-//			else bonus += ; Something with dex ac?  That would be a bad idea.
-			
-			if(is_rakuyo(otmp))
-				bonus *= 2;
-		}
-		
-		if(otmp->oartifact == ART_YORSHKA_S_SPEAR){
-			//Wis and dex both (str bonus is not reduced)
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/2;
-			arm = which_armor(mon, W_ARMG);
-			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
-			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
-			) bonus += (arm->spe)/2;
-		}
-		
-		if(otmp->oartifact == ART_FRIEDE_S_SCYTHE){
-			//Int and Dex
-			bonus /= 2; /*Half strength bonus/penalty*/
-			
-			arm = which_armor(mon, W_ARMG);
-			if(arm && arm->oartifact == ART_GODHANDS) bonus += 8;
-			else if(arm 
-			&& (arm->otyp == GAUNTLETS_OF_DEXTERITY || arm->oartifact == ART_PREMIUM_HEART || (arm->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(arm, IEA_GODEXTERITY)))
-			) bonus += (arm->spe)/2;
-//			else bonus += ; Something with dex ac?  That would be a bad idea.
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/2;
-		}
+	float mod = 0;
+	switch (atr){
+		case A_STR:
+			mod = bimanual_mod(otmp, mtmp);
 
-		if(otmp->oartifact == ART_VELKA_S_RAPIER || (mon->m_lev > 0 && check_oprop(otmp, OPROP_GSSDW))){
-			bonus /= 2;
-			//Int only
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/2;
-		}
+			if (is_rakuyo(otmp))
+				return 0;
 
-		if(otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING){
-			//Wis only
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/4;
-		}
+			if (is_rapier(otmp) || is_mercy_blade(otmp) || otmp->otyp == SET_OF_CROW_TALONS ||
+				(otmp->otyp == LIGHTSABER && !otmp->oartifact && otmp->ovar1_lightsaberHandle == 0))
+				mod = 0.5;
 
-		if(is_mercy_blade(otmp)){
-			//Int only
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/4;
-		}
+			if (otmp->oartifact == ART_LIFEHUNT_SCYTHE || otmp->oartifact == ART_VELKA_S_RAPIER ||
+				otmp->oartifact == ART_FRIEDE_S_SCYTHE || otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING)
+				mod = 0.5;
 
-		if(check_oprop(otmp, OPROP_OCLTW)){
-			bonus /= 2;
-			//Wis only
-			arm = which_armor(mon, W_ARMH);
-			if(arm && arm->otyp == HELM_OF_BRILLIANCE)
-				bonus += (arm->spe)/2;
-		}
-		if(check_oprop(otmp, OPROP_ELFLW)){
-			//Cha counts for half and Int and Wis count for half
-			arm = which_armor(mon, W_ARMH);
-			if(arm){
-				if(arm->otyp == HELM_OF_BRILLIANCE && arm->otyp == find_gcirclet())
-					bonus += (arm->spe);
-				else if(arm->otyp == HELM_OF_BRILLIANCE || arm->otyp == find_gcirclet())
-					bonus += (arm->spe)/2;
-			}
-		}
+			if (check_oprop(otmp, OPROP_OCLTW) || (u.uinsight > 0 && check_oprop(otmp, OPROP_GSSDW)))
+				mod = 0.5;
+
+			return mod;
+		case A_DEX:
+			if (is_rakuyo(otmp))
+				return 2; // otherwise gets caught by rapiers
+
+			if (otmp->oartifact == ART_LIFEHUNT_SCYTHE || otmp->oartifact == ART_YORSHKA_S_SPEAR ||
+				otmp->oartifact == ART_FRIEDE_S_SCYTHE)
+				mod += 2;
+
+			if (is_rapier(otmp) || is_mercy_blade(otmp) || otmp->otyp == SET_OF_CROW_TALONS ||
+				(otmp->otyp == LIGHTSABER && !otmp->oartifact && otmp->ovar1_lightsaberHandle == 0))
+				mod += 1;
+
+			return mod;
+		case A_CON:
+			return mod;
+		case A_INT:
+			if (u.uinsight > 0 && check_oprop(otmp, OPROP_GSSDW))
+				mod += 1;
+
+			if (otmp->oartifact == ART_VELKA_S_RAPIER || otmp->oartifact == ART_FRIEDE_S_SCYTHE)
+				mod += 1;
+
+			if (mercy_blade_prop(otmp))
+				mod += 0.5;
+
+			if (check_oprop(otmp, OPROP_ELFLW))
+				mod += 0.5;
+
+			return mod;
+		case A_WIS:
+			if (otmp->oartifact == ART_YORSHKA_S_SPEAR)
+				mod += 1;
+
+			if (check_oprop(otmp, OPROP_OCLTW))
+				mod += 1;
+
+			if (otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING)
+				mod += 0.5;
+
+			if (check_oprop(otmp, OPROP_ELFLW))
+				mod += 0.5;
+
+			return mod;
+		case A_CHA:
+			if (check_oprop(otmp, OPROP_ELFLW))
+				mod += 0.5;
+			return mod;
+		default:
+			return mod;
 	}
-	return bonus;
 }
 
 int
-dbon(otmp)		/* damage bonus for strength */
-struct obj *otmp;
+str_dbon(mtmp)
+struct monst *mtmp;
 {
-	int str = ACURR(A_STR);
-	int bonus = 0;
-	
-	if (str < 6) bonus = -6+str;
-	else if (str < 16) bonus = 0;
-	else if (str < 18) bonus = 1;
-	else if (str < STR18(25)) bonus = 2;		/* up to 18/25 */
-	else if (str < STR18(50)) bonus = 3;		/* up to 18/50 */
-	else if (str < STR18(75)) bonus = 4;		/* up to 18/75 */
-	else if (str < STR18(100)) bonus = 5;		/* up to 18/99 */
-	else if (str < STR19(22)) bonus = 6;
-	else if (str < STR19(25)) bonus = 7;
-	else /*  str ==25*/bonus = 8;
-	
-	if(u.umadness&MAD_RAGE && !BlockableClearThoughts){
-		bonus += (Insanity)/10;
-	}
-	if(otmp){
-		if (!uarms && !u.twoweap) {
-			if (bimanual(otmp, youracedata) ||
-				(otmp->oartifact == ART_PEN_OF_THE_VOID && otmp->ovar1_seals&SEAL_MARIONETTE && mvitals[PM_ACERERAK].died > 0))
-				bonus *= 2;
-			else if (otmp->otyp == FORCE_SWORD || otmp->otyp == ROD_OF_FORCE || weapon_type(otmp) == P_QUARTERSTAFF)
-				bonus *= 2;
-			else if (otmp->otyp == KATANA || otmp->otyp == LONG_SWORD)
-				bonus *= 1.5;
-			else if (is_vibrosword(otmp))
-				bonus *= 1.5;
-		}
-		
-		if(otmp==uwep 
-		&& (is_rapier(otmp) || is_rakuyo(otmp)
-			|| (otmp->otyp == LIGHTSABER && otmp->oartifact != ART_ANNULUS && otmp->ovar1_lightsaberHandle == 0)
-			|| otmp->otyp == SET_OF_CROW_TALONS
-			|| otmp->oartifact == ART_LIFEHUNT_SCYTHE
-			|| is_mercy_blade(otmp)
-		)){
-			if(is_rakuyo(otmp))
-				bonus = 0;
-			else bonus /= 2; /*Half strength bonus/penalty*/
-			
-			if(ACURR(A_DEX) == 25) bonus += 8;
-			else bonus += (ACURR(A_DEX)-10)/2;
-			
-			if(is_rakuyo(otmp))
-				bonus *= 2;
-		}
+	int str, strbon;
+	boolean youagr = mtmp == &youmonst;
 
-		if(otmp->oartifact == ART_YORSHKA_S_SPEAR){
-			if(ACURR(A_WIS) == 25) bonus += 8;
-			else bonus += (ACURR(A_WIS)-10)/2;
-			if(ACURR(A_DEX) == 25) bonus += 8;
-			else bonus += (ACURR(A_DEX)-10)/2;
-		}
+	str = acurr(A_STR, (youagr) ? ((struct monst *) 0) : mtmp);
 
-		if(otmp->oartifact == ART_FRIEDE_S_SCYTHE){
-			bonus /= 2; /*Half strength bonus/penalty*/
-			
-			if(ACURR(A_DEX) == 25) bonus += 8;
-			else bonus += (ACURR(A_DEX)-10)/2;
-			
-			if(ACURR(A_INT) == 25) bonus += 8;
-			else bonus += (ACURR(A_INT)-10)/2;
-		}
+	if (str < 6) 				strbon = str - 6;
+	else if (str < 16)			strbon= 0;
+	else if (str < 18)			strbon= 1;
+	else if (str < STR18(25))	strbon = 2;		/* up to 18/25 */
+	else if (str < STR18(50))	strbon = 3;		/* up to 18/50 */
+	else if (str < STR18(75))	strbon = 4;		/* up to 18/75 */
+	else if (str < STR18(100))	strbon = 5;		/* up to 18/99 */
+	else if (str < STR19(22))	strbon = 6;
+	else if (str < STR19(25))	strbon = 7;
+	else 						strbon = 8;		/* equal to 25 */
 
-		if(otmp->oartifact == ART_VELKA_S_RAPIER || (u.uinsight > 0 && check_oprop(otmp, OPROP_GSSDW))){
-			bonus /= 2;
-			if(ACURR(A_INT) == 25) bonus += 8;
-			else bonus += (ACURR(A_INT)-10)/2;
+	return strbon;
+}
+
+int
+dbon(otmp, mtmp)
+struct obj *otmp;
+struct monst *mtmp;
+{
+	boolean youagr = mtmp == &youmonst;
+
+	struct obj *armg = (youagr ? uarmg : which_armor(mtmp, W_ARMG));
+	int bare_bonus = weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT);
+	int damage_bon = 0;
+
+	int str, stat;
+	int strbon, statbon;
+
+	strbon = str_dbon(mtmp);
+
+	if(youagr && u.umadness&MAD_RAGE && !BlockableClearThoughts)
+		strbon += (Insanity)/10;
+
+	if(youagr ? 
+		(Race_if(PM_HALF_DRAGON) && flags.HDbreath == AD_FIRE && u.ulevel >= 15) :
+		(is_half_dragon(mtmp->data) && mtmp->mvar_hdBreath == AD_FIRE && mtmp->data->mlevel >= 15)
+	 )
+		strbon += 2;
+
+	if (otmp){
+		damage_bon = (int)(strbon * atr_dbon(otmp, mtmp, A_STR));
+		for (int i = A_DEX; i < A_MAX; i++){
+			stat = acurr(i, (youagr) ? ((struct monst *) 0) : mtmp);
+			statbon = (stat == 25) ? 8 : ((stat-10)/2);
+			damage_bon += (int)(statbon * atr_dbon(otmp, mtmp, i));
 		}
-		if(otmp->oartifact == ART_CRUCIFIX_OF_THE_MAD_KING){
-			if(ACURR(A_WIS) == 25) bonus += 4;
-			else bonus += (ACURR(A_WIS)-10)/4;
+		if (youagr && otmp->oartifact == ART_IBITE_ARM){
+			if(bare_bonus > 0) damage_bon += ACURR(A_CHA)/5 + bare_bonus*2;
 		}
-		if(is_mercy_blade(otmp)){
-			if(ACURR(A_INT) == 25) bonus += 4;
-			else bonus += (ACURR(A_INT)-10)/4;
-		}
-		if(check_oprop(otmp, OPROP_OCLTW)){
-			bonus /= 2;
-			if(ACURR(A_WIS) == 25) bonus += 8;
-			else bonus += (ACURR(A_WIS)-10)/2;
-		}
-		if(check_oprop(otmp, OPROP_ELFLW)){
-			if(ACURR(A_CHA) == 25) bonus += 8;
-			else bonus += (ACURR(A_CHA)-10)/2;
-			if((ACURR(A_WIS)+ACURR(A_INT)) == 50) bonus += 8;
-			else bonus += (ACURR(A_WIS)+ACURR(A_INT)-20)/4;
-		}
-		if(otmp->oartifact == ART_IBITE_ARM && u.umaniac){
-			//Combine mechanics: Gets a bonus from your bare-handed stuff.
-			if(weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT) > 0)
-				bonus += rnd(ACURR(A_CHA)/5 + weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT)*2);
-		}
+	} else {
+		damage_bon = strbon;
+
+		if (youagr && u.umaniac && bare_bonus > 0)
+			damage_bon += min_ints(bare_bonus, (ACURR(A_CHA) == 25) ? 8 : ((ACURR(A_CHA)-10)/2));
 	}
-	else if(u.umaniac && weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT) > 0){
-		bonus += min_ints(weapon_dam_bonus((struct obj *) 0, P_BARE_HANDED_COMBAT), (ACURR(A_CHA)-9)/2);
+
+	if (damage_bon && armg && check_oprop(armg, OPROP_RWTH) && (
+			(youagr && u.ualign.record >= 20 && u.ualign.type != A_CHAOTIC && u.ualign.type != A_NEUTRAL) ||
+			(!youagr && is_lawful_mon(mtmp)))
+	){
+		damage_bon = damage_bon * 3 / 2;
 	}
-	
-	return bonus;
+
+	return damage_bon;
 }
 
 /* copy the skill level name into the given buffer */
@@ -2906,6 +2968,27 @@ int skill;
      *	master -> grand master	3
      */
     return (tmp + 1) / 2;
+}
+
+/*
+ * Reset all trained skills to 0 so the player can respec their character.
+ */
+
+void
+reset_skills()
+{
+	int skill;
+	for(int i = u.skills_advanced-1; i >= 0; i--){
+		skill = u.skill_record[i];
+		if (OLD_P_SKILL(skill) <= P_UNSKILLED)
+			impossible("reset_skills skill already at minimum (%d)", skill);
+		else {
+			OLD_P_SKILL(skill)--;
+			u.weapon_slots += slots_required(skill);
+		}
+	}
+	u.skills_advanced = 0;
+	enhance_weapon_skill();
 }
 
 /* return true if this skill can be advanced */
@@ -2996,6 +3079,16 @@ enhance_weapon_skill()
 void dump_weapon_skill()
 {
 	enhance_skill(TRUE);
+}
+
+boolean
+fake_skill(skill)
+int skill;
+{
+	if (skill == P_KNI_RUNIC || skill == P_HALF_SWORD)
+		return TRUE;
+
+	return FALSE;
 }
 
 int enhance_skill(boolean want_dump)
@@ -3108,6 +3201,7 @@ int enhance_skill(boolean want_dump)
 #endif
 
 		if (P_RESTRICTED(i)) continue;
+		if (fake_skill(i)) continue; // pseudo skill for form check purposes
 		/*
 		 * Sigh, this assumes a monospaced font unless
 		 * iflags.menu_tab_sep is set in which case it puts
@@ -3202,6 +3296,21 @@ int skill;
 		OLD_P_SKILL(skill) = P_UNSKILLED;
 		OLD_P_MAX_SKILL(skill) = P_BASIC;
 		P_ADVANCE(skill) = 0;
+    }
+}
+
+/*
+ * Change from unrestricted to restricted, allowing P_BASIC as max.  This
+ * function may be called with with P_NONE.  Used in pray.c.
+ */
+void
+restrict_weapon_skill(skill)
+int skill;
+{
+    if (skill < P_NUM_SKILLS && !OLD_P_RESTRICTED(skill)) {
+		OLD_P_SKILL(skill) = P_ISRESTRICTED;
+		OLD_P_MAX_SKILL(skill) = P_ISRESTRICTED;
+		//P_ADVANCE(skill) = 0; don't lose progress
     }
 }
 
@@ -3303,6 +3412,41 @@ int degree;
 }
 
 void
+lose_skill(skill,degree)
+int skill;
+int degree;
+{
+	if(skill < 0) skill *= -1;
+	
+    if (skill == P_NONE)
+		return;
+
+	if(P_ADVANCE(skill) > degree)
+		P_ADVANCE(skill)-=degree;
+	else P_ADVANCE(skill) = 0;
+
+	boolean try_reduce = TRUE; //Don't get stuck in an infinite loop if skill's default value is > P_UNSKILLED
+	while(OLD_P_SKILL(skill) > P_UNSKILLED
+	 && P_ADVANCE(skill) < practice_needed_to_advance(OLD_P_SKILL(skill)-1)
+	 && try_reduce
+	) {
+		try_reduce = FALSE;
+		for(int i = u.skills_advanced-1; i >= 0; i--){
+			if(skill == u.skill_record[i]){
+				try_reduce = TRUE;
+				OLD_P_SKILL(skill)--;
+				u.weapon_slots += slots_required(skill);
+				for(int j = i+1; j < u.skills_advanced; j++, i++){
+					u.skill_record[i] = u.skill_record[j];
+				}
+				u.skills_advanced--;
+				break; //End outer skill-finding loop
+			}
+		}
+	}
+}
+
+void
 add_weapon_skill(n)
 int n;	/* number of slots to gain; normally one */
 {
@@ -3324,20 +3468,22 @@ int n;	/* number of slots to lose; normally one */
     int skill;
 
     while (--n >= 0) {
-	/* deduct first from unused slots, then from last placed slot, if any */
-	if (u.weapon_slots) {
-	    u.weapon_slots--;
-	} else if (u.skills_advanced) {
-	    skill = u.skill_record[--u.skills_advanced];
-	    if (OLD_P_SKILL(skill) <= P_UNSKILLED)
-		panic("lose_weapon_skill (%d)", skill);
-	    OLD_P_SKILL(skill)--;	/* drop skill one level */
-	    /* Lost skill might have taken more than one slot; refund rest. */
-	    u.weapon_slots = slots_required(skill) - 1;
-	    /* It might now be possible to advance some other pending
-	       skill by using the refunded slots, but giving a message
-	       to that effect would seem pretty confusing.... */
-	}
+		/* deduct first from unused slots, then from last placed slot, if any */
+		if (u.weapon_slots) {
+			u.weapon_slots--;
+		} else if (u.skills_advanced) {
+			skill = u.skill_record[--u.skills_advanced];
+			if (fake_skill(skill))
+				continue;
+			if (OLD_P_SKILL(skill) <= P_UNSKILLED)
+				panic("lose_weapon_skill (%d)", skill);
+			OLD_P_SKILL(skill)--;	/* drop skill one level */
+			/* Lost skill might have taken more than one slot; refund rest. */
+			u.weapon_slots = slots_required(skill) - 1;
+			/* It might now be possible to advance some other pending
+			   skill by using the refunded slots, but giving a message
+			   to that effect would seem pretty confusing.... */
+		}
     }
 }
 
@@ -3357,6 +3503,8 @@ struct obj *obj;
 #endif /* CONVICT */
     if ((obj->otyp == CHAIN) && (Role_if(PM_CONVICT) || u.sealsActive&SEAL_AHAZU))
         return objects[obj->otyp].oc_skill;
+    if (is_shield(obj) && activeFightingForm(FFORM_SHIELD_BASH))
+        return P_SHIELD_BASH; // not P_SHIELD, that's for defensive uses
 	if (obj->oclass != WEAPON_CLASS && obj->oclass != TOOL_CLASS &&
 	    obj->oclass != GEM_CLASS && obj->oartifact != ART_WAND_OF_ORCUS)
 		/* Not a weapon, weapon-tool, or ammo */
@@ -3376,6 +3524,16 @@ struct obj *obj;
 	}
 	else if(obj->oartifact == ART_HOLY_MOONLIGHT_SWORD){
 		CHECK_ALTERNATE_SKILL(P_TWO_HANDED_SWORD)
+	}
+	else if(obj->oartifact == ART_SILVER_SKY){
+		CHECK_ALTERNATE_SKILL(P_TWO_HANDED_SWORD)
+		CHECK_ALTERNATE_SKILL(P_BROAD_SWORD)
+		CHECK_ALTERNATE_SKILL(P_SHORT_SWORD)
+	}
+	else if(obj->oartifact == ART_AMALGAMATED_SKIES){
+		CHECK_ALTERNATE_SKILL(P_LONG_SWORD)
+		CHECK_ALTERNATE_SKILL(P_BROAD_SWORD)
+		CHECK_ALTERNATE_SKILL(P_SHORT_SWORD)
 	}
 	else if(obj->oartifact == ART_TORCH_OF_ORIGINS){
 		type = P_CLUB;
@@ -3437,6 +3595,57 @@ uwep_skill_type()
 	return weapon_type(uwep);
 }
 
+int
+get_your_size()
+{
+	int wielder_size = (youracedata->msize - MZ_MEDIUM);
+
+	if (Role_if(PM_CAVEMAN))
+		wielder_size += 1;
+	if (u.sealsActive&SEAL_YMIR)
+		wielder_size += 1;
+
+	return wielder_size;
+}
+
+int
+get_your_shield_size()
+{
+	int wielder_size = (youracedata->msize - MZ_MEDIUM);
+
+	return wielder_size;
+}
+
+int
+max_offhand_weight(){
+	/* Sporkhack:
+	 * Heavy things are hard to use in your offhand unless you're
+	 * very good at what you're doing.
+	 *
+	 * No real need to restrict unskilled here since knives and such
+	 * are very hard to find and people who are restricted can't
+	 * #twoweapon even at unskilled...
+	*/
+
+	int maxweight = 0;
+	switch (P_SKILL(P_TWO_WEAPON_COMBAT)) {
+		case P_ISRESTRICTED:
+		case P_UNSKILLED:		maxweight = 10; break;	 /* not silver daggers */
+		case P_BASIC:			maxweight = 20; break;	 /* daggers, crysknife, sickle, aklys, flail, bullwhip, unicorn horn */
+		case P_SKILLED:	 		maxweight = 30; break;	 /* shortswords and spears (inc silver), mace, club, lightsaber, grappling hook */
+		case P_EXPERT:			maxweight = 40; break;	 /* sabers and long swords, axe weighs 60, war hammer 50, pickaxe 80, beamsword */
+		case P_MASTER:			maxweight = 50; break;
+		case P_GRAND_MASTER:	maxweight = 60; break;
+		default: impossible("weapon_hit_bonus: bad skill %d", P_SKILL(P_TWO_WEAPON_COMBAT));
+	}
+
+	int wielder_size = get_your_size();
+
+	if (wielder_size > 0) maxweight *= 1+wielder_size;
+
+	return maxweight;
+}
+
 /*
  * Return hit bonus/penalty based on skill of weapon.
  * Treat restricted weapons as unskilled.
@@ -3447,7 +3656,7 @@ struct obj *weapon;
 int wep_type;
 {
 	int type, skill, bonus = 0, aumpenalty = 0;
-	unsigned int maxweight = 0;
+	int maxweight = max_offhand_weight();
 	static boolean twowepwarn = TRUE;
 	static boolean makashiwarn = TRUE;
 
@@ -3509,33 +3718,6 @@ int wep_type;
 		1W weapons -4 -4 +0 +2 +5      
 		2W weapons -6 -6 +0 +1 +2
 		*/
-
-		/* Sporkhack:
-		 * Heavy things are hard to use in your offhand unless you're
-		 * very good at what you're doing.
-		 *
-		 * No real need to restrict unskilled here since knives and such
-		 * are very hard to find and people who are restricted can't
-		 * #twoweapon even at unskilled...
-		 */
-		switch (P_SKILL(P_TWO_WEAPON_COMBAT)) {
-			default: impossible("weapon_hit_bonus: bad skill %d", P_SKILL(P_TWO_WEAPON_COMBAT));
-			case P_ISRESTRICTED:
-			case P_UNSKILLED:		maxweight = 10; break;	 /* not silver daggers */
-			case P_BASIC:			maxweight = 20; break;	 /* daggers, crysknife, sickle, aklys, flail, bullwhip, unicorn horn */
-			case P_SKILLED:	 		maxweight = 30; break;	 /* shortswords and spears (inc silver), mace, club, lightsaber, grappling hook */
-			case P_EXPERT:			maxweight = 40; break;	 /* sabers and long swords, axe weighs 60, war hammer 50, pickaxe 80, beamsword */
-			case P_MASTER:			maxweight = 50; break;
-			case P_GRAND_MASTER:	maxweight = 60; break;
-		}
-		int wielder_size = (youracedata->msize - MZ_MEDIUM);
-
-		if (Role_if(PM_CAVEMAN))
-			wielder_size += 1;
-		if (u.sealsActive&SEAL_YMIR)
-			wielder_size += 1;
-		if (wielder_size > 0)
-			maxweight *= 1+wielder_size;
 
 		if (wep_type == P_BARE_HANDED_COMBAT) {
 			bonus -= abs(bonus * 2 / 3);
@@ -3751,6 +3933,17 @@ int wep_type;
 	if(wep_type == P_AXE && Race_if(PM_DWARF) && ublindf && ublindf->oartifact == ART_WAR_MASK_OF_DURIN) bonus += 5;
 	if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && type != P_TWO_WEAPON_COMBAT) bonus = max(bonus,0);
 	
+	if(weapon && weapon == uwep && Role_if(PM_SAMURAI) && !Upolyd && !u.twoweap && !u.usteed && !u.ustuck
+	  && ((u.dx == u.prev_dir.x && u.dy == u.prev_dir.y) || (u.dx == -1*u.prev_dir.x && u.dy == -1*u.prev_dir.y)) 
+	  && (weapon->oclass == WEAPON_CLASS || is_weptool(weapon)) 
+		&& (objects[weapon->otyp].oc_skill == P_LONG_SWORD || objects[weapon->otyp].oc_skill == P_TWO_HANDED_SWORD)
+	  && (bimanual(weapon, youracedata) || bimanual_mod(weapon, &youmonst) > 1)
+	){
+		if(bonus > 0)
+			bonus *= 2;
+		else bonus++;
+	}
+
     return bonus;
 }
 
@@ -3930,7 +4123,7 @@ int wep_type;
 			}
 			if(mcount > 1){
 				int sbon = ACURR(A_STR);
-				if(sbon >= STR19(19)) sbon -= 100; //remove percentile adjustment
+				if(sbon >= STR19(19)) sbon -= 20; //remove percentile adjustment
 				else if(sbon > 18) sbon = 18; //remove percentile adjustment
 				//else it is fine as is.
 				sbon = (sbon+2)/3; //1-9
@@ -3971,6 +4164,16 @@ int wep_type;
 	if(wep_type == P_AXE && Race_if(PM_DWARF) && ublindf && ublindf->oartifact == ART_WAR_MASK_OF_DURIN) bonus += 5;
 	if(uwep && uwep->oartifact == ART_PEN_OF_THE_VOID && type != P_TWO_WEAPON_COMBAT) bonus = max(bonus,0);
 	
+	if(weapon && weapon == uwep && Role_if(PM_SAMURAI) && !Upolyd && !u.twoweap && !u.usteed && !u.ustuck
+	  && (weapon->oclass == WEAPON_CLASS || is_weptool(weapon)) && objects[weapon->otyp].oc_skill == P_LONG_SWORD
+	  && (bimanual(weapon, youracedata) || bimanual_mod(weapon, &youmonst) > 1)
+	  && ((u.dx == u.prev_dir.x && u.dy == u.prev_dir.y) || (u.dx == -1*u.prev_dir.x && u.dy == -1*u.prev_dir.y)) 
+	){
+		if(bonus > 0)
+			bonus *= 2;
+		else bonus++;
+	}
+
 	return bonus;
 }
 
@@ -3978,18 +4181,22 @@ int
 shield_skill(shield)
 struct obj *shield;
 {
-	if(weight(shield) > (int)objects[BUCKLER].oc_weight){
+	int size_adjust = get_your_shield_size();
+	if(size_adjust < 0)
+		size_adjust = 0;
+	else size_adjust += 1;
+	if(weight(shield) > (int)objects[BUCKLER].oc_weight*size_adjust){
 		switch(P_SKILL(P_SHIELD)){
 			case P_BASIC:	return 1;
-			case P_SKILLED:	return 2;
-			case P_EXPERT:	return 5;
+			case P_SKILLED:	return activeFightingForm(FFORM_SHIELD_BASH) ? 2 : 3;
+			case P_EXPERT:	return activeFightingForm(FFORM_SHIELD_BASH) ? 5 : 8;
 			default: return 0;
 		}
 	}
 	else {
 		switch(P_SKILL(P_SHIELD)){
 			case P_SKILLED:	return 1;
-			case P_EXPERT:	return 2;
+			case P_EXPERT:	return activeFightingForm(FFORM_SHIELD_BASH) ? 2 : 3;
 			default: return 0;
 		}
 	}
@@ -4211,7 +4418,8 @@ boolean youagr;
 			&& !(otmp->oartifact && !always_twoweapable_artifact(otmp))			// ok artifact
 			&& (!bimanual(otmp, pa) || pa->mtyp == PM_GYNOID || pa->mtyp == PM_PARASITIZED_GYNOID)// not two-handed
 			&& (youagr || (otmp != MON_WEP(magr) && otmp != MON_SWEP(magr)))	// not wielded already (monster)
-			&& (!youagr || otmp->owt <= max(10, P_SKILL(P_TWO_WEAPON_COMBAT)*10))// not too heavy
+			&& (!youagr || otmp->owt <= max_offhand_weight())// not too heavy
+			&& (!(otmp->cursed) || (youagr && Weldproof) || (!youagr && is_weldproof_mon(magr)))
 			&& (!youagr || (otmp != uwep && (!u.twoweap || otmp != uswapwep)))	// not wielded already (player)
 			&& !(is_ammo(otmp) || (is_bad_melee_pole(otmp) && !melee_polearms(pa)) || is_missile(otmp))	// not unsuitable for melee (ammo, polearm, missile)
 			&& !otmp->owornmask);												// not worn

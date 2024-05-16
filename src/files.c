@@ -45,13 +45,7 @@ extern int errno;
 #include <signal.h>
 #endif
 
-#if defined(MSDOS) || defined(OS2) || defined(TOS) || defined(WIN32)
-# ifndef GNUDOS
-#include <sys\stat.h>
-# else
 #include <sys/stat.h>
-# endif
-#endif
 #ifndef O_BINARY	/* used for micros, no-op for others */
 # define O_BINARY 0
 #endif
@@ -62,7 +56,7 @@ static char fqn_filename_buffer[FQN_NUMBUF][FQN_MAX_FILENAME];
 #endif
 
 #if !defined(MFLOPPY) && !defined(VMS) && !defined(WIN32)
-char bones[] = "bonesnn.xxx";
+char bones[BUFSZ] = {0};
 char lock[PL_NSIZ+14] = "1lock"; /* long enough for uid+name+.99 */
 #else
 # if defined(MFLOPPY)
@@ -70,11 +64,11 @@ char bones[FILENAME];		/* pathname of bones files */
 char lock[FILENAME];		/* pathname of level files */
 # endif
 # if defined(VMS)
-char bones[] = "bonesnn.xxx;1";
+char bones[BUFSZ] = {0};
 char lock[PL_NSIZ+17] = "1lock"; /* long enough for _uid+name+.99;1 */
 # endif
 # if defined(WIN32)
-char bones[] = "bonesnn.xxx";
+char bones[BUFSZ] = {0};
 char lock[PL_NSIZ+25];		/* long enough for username+-+name+.99 */
 # endif
 #endif
@@ -1591,7 +1585,7 @@ const char *filename;
 
 const char *configfile =
 #ifdef UNIX
-			".nethackrc";
+			".dnethackrc";
 #else
 # if defined(MAC) || defined(__BEOS__)
 			"NetHack Defaults";
@@ -2086,6 +2080,10 @@ char		*tmp_levels;
 #if defined(STATUS_COLORS) && defined(TEXTCOLOR)
             (void) parse_status_color_options(bufp);
 #endif
+	} else if (match_varname(buf, "SETCOLOR", 8)) {
+	    (void) parse_setcolor(bufp);
+	} else if (match_varname(buf, "RESETCOLOR", 10)) {
+	    (void) parse_resetcolor(bufp);
 	} else if (match_varname(buf, "DUNGEON", 4)) {
 	    len = get_uchars(fp, buf, bufp, translate, FALSE,
 			     MAXDCHARS, "DUNGEON");

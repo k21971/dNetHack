@@ -242,13 +242,12 @@ int sanctum;   /* is it the seat of the high priest? */
 			priest->ispriest = 1;
 			priest->msleeping = 0;
 			priest->mpeaceful = 0;
-			set_malign(priest); /* mpeaceful may have changed */
 		} else {
 			priest->mpeaceful = 1;
 			priest->ispriest = 1;
 			priest->msleeping = 0;
-			set_malign(priest); /* mpeaceful may have changed */
 		}
+		set_malign(priest); /* mpeaceful or murderability may have changed */
 
 		/* now his/her goodies... */
 		if(sanctum && EPRI(priest)->shralign == A_NONE &&
@@ -394,7 +393,7 @@ boolean
 p_coaligned(priest)
 struct monst *priest;
 {
-	return((boolean)(u.ualign.type == ((int)EPRI(priest)->shralign)));
+	return((boolean)(u.ualign.type == ((int)EPRI(priest)->shralign) && (!(EPRI(priest)->godnum) || u.ugodbase[UGOD_CURRENT] == EPRI(priest)->godnum)));
 }
 
 STATIC_OVL boolean
@@ -696,8 +695,6 @@ register struct monst *priest;
 	if(priest->mflee || (!priest->ispriest && coaligned && strayed)) {
 	    pline("%s doesn't want anything to do with you!",
 				Monnam(priest));
-	    priest->mpeaceful = 0;
-		newsym(priest->mx, priest->my);
 	    return;
 	}
 
@@ -716,7 +713,6 @@ register struct monst *priest;
 		priest->mfrozen = priest->msleeping = 0;
 		priest->mcanmove = 1;
 	    }
-	    priest->mpeaceful = 0;
 	    verbalize1(cranky_msg[rn2(3)]);
 	    return;
 	}

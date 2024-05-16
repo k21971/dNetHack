@@ -30,7 +30,6 @@ STATIC_DCL boolean FDECL(spiritLets, (char *, int));
 STATIC_DCL int FDECL(dospiritmenu, (int, int *, int));
 STATIC_DCL boolean FDECL(dospellmenu, (int,int *));
 STATIC_DCL void FDECL(describe_spell, (int));
-STATIC_DCL int FDECL(percent_success, (int));
 STATIC_DCL int NDECL(throwspell);
 STATIC_DCL void NDECL(cast_protection);
 STATIC_DCL void NDECL(cast_abjuration);
@@ -748,9 +747,13 @@ struct obj *spellbook;
 			char qbuf[QBUFSZ];
 			Sprintf(qbuf, "You know \"%s\" quite well already. Try to refresh your memory anyway?", OBJ_NAME(objects[booktype]));
 
-			for (int i = 0; i < MAXSPELL; i++)
-				if (spellid(i) == booktype && spellknow(i) > KEEN/10 && yn(qbuf) == 'n')
+			for (int i = 0; i < MAXSPELL; i++){
+				if (spellid(i) == booktype && spellknow(i) > KEEN/10 && yn(qbuf) == 'n'){
+					/* identify the book in case you learnt the spell from an artifact book or aphanactonan archive */
+					makeknown(booktype);
 					return MOVE_CANCELLED;
+				}
+			}
 		}		
 		spellbook->in_use = TRUE;
 		
@@ -816,9 +819,10 @@ struct obj *spellbook;
 			You("begin to study the ward.");
 		else if (spellbook->otyp == SPE_BOOK_OF_THE_DEAD)
 			You("begin to recite the runes.");
-		else
+		else {
 			You("begin to memorize the runes.");
-			
+			makeknown(spellbook->otyp);
+		}
 	}
 
 	book = spellbook;
@@ -1298,6 +1302,12 @@ static const struct spirit_power spirit_powers[NUMBER_POWERS] = {
 	"Fire a powerful bolt of shadow. This bolt poisons, ignores armor, and ensnares creatures hit in a web." },
 	{ SEAL_SPECIAL|SEAL_BLACK_WEB,			"Weave a Black Web",		
 	"Make additional shadowblade attacks to everything around you for a few turns." },
+	{ SEAL_SPECIAL|SEAL_YOG_SOTHOTH,		"Burst of Madness",		
+	"Zap a ray of madness in a specified direction." },
+	{ SEAL_SPECIAL|SEAL_YOG_SOTHOTH,		"Unendurable Madness",		
+	"Create blasts of madness in a specified direction." },
+	{ SEAL_SPECIAL|SEAL_YOG_SOTHOTH,		"Contact Yog-Sothoth",		
+	"Trade favor for boons." },
 	{ SEAL_SPECIAL|SEAL_NUMINA,				"Identify",					
 	"Identify your inventory." },
 	{ SEAL_SPECIAL|SEAL_NUMINA,				"Clairvoyance",				
@@ -1402,7 +1412,13 @@ spiritLets(lets, respect_timeout)
 		for(s=0; s<NUM_BIND_SPRITS; s++){
 			if(u.spirit[s]) for(i = 0; i<52; i++){
 				if(u.spiritPOrder[i] == -1) continue;
-				if(spirit_powers[u.spiritPOrder[i]].owner == u.spirit[s] && (u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout)){
+				if(u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1)) continue;
+				if(u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2)) continue;
+				if(u.spiritPOrder[i] == PWR_CONTACT_YOG_SOTHOTH){
+					if(u.yog_sothoth_credit >= 50)
+						Sprintf(lets, "%c", i<26 ? 'a'+(char)i : 'A'+(char)(i-26));
+				}
+				else if(spirit_powers[u.spiritPOrder[i]].owner == u.spirit[s] && (u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout)){
 					Sprintf(lets, "%c", i<26 ? 'a'+(char)i : 'A'+(char)(i-26));
 				}
 			}
@@ -1410,9 +1426,16 @@ spiritLets(lets, respect_timeout)
 	} else {
 		for(i = 0; i<52; i++){
 			if(u.spiritPOrder[i] == -1) continue;
-			if(((spirit_powers[u.spiritPOrder[i]].owner & u.sealsActive &&
+			if(u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1)) continue;
+			if(u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2)) continue;
+			if(u.spiritPOrder[i] == PWR_CONTACT_YOG_SOTHOTH){
+				if(u.yog_sothoth_credit >= 50)
+					Sprintf(lets, "%c", i<26 ? 'a'+(char)i : 'A'+(char)(i-26));
+			}
+			else if(((spirit_powers[u.spiritPOrder[i]].owner & u.sealsActive &&
 				!(spirit_powers[u.spiritPOrder[i]].owner & SEAL_SPECIAL)) || 
-				spirit_powers[u.spiritPOrder[i]].owner & u.specialSealsActive & ~SEAL_SPECIAL) &&
+				(spirit_powers[u.spiritPOrder[i]].owner & u.specialSealsActive & ~SEAL_SPECIAL &&
+				 spirit_powers[u.spiritPOrder[i]].owner & SEAL_SPECIAL)) &&
 				(u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout)
 			){
 				Sprintf(lets, "%c", i<26 ? 'a'+(char)i : 'A'+(char)(i-26));
@@ -1548,6 +1571,9 @@ int atype;
 	int spell = 0;
 	switch (atype)
 	{
+	case AD_HOLY:
+	case AD_UNHY:
+		return P_MARTIAL_ARTS;
 	case AD_MAGM:
 	case AD_FIRE:
 	case AD_COLD:
@@ -1555,9 +1581,8 @@ int atype;
 	case AD_DEAD:
 	case AD_DRLI:
 	case AD_STAR:
-	case AD_HOLY:
-	case AD_UNHY:
 	case AD_HLUH:
+	case AD_MADF:
 		return P_ATTACK_SPELL;
 	case AD_DRST:
 	case AD_ACID:
@@ -2000,7 +2025,8 @@ int
 spiritDsize()
 {
     int bonus = 1;
-    if(ublindf && ublindf->oartifact == ART_SOUL_LENS) bonus = 2;
+    // if(ublindf && ublindf->oartifact == ART_SOUL_LENS) bonus = 2;
+    if(ublindf && ublindf->otyp == SOUL_LENS) bonus = 2;
 	if(u.ulevel <= 2) return 1 * bonus;
 	else if(u.ulevel <= 5) return 2 * bonus;
 	else if(u.ulevel <= 9) return 3 * bonus;
@@ -2680,7 +2706,7 @@ spiriteffects(power, atme)
 			if(isok(u.ux+u.dx, u.uy+u.dy)) {
 				struct obj *otmp;
 				You("ask the earth to open.");
-				digfarhole(TRUE, u.ux+u.dx, u.uy+u.dy);
+				digfarhole(TRUE, u.ux+u.dx, u.uy+u.dy, TRUE);
 				otmp = mksobj(BOULDER, MKOBJ_NOINIT);
 				projectile(&youmonst, otmp, (void *)0, HMON_PROJECTILE|HMON_FIRED, u.ux, u.uy, u.dx, u.dy, 0, 1, FALSE, FALSE, FALSE);
 				nomul(0, NULL);
@@ -3487,9 +3513,10 @@ spiriteffects(power, atme)
 			}
 		}break;
 		case PWR_GREAT_LEAP:
-			You("plunge through the ceiling!");
-			morehungry(max_ints(1, rnd(625)*get_uhungersizemod()));
-			level_tele();
+			if(level_tele()){
+				You("plunge through the ceiling!");
+				morehungry(max_ints(1, rnd(625)*get_uhungersizemod()));
+			}
 		break;
 		case PWR_MASTER_OF_DOORWAYS:{
 			//with apologies to Neil Gaiman
@@ -3513,7 +3540,7 @@ spiriteffects(power, atme)
 					else break;
 				} 
 				struct attack basicattack = {
-					((uarmg && arti_shining(uarmg)) || u.sealsActive&SEAL_CHUPOCLOPS) ? AT_TUCH : AT_CLAW,
+					((uarmg && arti_phasing(uarmg)) || u.sealsActive&SEAL_CHUPOCLOPS) ? AT_TUCH : AT_CLAW,
 					AD_PHYS, 0, 0 };
 				
 				int dieroll = rnd(20);
@@ -4045,6 +4072,47 @@ spiriteffects(power, atme)
 		    pline("The poison shadow of the Black Web flows in your wake.");
 			weave_black_web((struct monst *)0);
 			break;
+		case PWR_MAD_BURST:{
+			if (!getdir((char *)0) || !(u.dx || u.dy)) return MOVE_CANCELLED;
+			struct zapdata zapdata = { 0 };
+			basiczap(&zapdata, AD_MADF, ZAP_SPELL, 0);
+			zapdata.damn = 6 + P_SKILL(P_ATTACK_SPELL);
+			zapdata.damd = dsize;
+			zapdata.bonus += Insanity/10;
+			zapdata.no_bounce = TRUE;
+			zap(&youmonst, u.ux, u.uy, u.dx, u.dy, rn1(7, 7), &zapdata);
+			}break;
+		case PWR_UNENDURABLE_MADNESS:{
+			if (!getdir((char *)0) || !(u.dx || u.dy)) return MOVE_CANCELLED;
+			struct zapdata zapdata = { 0 };
+			int x = u.ux, y = u.uy;
+			int ix, iy;
+			for(int i = 0; i<3;i++){
+				x = x+u.dx;
+				y = y+u.dy;
+				if(!isok(x,y) || !ZAP_POS(levl[x][y].typ)){
+					Your("fires fizzle in the confined space!");
+					return MOVE_CANCELLED;
+				}
+			}
+			int n = d(2,3)+1;
+			int dam;
+			ix = x;
+			iy = y;
+			do{
+				dam = d(1, dsize) + rnd(u.ulevel) + Insanity/10;
+				explode(ix, iy, AD_MADF, 0, dam, EXPL_MAGENTA, 1);
+				ix = x + rn2(3)-1;
+				iy = y + rn2(3)-1;
+				if(!isok(ix, iy) || !ZAP_POS(levl[ix][iy].typ)){
+					ix = x;
+					iy = y;
+				}
+			} while(n--);
+			}break;
+		case PWR_CONTACT_YOG_SOTHOTH:
+			commune_with_yog();
+			break;
 		case PWR_IDENTIFY_INVENTORY:
 		    identify_pack(0);
 		break;
@@ -4575,7 +4643,7 @@ spelleffects(int spell, boolean atme, int spelltyp)
 		}
 		energy = spellenergy(spell);
 
-		if (!Race_if(PM_INCANTIFIER) && u.uhunger <= 10 && spellid(spell) != SPE_DETECT_FOOD) {
+		if (!Race_if(PM_INCANTIFIER) && u.uhunger <= 10*get_uhungersizemod() && spellid(spell) != SPE_DETECT_FOOD) {
 			You("are too hungry to cast that spell.");
 			return MOVE_CANCELLED;
 		} else if (ACURR(A_STR) < 4 && casting_stat != A_CHA)  {
@@ -4648,27 +4716,36 @@ spelleffects(int spell, boolean atme, int spelltyp)
 	skill = spell_skilltype(pseudo->otyp);
 	role_skill = P_SKILL(skill);
 	if(Spellboost) role_skill++;
+	if(Role_if(PM_WIZARD)) role_skill++;
 	
 	n = 0;
 	switch(pseudo->otyp)  {
 	case SPE_LIGHTNING_STORM:	color = EXPL_MAGICAL;
 								n = rnd(4) + 2;
+								if(n < (role_skill-P_BASIC+2))
+									n = role_skill-P_BASIC+2;
 								dice = 6;
 								flat = spell_damage_bonus();
 								rad = 1;
 								inacc = 3;
 								goto dothrowspell;
-	case SPE_BLIZZARD:			color = EXPL_FROSTY;
+	case SPE_FIRE_STORM:		color = EXPL_FIERY;
 								n = rnd(3) + 1;
+								if(n < (role_skill-P_BASIC))
+									n = role_skill-P_BASIC;
 								dice = 4;
 								flat = spell_damage_bonus();
 								rad = 1;
 								inacc = 1;
 								goto dothrowspell;
-	case SPE_FIRE_STORM:		color = EXPL_FIERY;
+	case SPE_BLIZZARD:			color = EXPL_FROSTY;
 								n = 1;
 								dice = 12;
 								flat = u.ulevel/2 + spell_damage_bonus();
+								if((role_skill-P_BASIC) > 0){
+									dice -= min(11, role_skill-P_BASIC);
+									flat += 6*min(11, role_skill-P_BASIC);
+								}
 								rad = 2;
 								inacc = 0;
 								goto dothrowspell;
@@ -4719,6 +4796,8 @@ dothrowspell:
 				}
 				else {
 					dam = d(dice, 6) + flat + rnd(u.ulevel);
+					if(Spellboost) dam *= 2;
+					if(u.ukrau_duration) dam *= 1.5;
 					explode(u.dx, u.dy, spell_adtype(pseudo->otyp), 0, dam, color, rad);
 				}
 			}
@@ -4991,13 +5070,36 @@ int respect_timeout;
 					add_menu(tmpwin, NO_GLYPH, &anyvoid, 0, 0, ATR_BOLD, sealNames[j], MENU_UNSELECTED);
 					for (i = 0; i < 52; i++){
 						if (u.spiritPOrder[i] == -1) continue;
-						if (spirit_powers[u.spiritPOrder[i]].owner == u.spirit[s]){
-							if (action != SPELLMENU_CAST || u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout){
+						if (u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1) && (action == SPELLMENU_CAST || action == SPELLMENU_DESCRIBE)) continue;
+						if (u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2) && (action == SPELLMENU_CAST || action == SPELLMENU_DESCRIBE)) continue;
+						if(u.spiritPOrder[i] == PWR_CONTACT_YOG_SOTHOTH){
+							if(u.yog_sothoth_credit >= 50){
 								Sprintf1(buf, spirit_powers[u.spiritPOrder[i]].name);
 								any.a_int = u.spiritPOrder[i] + 1;	/* must be non-zero */
 								add_menu(tmpwin, NO_GLYPH, &any,
 									i < 26 ? 'a' + (char)i : 'A' + (char)(i - 26),
 									0, ATR_NONE, buf, MENU_UNSELECTED);
+							}
+							else {
+								Sprintf(buf, " na %s", spirit_powers[u.spiritPOrder[i]].name);
+								add_menu(tmpwin, NO_GLYPH, &anyvoid, 0, 0, ATR_NONE, buf, MENU_UNSELECTED);
+							}
+						}
+						else if (spirit_powers[u.spiritPOrder[i]].owner == u.spirit[s]){
+							if (action != SPELLMENU_CAST || u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout){
+								if ((u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1))
+								 || (u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2))
+								){
+									Sprintf1(buf, "------");
+									add_menu(tmpwin, NO_GLYPH, &anyvoid, 0, 0, ATR_NONE, buf, MENU_UNSELECTED);
+								}
+								else {
+									Sprintf1(buf, spirit_powers[u.spiritPOrder[i]].name);
+									any.a_int = u.spiritPOrder[i] + 1;	/* must be non-zero */
+									add_menu(tmpwin, NO_GLYPH, &any,
+										i < 26 ? 'a' + (char)i : 'A' + (char)(i - 26),
+										0, ATR_NONE, buf, MENU_UNSELECTED);
+								}
 							}
 							else {
 								Sprintf(buf, " %2ld %s", u.spiritPColdowns[u.spiritPOrder[i]] - monstermoves + 1, spirit_powers[u.spiritPOrder[i]].name);
@@ -5012,13 +5114,34 @@ int respect_timeout;
 		else {
 			p = 0;
 			for (i = 0; i < 52; i++){
-				if (u.spiritPOrder[i] != -1 && ((
+				if (u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1) && (action == SPELLMENU_CAST || action == SPELLMENU_DESCRIBE)) continue;
+				if (u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2) && (action == SPELLMENU_CAST || action == SPELLMENU_DESCRIBE)) continue;
+				if(u.spiritPOrder[i] == PWR_CONTACT_YOG_SOTHOTH){
+					if(u.yog_sothoth_credit >= 50){
+						Sprintf1(buf, spirit_powers[u.spiritPOrder[i]].name);
+						any.a_int = u.spiritPOrder[i] + 1;	/* must be non-zero */
+						add_menu(tmpwin, NO_GLYPH, &any,
+							i < 26 ? 'a' + (char)i : 'A' + (char)(i - 26),
+							0, ATR_NONE, buf, MENU_UNSELECTED);
+					}
+					else {
+						Sprintf(buf, " na %s", spirit_powers[u.spiritPOrder[i]].name);
+						add_menu(tmpwin, NO_GLYPH, &anyvoid, 0, 0, ATR_NONE, buf, MENU_UNSELECTED);
+					}
+				}
+				else if (u.spiritPOrder[i] != -1 && ((
 					spirit_powers[u.spiritPOrder[i]].owner & u.sealsActive &&
 					!(spirit_powers[u.spiritPOrder[i]].owner & SEAL_SPECIAL)) ||
 					((spirit_powers[u.spiritPOrder[i]].owner & SEAL_SPECIAL) &&
 					(spirit_powers[u.spiritPOrder[i]].owner & u.specialSealsActive & ~SEAL_SPECIAL)))
+				){
+					if ((u.spiritPOrder[i] == PWR_MAD_BURST && !check_mutation(YOG_GAZE_1))
+					 || (u.spiritPOrder[i] == PWR_UNENDURABLE_MADNESS && !check_mutation(YOG_GAZE_2))
 					){
-					if (action != SPELLMENU_CAST || u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout){
+						Sprintf1(buf, "------");
+						add_menu(tmpwin, NO_GLYPH, &anyvoid, 0, 0, ATR_NONE, buf, MENU_UNSELECTED);
+					}
+					else if (action != SPELLMENU_CAST || u.spiritPColdowns[u.spiritPOrder[i]] < monstermoves || !respect_timeout){
 						Sprintf1(buf, spirit_powers[u.spiritPOrder[i]].name);
 						any.a_int = u.spiritPOrder[i] + 1;	/* must be non-zero */
 						add_menu(tmpwin, NO_GLYPH, &any,
@@ -5810,7 +5933,7 @@ base_casting_stat()
 	return stat;
 }
 
-STATIC_OVL int
+int
 percent_success(spell)
 int spell;
 {
@@ -5891,6 +6014,7 @@ int spell;
 			 || spell_skilltype(spellid(spell)) == P_HEALING_SPELL
 			 || Role_if(PM_PRIEST)
 			 || Role_if(PM_MONK)
+			 || Role_if(PM_HEALER)
 			) cast_bon += 2;
 			if (uwep->oartifact)
 				cast_bon *= 2;
@@ -5905,6 +6029,7 @@ int spell;
 			if(spell_skilltype(spellid(spell)) == P_CLERIC_SPELL
 			 || spell_skilltype(spellid(spell)) == P_HEALING_SPELL
 			 || Role_if(PM_PRIEST)
+			 || Role_if(PM_HEALER)
 			) cast_bon += 2;
 			if (uwep->oartifact || objects[uwep->otyp].oc_unique)
 				cast_bon *= 2;
@@ -5916,8 +6041,10 @@ int spell;
 			|| uwep->oartifact == ART_ESSCOOAHLIPBOOURRR
 		) {	// tools of healing
 			cast_bon = 0;
-			if(spell_skilltype(spellid(spell)) == P_HEALING_SPELL)
-			cast_bon += 2;
+			if(spell_skilltype(spellid(spell)) == P_HEALING_SPELL
+			  || Role_if(PM_HEALER)
+			)
+				cast_bon += 2;
 			if (uwep->oartifact)
 				cast_bon *= 2;
 			splcaster -= urole.spelarmr * cast_bon / 3;
@@ -5988,11 +6115,11 @@ int spell;
 
 	if (uarm){
 		if(arm_blocks_upper_body(uarm->otyp)){
-			if ((is_metallic(uarm) || uarm->oartifact == ART_DRAGON_PLATE) && !check_oprop(uarm, OPROP_BRIL))
+			if (metal_blocks_spellcasting(uarm))
 				splcaster += casting_stat == A_CHA ? uarmgbon : urole.spelarmr;
 		}
 		else {
-			if ((is_metallic(uarm) || uarm->oartifact == ART_DRAGON_PLATE) && !check_oprop(uarm, OPROP_BRIL))
+			if (metal_blocks_spellcasting(uarm))
 				splcaster += uarmfbon;
 		}
 
@@ -6002,11 +6129,11 @@ int spell;
 	
 	if (uarmu){
 		if(arm_blocks_upper_body(uarmu->otyp)){
-			if (is_metallic(uarmu) && !check_oprop(uarmu, OPROP_BRIL))
+			if (metal_blocks_spellcasting(uarmu))
 				splcaster += casting_stat == A_CHA ? uarmgbon : urole.spelarmr;
 		}
 		else {
-			if (is_metallic(uarmu) && !check_oprop(uarmu, OPROP_BRIL))
+			if (metal_blocks_spellcasting(uarmu))
 				splcaster += uarmfbon;
 		}
 	}
@@ -6018,17 +6145,16 @@ int spell;
 			splcaster -= 2;
 		if (uarmc->otyp == SMOKY_VIOLET_FACELESS_ROBE)
 			splcaster -= 4;
-		if (uarmc->otyp == ROBE)
-			splcaster -= (urole.spelarmr
-			* ((uarmc->oartifact) ? 2 : 1)
-			/ ((uarm && (is_metallic(uarm) || uarm->oartifact == ART_DRAGON_PLATE) && !check_oprop(uarm, OPROP_BRIL)) ? 2 : 1));
-		if (is_metallic(uarmc) && !check_oprop(uarmc, OPROP_BRIL))
+		if (uarmc->otyp == ROBE){
+			splcaster -= (urole.spelarmr * ((uarmc->oartifact) ? 2 : 1) / ((metal_blocks_spellcasting(uarm)) ? 2 : 1));
+		}
+		if (metal_blocks_spellcasting(uarmc))
 			splcaster += uarmfbon;
 	}
 
 	if (uarmh && !Role_if(PM_MONK)) {
 		//Something up with madmen and this, it doesn't affect much.
-		if (is_metallic(uarmh) && uarmh->otyp != HELM_OF_BRILLIANCE && !check_oprop(uarmh, OPROP_BRIL)){
+		if (metal_blocks_spellcasting(uarmh)){
 			if(casting_stat == A_CHA){
 				splcaster += FacelessHelm(uarmh) ? 4*urole.spelarmr : 
 							 (uarmh->otyp == find_gcirclet()) ? urole.spelarmr/2 : 
@@ -6046,13 +6172,13 @@ int spell;
 			if(is_hard(uarmg) && uarmg->oartifact != ART_PREMIUM_HEART && uarmg->oartifact != ART_GODHANDS)
 				splcaster += uarmgbon;
 		}
-		else if (is_metallic(uarmg) && !check_oprop(uarmg, OPROP_BRIL)){
+		else if (metal_blocks_spellcasting(uarmg)){
 			splcaster += casting_stat == A_CHA ? uarmfbon : uarmgbon;
 		}
 	}
 
 	if (uarmf && !Role_if(PM_MONK)) {
-		if (is_metallic(uarmf) && !check_oprop(uarmf, OPROP_BRIL))
+		if (metal_blocks_spellcasting(uarmf))
 			splcaster += uarmfbon;
 	}
 
@@ -6061,6 +6187,23 @@ int spell;
 	}
 
 	if(u.sealsActive&SEAL_PAIMON) splcaster -= urole.spelarmr;
+	
+	if(ublindf && ublindf->otyp == SOUL_LENS){
+		if(u.ualign.record < 0 || ublindf->cursed){
+			if(casting_stat == A_CHA || Race_if(PM_ELF)){
+				splcaster += urole.spelarmr;
+			}
+			else if(Role_if(PM_MONK))
+				splcaster += ublindf->oartifact == ART_EYE_OF_THE_OVERWORLD ? urole.spelarmr : urole.spelarmr/2;
+		}
+		else if(u.ualign.record >= 20){
+			if(casting_stat == A_CHA || Race_if(PM_ELF)){
+				splcaster -= urole.spelarmr;
+			}
+			else if(Role_if(PM_MONK))
+				splcaster -= ublindf->oartifact == ART_EYE_OF_THE_OVERWORLD ? urole.spelarmr : urole.spelarmr/2;
+		}
+	}
 	
 	if(Race_if(PM_INCANTIFIER))
 		splcaster += max(-3*urole.spelarmr,urole.spelsbon);
@@ -6121,7 +6264,11 @@ int spell;
 	 * to cast a spell.  The penalty is not quite so bad for the
 	 * player's role-specific spell.
 	 */
-	if (uarms && casting_stat != A_CHA && (is_metallic(uarms) || weight(uarms) > (int) objects[BUCKLER].oc_weight)) {
+	int size_adjust = get_your_shield_size();
+	if(size_adjust < 1)
+		size_adjust = 1;
+	else size_adjust += 1;
+	if (uarms && casting_stat != A_CHA && ((metal_blocks_spellcasting(uarms)) || weight(uarms) > ((int) objects[BUCKLER].oc_weight)*size_adjust)) {
 		if (spellid(spell) == urole.spelspec) {
 			chance /= 2;
 		} else {
@@ -6137,6 +6284,19 @@ int spell;
 	 */
 	chance = chance * (20-splcaster) / 15 - splcaster;
 	
+	if(check_mutation(SHUB_RADIANCE)){
+		int insight = u.uinsight;
+		while(insight){
+			chance += 1;
+			insight /= 2;
+		}
+		chance += (ACURR(A_CHA)-10)/2;
+		if(ACURR(A_CHA) == 25)
+			chance += 1; //24 == +7, 25 == +8
+		if(u.ufirst_know)
+			chance += 10;
+	}
+
 	//Many madnesses affect spell casting chances
 	if(u.umadness){
 		int delta = NightmareAware_Insanity;

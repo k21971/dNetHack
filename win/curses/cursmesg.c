@@ -261,22 +261,21 @@ curses_prev_mesg()
     int count;
     winid wid;
     long turn = 0;
-    anything *identifier;
+    anything identifier;
     nhprev_mesg *mesg;
     menu_item *selected = NULL;
 
     wid = curses_get_wid(NHW_MENU);
     curses_create_nhmenu(wid);
-    identifier = malloc(sizeof (anything));
-    identifier->a_void = NULL;
+    identifier = zeroany;
 
     for (count = 0; count < num_messages; count++) {
         mesg = get_msg_line(TRUE, count);
         if ((turn != mesg->turn) && (count != 0)) {
-            curses_add_menu(wid, NO_GLYPH, identifier, 0, 0, A_NORMAL,
+            curses_add_menu(wid, NO_GLYPH, &identifier, 0, 0, A_NORMAL,
                             "---", FALSE);
         }
-        curses_add_menu(wid, NO_GLYPH, identifier, 0, 0, A_NORMAL,
+        curses_add_menu(wid, NO_GLYPH, &identifier, 0, 0, A_NORMAL,
                         mesg->str, FALSE);
         turn = mesg->turn;
     }
@@ -469,12 +468,17 @@ curses_message_win_getline(const char *prompt, char *answer, int buffer)
             strncpy(answer, p_answer, buffer);
             strcpy(toplines, tmpbuf);
             mesg_add_line((char *) tmpbuf);
+            /* newline */
+            if (my >= maxy) scroll_window(MESSAGE_WIN);
+            else my++;
+            mx = border_space;
             free(tmpbuf);
             curs_set(orig_cursor);
             curses_toggle_color_attr(win, NONE, A_BOLD, OFF);
             return;
         case '\b':
         case KEY_BACKSPACE:
+        case '\177':            /* delete */
             if (len < 1) {
                 len = 1;
                 mx = promptx;
@@ -575,11 +579,11 @@ mesg_add_line(char *mline)
     current_mesg->prev_mesg = last_mesg;
     last_mesg = current_mesg;
 
-
     if (num_messages < max_messages) {
         num_messages++;
     } else {
         tmp_mesg = first_mesg->next_mesg;
+        free(first_mesg->str);
         free(first_mesg);
         first_mesg = tmp_mesg;
     }

@@ -667,6 +667,9 @@ boolean msgs;
 	    dryup(x, y, madeby_u);
 		if(!flags.mon_moving && u.sealsActive&SEAL_EDEN) unbind(SEAL_EDEN,TRUE);
 	    return;
+	} else if (IS_FORGE(lev->typ)) {
+	    breakforge(x, y);
+	    return;
 #ifdef SINKS
 	} else if (IS_SINK(lev->typ)) {
 	    breaksink(x, y);
@@ -1253,6 +1256,14 @@ boolean pit_only;
 			pline_The("%s here refuses to open.", surface(u.ux,u.uy));
 			return FALSE;
 		}
+	} else if (IS_FORGE(lev->typ)) {
+		if(!pit_only){
+			openfakedoor();
+			return TRUE;
+		} else {
+			pline_The("%s here refuses to open.", surface(u.ux,u.uy));
+			return FALSE;
+		}
 #ifdef SINKS
 	} else if (IS_SINK(lev->typ)) {
 		if(!pit_only){
@@ -1470,6 +1481,9 @@ openrocktrap()
 	} else if (IS_FOUNTAIN(lev->typ)) {
 		fakerocktrap();
 	    return TRUE;
+	} else if (IS_FORGE(lev->typ)) {
+		fakerocktrap();
+	    return TRUE;
 #ifdef SINKS
 	} else if (IS_SINK(lev->typ)) {
 		fakerocktrap();
@@ -1506,13 +1520,13 @@ int x, y;
 	if (Role_if(PM_ARCHEOLOGIST)) {
 	    adjalign(-sgn(u.ualign.type)*3);
 		u.ualign.sins++;
-		u.hod++;
+		change_hod(1);
 	    You_feel("like a despicable grave-robber!");
 	} else if (Role_if(PM_SAMURAI)) {
         if(!(uarmh && uarmh->oartifact && uarmh->oartifact == ART_HELM_OF_THE_NINJA)){
 		    adjalign(-sgn(u.ualign.type)*10);//stiffer penalty
 			u.ualign.sins++;
-			u.hod++;
+			change_hod(1);
 		    You("disturb the honorable dead!");
         } else {
 			adjalign(10);
@@ -1976,7 +1990,7 @@ struct obj *obj;
 		char buf[BUFSZ];
 		int dam;
 
-		dam = rnd(2) + dbon(obj) + obj->spe;
+		dam = rnd(2) + dbon(obj, &youmonst) + obj->spe;
 		if (dam <= 0) dam = 1;
 		You("hit yourself with %s.", yname(obj));
 		Sprintf(buf, "%s own %s", uhis(),
@@ -2137,7 +2151,7 @@ watch_dig(mtmp, x, y, zap)
 
 	if (in_town(x, y) &&
 	    (closed_door(x, y) || lev->typ == SDOOR ||
-	     IS_WALL(lev->typ) || IS_FOUNTAIN(lev->typ) || IS_TREE(lev->typ))) {
+	     IS_WALL(lev->typ) || IS_FOUNTAIN(lev->typ) || IS_FORGE(lev->typ) || IS_TREE(lev->typ))) {
 	    if (!mtmp) {
 		for(mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
 		    if (DEADMONSTER(mtmp)) continue;
@@ -2622,6 +2636,12 @@ long timeout;	/* unused */
 			u.shubbie_devotion += 30;
 		}
 	}
+	if(obj->otyp == BRAINROOT){
+		struct monst *mon = makemon(&mons[PM_BRAINBLOSSOM_PATCH], obj->ox, obj->oy, MM_NOCOUNTBIRTH);
+		if(mon && canspotmon(mon)){
+			pline("%s grows back from the roots!", Monnam(mon));
+		}
+	}
 	obj_extract_self(obj);
 	obfree(obj, (struct obj *) 0);
 }
@@ -2680,10 +2700,11 @@ long timeout;	/* unused */
 /* return TRUE if digging succeeded, FALSE otherwise */
 //digs a hole at the specified x and y.
 boolean
-digfarhole(pit_only, x, y)
+digfarhole(pit_only, x, y, yours)
 boolean pit_only;
 int x;
 int y;
+boolean yours;
 {
 	struct trap *ttmp = t_at(x, y);
 	struct rm *lev = &levl[x][y];
@@ -2739,11 +2760,11 @@ int y;
 		return TRUE;
 
 	} else if (IS_GRAVE(lev->typ)) {
-	    digactualhole(x, y, BY_YOU, PIT, FALSE, TRUE);
+	    digactualhole(x, y, yours ? BY_YOU : (struct monst *)0, PIT, FALSE, TRUE);
 	    dig_up_grave(x,y);
 	    return TRUE;
 	} else if (IS_SEAL(lev->typ)) {
-	    // digactualhole(x, y, BY_YOU, PIT, FALSE, TRUE);
+	    // digactualhole(x, y, yours ? BY_YOU : (struct monst *)0, PIT, FALSE, TRUE);
 	    break_seal(x,y);
 	    return TRUE;
 	} else if (lev->typ == DRAWBRIDGE_UP) {
@@ -2797,9 +2818,9 @@ int y;
 
 		/* finally we get to make a hole */
 		if (nohole || pit_only)
-			digactualhole(x, y, BY_YOU, PIT, FALSE, TRUE);
+			digactualhole(x, y, yours ? BY_YOU : (struct monst *)0, PIT, FALSE, TRUE);
 		else
-			digactualhole(x, y, BY_YOU, HOLE, FALSE, TRUE);
+			digactualhole(x, y, yours ? BY_YOU : (struct monst *)0, HOLE, FALSE, TRUE);
 
 		return TRUE;
 	}

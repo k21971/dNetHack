@@ -1357,6 +1357,8 @@ int attempts;
 			/* probabilities here are deflated from makelevel() */
 			if (!rn2(20))
 				mkfeature(FOUNTAIN, FALSE, r);
+			if (!rn2(60))
+				mkfeature(FORGE, FALSE, r);
 			if (!rn2(80))
 				mkfeature(SINK, FALSE, r);
 			if (!rn2(100))
@@ -1435,9 +1437,26 @@ register const char *s;
 	if(*s) {
 	    if(sp && sp->rndlevs){
 			levvar = rnd((int) sp->rndlevs);
-			/* special case -- chalev should always use the corresponding level */
+			/* special cases -- 
+			 * chalev should always use the corresponding level
+			 * hell/abyss floors are set at game start for oracle sneak peeks
+			 * medusa & grue are still random as of right now, as is sea
+			*/
 			if (!strcmp(sp->proto, "chalev"))
 				levvar = chaos_dvariant + 1;
+			else if (Is_hell1(&u.uz))
+				levvar = dungeon_topology.hell1_variant;
+			else if (Is_hell2(&u.uz))
+				levvar = dungeon_topology.hell2_variant;
+			else if (Is_abyss1(&u.uz))
+				levvar = dungeon_topology.abyss_variant;
+			else if (Is_abyss2(&u.uz))
+				levvar = dungeon_topology.abys2_variant;
+			else if (Is_abyss3(&u.uz))
+				levvar = dungeon_topology.brine_variant;
+			
+			if (dungeon_topology.hell1_variant == CHROMA_LEVEL) levvar = BAEL_LEVEL;
+			
 			Sprintf(protofile, "%s-%d", s, levvar);
 		}
 	    else Strcpy(protofile, s);
@@ -1462,16 +1481,6 @@ register const char *s;
 //	pline("%d", levvar);
 	if (Is_challenge_level(&u.uz)){
 		dungeon_topology.challenge_variant = levvar;
-	} else if(Is_hell1(&u.uz)){
-		dungeon_topology.hell1_variant = levvar;
-	} else if(Is_hell2(&u.uz)){
-		dungeon_topology.hell2_variant = levvar;
-	} else if(Is_abyss1(&u.uz)){
-		dungeon_topology.abyss_variant = levvar;
-	} else if(Is_abyss2(&u.uz)){
-		dungeon_topology.abys2_variant = levvar;
-	} else if(Is_abyss3(&u.uz)){
-		dungeon_topology.brine_variant = levvar;
 	} else if(In_sea(&u.uz)){
 		dungeon_topology.sea_variant = levvar;
 	}
@@ -1484,8 +1493,9 @@ register const char *s;
 		} else if(Is_arcadiadonjon(&u.uz)){
 			Strcpy(protofile, "towrtob");
 		}
-	} 
-	if(Is_hell1(&u.uz) && !Role_if(PM_CAVEMAN) && dungeon_topology.hell1_variant == BAEL_LEVEL && rn2(2)){
+	}
+	
+	if(Is_hell1(&u.uz) && dungeon_topology.hell1_variant == CHROMA_LEVEL){
 			Strcpy(protofile, "hell-a");
 	}
 	/* quick hack for Binders entering Astral -- change the gods out before loading the level, so that
@@ -2442,7 +2452,11 @@ fill_dungeon_of_ill_regard(){
 		}
 	}
 	for(i = 0; i < PM_LONG_WORM_TAIL ; i++){
-		if(mons[i].geno&(G_NOGEN|G_UNIQ) || mvitals[i].mvflags&G_GONE || mons[i].mlet == S_PLANT)
+		if(mons[i].geno&(G_NOGEN|G_UNIQ)
+			|| mvitals[i].mvflags&G_GONE
+			|| mons[i].mlet == S_PLANT
+			|| G_C_INST(mons[i].geno) != 0
+		)
 			continue;
 		if(mons[i].maligntyp < -10)
 			strong++;
@@ -2469,12 +2483,12 @@ fill_dungeon_of_ill_regard(){
 #define LOOP_BODY	\
 			if(isok(x,y) && levl[x][y].typ == CORR){\
 				while(i < PM_LONG_WORM_TAIL \
-				&& (mons[i].maligntyp >= 0 || (mons[i].geno&(G_NOGEN|G_UNIQ)) || mvitals[i].mvflags&G_GONE || mons[i].mlet == S_PLANT || skips[j])){\
-					if(mons[i].maligntyp < 0 && !(mons[i].geno&(G_NOGEN|G_UNIQ)) && !(mvitals[i].mvflags&G_GONE) && mons[i].mlet != S_PLANT) j++;\
+				&& (mons[i].maligntyp >= 0 || (mons[i].geno&(G_NOGEN|G_UNIQ)) || G_C_INST(mons[i].geno) != 0 || mvitals[i].mvflags&G_GONE || mons[i].mlet == S_PLANT || skips[j])){\
+					if(mons[i].maligntyp < 0 && !(mons[i].geno&(G_NOGEN|G_UNIQ)) && G_C_INST(mons[i].geno) == 0 && !(mvitals[i].mvflags&G_GONE) && mons[i].mlet != S_PLANT) j++;\
 					i++;\
 				}\
 				if(i < PM_LONG_WORM_TAIL){\
-					mon = makemon(&mons[i], x, y, NO_MINVENT|MM_IGNOREWATER);\
+					mon = makemon(&mons[i], x, y, NO_MINVENT|MM_IGNOREWATER|MM_NOGROUP);\
 					trap = maketrap(x, y, VIVI_TRAP);\
 					trap->tseen = TRUE;\
 					if(!mon) impossible("bad monster placement at %d, %d.", x, y);\

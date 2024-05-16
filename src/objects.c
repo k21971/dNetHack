@@ -594,13 +594,13 @@ GUN(("cutting laser","hard tan lozenge", "hard lozenge"),         0,   MZ_SMALL,
 GUN(("raygun", "hard handle ending in glassy disks"), 0,  MZ_MEDIUM, 0,   8, 3000, 15,  1,  0,WP_BLASTER, PLASTIC, P_FIREARM, CLR_BRIGHT_CYAN, O_MAGIC(1)), /*Needs tile*/
 BULLET(("bullet", "pellet"),
 	DMG(D(2, 8), F(4)), DMG(D(2, 6), F(4)),
-	0,    MZ_TINY, 0,  1,   5, 0,  WP_BULLET,   P,   METAL, -P_FIREARM, HI_METAL),/*Needs tile*/
+	0,    MZ_TINY, 0,  1,   5, 0,  WP_BULLET,   P,   LEAD, -P_FIREARM, HI_METAL),/*Needs tile*/
 BULLET(("silver bullet", "silver pellet"),
 	DMG(D(2, 8), F(4)), DMG(D(2, 6), F(4)),
 	0,    MZ_TINY, 0,  1,  15, 0,  WP_BULLET,   P,  SILVER, -P_FIREARM, HI_SILVER),/*Needs tile*/
 BULLET(("shotgun shell", "red tube", "tube"),
 	DMG(D(2, 12), F(4)), DMG(D(2, 6), F(4)),
-	0,    MZ_TINY, 0,  1,  10,10,   WP_SHELL,   S,   METAL, -P_FIREARM, CLR_RED),/*Needs tile*/
+	0,    MZ_TINY, 0,  1,  10,10,   WP_SHELL,   S,   LEAD, -P_FIREARM, CLR_RED),/*Needs tile*/
 BULLET(("frag grenade", "green spheroid", "spheroid"),
 	DMG(D(2)), DMG(D(2)),
 	0,   MZ_SMALL, 0,  5, 350, 0, WP_GRENADE,   B,    IRON, -P_FIREARM, CLR_GREEN),/*Needs tile*/
@@ -688,6 +688,8 @@ HELM(("dwarvish helm", "hard hat"),
 		0, 0,  5, 1, 40,  20, 9, 1, 0, IRON, HI_METAL),
 HELM(("gnomish pointy hat", "conical hat"),
 		0, 0,  0, 1,  3,   2,10, 0, 0, CLOTH, CLR_RED),
+HELM(("sunlight maggot", "parasitic insectoid"),
+		0, 0,  0, 1, 10, 200,9, 2, 0, CHITIN, CLR_BROWN),
 HELM(("fedora"),
 		1, 0,  0, 0,  3,   1,10, 0, 0, CLOTH, CLR_BROWN),
 HELM(("cornuthaum", "conical hat"),
@@ -709,7 +711,7 @@ HELM(("elven helm", "runed helm"), /*Needs encyc entry*//*Needs tile*/
 HELM(("high-elven helm", "runed helm"), /*Needs encyc entry*//*Needs tile*/
 		0, 0,  0, 1, 15,   5, 8, 4, 0, MITHRIL, HI_MITHRIL, O_MATSPEC(UNIDED)),
 HELM(("imperial elven helm", "runed faceless helm"), /*Needs encyc entry*//*Needs tile*/
-		0, 0,  0, 0, 30, 900, 8, 4, 2, WOOD, CLR_BRIGHT_GREEN),
+		0, 1,  0, 0, 30, 900, 8, 4, 2, WOOD, CLR_BRIGHT_GREEN),
 HELM(("droven helm", "spider-shaped helm"), /*Needs encyc entry*//*Needs tile*/
 		0, 0,  0, 1, 20,   5, 8, 4, 0, SHADOWSTEEL, CLR_BLACK),
 HELM(("plasteel helm", "white skull helm", "skull helm"), /*Needs encyc entry*//*Needs tile*/
@@ -786,7 +788,7 @@ SUIT(("lantern plate mail", "glass-set plate mail"),
 SUIT(("high-elven plate", "runed plate mail"), /*Needs encyc entry*/
 	0, 0,   MZ_HUGE, ARMSZ_MEDIUM,  0,  5, 110, 1200,  3, 7, 3, MITHRIL, HI_MITHRIL),
 SUIT(("imperial elven armor", "runed plate mail"), /*Needs encyc entry*/
-	0, 0,   MZ_HUGE, ARMSZ_HEAVY,  0,  5, 110, 9000,  4, 6, 3, WOOD, CLR_BRIGHT_GREEN),
+	0, 1,   MZ_HUGE, ARMSZ_HEAVY,  0,  5, 110, 9000,  4, 6, 3, WOOD, CLR_BRIGHT_GREEN),
 SUIT(("droven plate mail", "crested black plate", "crested plate mail"), /*Needs encyc entry*/
 	0, 0,   MZ_HUGE, ARMSZ_MEDIUM,  0,  5,  85, 2000,  3, 7, 3, SHADOWSTEEL, CLR_BLACK),
 SUIT(("elven toga"), /*Needs encyc entry*//*Needs tile*/
@@ -880,7 +882,7 @@ SHIRT(("plain dress", "dress"), /*Needs encyc entry*/
 #endif
 /*Ruffled shirts are little different from other shirts*/
 SHIRT(("ruffled shirt"), /*Needs encyc entry*/
-	1, 0, MZ_MEDIUM,  0, 0,	 5,   2, 10, 0, 0, CLOTH, CLR_WHITE),
+	1, 0, MZ_MEDIUM,  0, 0,	 5,  200, 10, 0, 0, CLOTH, CLR_WHITE),
 /* victorian underwear, on the other hand, inflicts a penalty to AC but grants MC 3 */
 /* needs special case to be 'bulky' */
 SHIRT(("victorian underwear", "frilly dress"),
@@ -992,7 +994,7 @@ GLOVES(("harmonium gauntlets", "red-lacquered hooked gauntlets", "hooked gauntle
 GLOVES(("high-elven gauntlets", "runed gauntlets"), /*Needs encyc entry*//*Needs tile*/
 		0, 0,  0, 2, 15, 50, 8, 4, 0, MITHRIL, HI_MITHRIL),
 GLOVES(("imperial elven gauntlets", "runed gauntlets"), /*Needs encyc entry*//*Needs tile*/
-		0, 0,  0, 2, 15,900, 8, 4, 1, WOOD, CLR_BRIGHT_GREEN),
+		0, 1,  0, 2, 15,900, 8, 4, 1, WOOD, CLR_BRIGHT_GREEN),
 GLOVES(("plasteel gauntlets", "hard white gauntlets", "gauntlets"), /*Needs encyc entry*//*Needs tile*/
 		0, 0,  0, 2, 15, 50,  8, 3, 0, PLASTIC, CLR_WHITE),
 GLOVES(("gloves", "old gloves"),
@@ -1028,7 +1030,7 @@ BOOTS(("high boots", "jackboots"),
 BOOTS(("heeled boots", "tall boots"),
 		1, 0,   0, 2, 20, 12, 10, 2, 0, LEATHER, CLR_BLACK),
 BOOTS(("imperial elven boots", "runed armored boots"),
-		0, 0,   0, 2, 25,900,  8, 3, 1, WOOD, CLR_BRIGHT_GREEN, O_POWER(STEALTH)),
+		0, 1,   0, 2, 25,900,  8, 3, 1, WOOD, CLR_BRIGHT_GREEN, O_POWER(STEALTH)),
 BOOTS(("wind and fire wheels", "bladed disks"),
 		0, 0,   0, 2, 25,900, 10, 0, 0, IRON, HI_METAL),
 BOOTS(("crystal boots", "boots"), /*Needs encyc entry*//*Needs tile*/
@@ -1063,6 +1065,7 @@ BOOTS(("flying boots", "snow boots"),
 		BITS(0,0,spec,0,mgc,spec,0,0,MZ_TINY,0,HARDGEM(mohs),0,0,P_NONE,metal,0), \
 		power, RING_CLASS, 0, 0, 3, cost, {0}, {0}, 0, 0, 0, 15, color,__VA_ARGS__ )
 RING(("wishes", "black"),                {0},                  500, 1, 1, 4, FIRMAMENT, CLR_BLACK, O_NOWISH(1)),
+RING(("nothing", "boring"),              {0},                 50, 0, 0, 0, IRON, HI_METAL, O_PROB(0)),
 RING(("adornment", "wooden"),            {ADORNED},           100, 1, 1, 2, WOOD, HI_WOOD),
 RING(("gain strength", "granite"),       {0},                  150, 1, 1, 7, MINERAL, HI_MINERAL),
 RING(("gain constitution", "opal"),      {0},                  150, 1, 1, 7, GEMSTONE,  CLR_WHITE),
@@ -1124,6 +1127,7 @@ AMULET(("Amulet of Yendor", "Amulet of Yendor"), {0}, 0, /* note: description ==
 
 /* tools ... */
 /* tools with weapon characteristics come last */
+/* torches are mergeable */
 #define TOOL(names,kn,size,mrg,mgc,chg,prob,wt,cost,mat,color,...) \
 	OBJECT( names, \
 		BITS(kn,mrg,chg,0,mgc,chg,0,0,size,0,0,0,0,P_NONE,mat,0), \
@@ -1139,6 +1143,13 @@ AMULET(("Amulet of Yendor", "Amulet of Yendor"), {0}, 0, /* note: description ==
 		BITS(kn,0,1,chg,mgc,1,0,0,size,0,0,0,typ,sub,mat,0), \
 		{0}, TOOL_CLASS, prob, 0, \
 		wt, cost, sdam, ldam, hitbon, WP_GENERIC, 0, wt, clr, __VA_ARGS__)
+#define TORCH(names,sdam,ldam,kn,size,mgc,chg,prob,wt,cost,hitbon,typ,sub,mat,clr,...) \
+	OBJECT( names, \
+		BITS(kn,1,1,chg,mgc,1,0,0,size,0,0,0,typ,sub,mat,0), \
+		{0}, TOOL_CLASS, prob, 0, \
+		wt, cost, sdam, ldam, hitbon, WP_GENERIC, 0, wt, clr, __VA_ARGS__)
+
+
 /* containers */
 CONTAINER(("box"),             1,   MZ_HUGE, 0, 0,  30, 350,   8, WOOD, HI_WOOD),
 CONTAINER(("sarcophagus"),             1,   MZ_HUGE, 0, 0,  0, 3500,   8, GOLD, HI_GOLD),
@@ -1225,6 +1236,7 @@ TOOL(("sunglasses", "mirrored lenses"),/*Needs encyc entry*/
 TOOL(("blindfold"),    1,   MZ_TINY, 0, 0, 0,  45,  2,  20, CLOTH, CLR_GRAY),
 TOOL(("android visor", "black blindfold", "blindfold"), /*Needs encyc entry*/
 								0,   MZ_TINY, 0, 0, 0,   0,  2,  40, CLOTH, CLR_BLACK),
+TOOL(("soul-lens", "smooth-gemmed head-chain"),		0,   MZ_TINY, 0, 1, 0,   0,  3, 333, GLASS, HI_GOLD), /*Needs encyc entry*/
 TOOL(("towel"),        1,   MZ_TINY, 0, 0, 0,  45,  2,  50, CLOTH, CLR_MAGENTA),
 #ifdef STEED
 TOOL(("saddle"),       1,  MZ_LARGE, 0, 0, 0,   5,200, 150, LEATHER, HI_LEATHER),
@@ -1274,6 +1286,8 @@ TOOL(("doll's tear",   "milky gemstone", "gem"),/*Needs encyc entry*/
 								0,   MZ_TINY, 0, 1, 0,   0,  1,8000, GEMSTONE, CLR_WHITE),
 TOOL(("holy symbol of the black mother", "tarnished triple goat-head"), /*Needs encyc entry*/
 								0,   MZ_TINY, 0, 1, 0,   0, 50,8000, SILVER, CLR_BLACK),
+TOOL(("Hyperborean dial", "silvery mechanism"), /*Needs encyc entry*/
+								0,   MZ_SMALL, 0, 1, 0,   0, 66,8000, METAL, HI_SILVER),
 TOOL(("magic marker"), 1,   MZ_TINY, 0, 1, 1,  15,  2,  50, PLASTIC, CLR_RED),
 /* traps */
 TOOL(("land mine",(char *)0),     1,  MZ_LARGE, 0, 0, 0,   0,300, 180, IRON, CLR_RED),
@@ -1313,16 +1327,16 @@ WEPTOOL(("seismic hammer", "dull metallic hammer"),/*Needs encyc entry*/
 /*
  * Torches work as clubs
  */
-WEPTOOL(("torch"),/*Needs encyc entry*/
+TORCH(("torch"),/*Needs encyc entry*/
 	DMG(D(3)), DMG(D(2)),
 	1,  MZ_SMALL, 0, 0, 15, 10,   5,  0, B,   P_CLUB, WOOD, HI_WOOD),
-WEPTOOL(("magic torch", "torch"),/*Needs encyc entry*/
+TORCH(("magic torch", "torch"),/*Needs encyc entry*/
 	DMG(D(6)), DMG(D(3)),
 	0,  MZ_SMALL, 1, 0,  0, 10, 500,  1, B,   P_CLUB, BONE, CLR_WHITE, O_MATSPEC(UNIDED)),
-WEPTOOL(("shadowlander's torch", "black torch", "torch"),/*Needs encyc entry*/
+TORCH(("shadowlander's torch", "black torch", "torch"),/*Needs encyc entry*/
 	DMG(D(3)), DMG(D(2)),
 	0,  MZ_SMALL, 0, 0, 10, 10,  50,  0, B,   P_CLUB, WOOD, CLR_BLACK),
-WEPTOOL(("sunrod", "rod"),/*Needs encyc entry*/
+TORCH(("sunrod", "rod"),/*Needs encyc entry*/
 	DMG(D(3)), DMG(D(2)),
 	1,  MZ_SMALL, 0, 0,  5, 20,  50,  0, B,   P_MACE, GOLD, HI_GOLD, O_MATSPEC(UNIDED)),
 /* 
@@ -1399,6 +1413,7 @@ FOOD(("orange"),                 10,   MZ_TINY,  1,  2, 0, VEGGY,  80, CLR_ORANG
 FOOD(("pear"),                   10,   MZ_TINY,  1,  2, 0, VEGGY,  50, CLR_BRIGHT_GREEN),
 FOOD(("melon"),                  10,  MZ_SMALL,  1,  5, 0, VEGGY, 100, CLR_BRIGHT_GREEN),
 FOOD(("banana"),                 10,   MZ_TINY,  1,  2, 0, VEGGY,  80, CLR_YELLOW),
+FOOD(("brainroot"),               0,  MZ_SMALL,  4, 30, 0, VEGGY, 600, CLR_ORANGE),
 FOOD(("carrot"),                 15,   MZ_TINY,  1,  2, 0, VEGGY,  50, CLR_ORANGE),
 /*:and ends here*/
 FOOD(("sprig of wolfsbane"),      7,   MZ_TINY,  1,  1, 0, VEGGY,  40, CLR_GREEN),
@@ -1464,6 +1479,7 @@ POTION(("acid", "white"),                 0, 32, 250, CLR_WHITE),
 POTION(("oil", "murky"),                  0, 30, 250, CLR_BROWN),
 POTION(("amnesia", "sparkling"),          1, 8,  100, CLR_CYAN),
 POTION(("goat's milk", "black"),          1, 0,  900, CLR_BLACK),
+POTION(("primordial waters", "clear"),    1, 0,  900, CLR_CYAN),
 POTION(("space mead", "golden"),          1, 0,  900, CLR_YELLOW),
 POTION(("starlight", "dimly-shining"),    1, 4,  250, CLR_BRIGHT_CYAN),
 POTION(("water", "clear"),                0, 80, 100, CLR_CYAN),
@@ -1558,15 +1574,15 @@ POTION(("blood", "blood-red"),            0, 18, 50,  CLR_RED, O_USKWN(1)),	/* e
 	GOLD_DISK(("aphanactonan record",  "disk"), CLR_ORANGE, 80, MZ_MEDIUM),
 	GOLD_DISK(("aphanactonan archive",  "disk"), CLR_ORANGE, 800, MZ_LARGE),
 #undef GOLD_DISK
-#define METALIC_SLAB(names, clr,...) OBJECT( \
+#define METALLIC_SLAB(names, clr,...) OBJECT( \
 		DEF_BLINDNAME(names, "slab"), BITS(0,0,0,0,1,0,1,1,MZ_HUGE,0,0,0,0,P_NONE,METAL, IDED|UNIDED), {0}, \
 		TILE_CLASS, 0, 0, 300, 3000, {0}, {0}, 0, 0, 0, 6, clr, __VA_ARGS__)
 	/* Fixed descriptions (also, artifact base-items only) *//*Needs encyc entry*/
-	METALIC_SLAB(("First Word",  "blinding glyph"), CLR_YELLOW),
-	METALIC_SLAB(("Dividing Word",  "cerulean glyph"), HI_ZAP),
-	METALIC_SLAB(("Nurturing Word",  "verdant glyph"), CLR_GREEN),
-	METALIC_SLAB(("Word of Knowledge",  "crimson glyph"), CLR_RED),
-#undef METALIC_SLAB
+	METALLIC_SLAB(("First Word",  "blinding glyph"), CLR_YELLOW),
+	METALLIC_SLAB(("Dividing Word",  "cerulean glyph"), HI_ZAP),
+	METALLIC_SLAB(("Nurturing Word",  "verdant glyph"), CLR_GREEN),
+	METALLIC_SLAB(("Word of Knowledge",  "crimson glyph"), CLR_RED),
+#undef METALLIC_SLAB
 
 /* spellbooks ... */
 #define SPELL(names,sub,prob,level,mgc,dir,color,...) OBJECT( \
@@ -1799,6 +1815,8 @@ OBJECT(("bedroll"), BITS(1,0,0,0,0,0,0,0,MZ_SMALL,1,0,0,0,P_NONE,CLOTH,0), {0},	
 		BED_CLASS,   100, 0, 60,  100, DMG(D(2)), DMG(D(2)), 0, 0, 0, 2000, CLR_GREEN),
 OBJECT(("gurney"), BITS(1,0,0,0,0,0,0,0,MZ_MEDIUM,1,0,0,0,P_NONE,METAL,0), {0},		/*Needs encyc entry*/
 		BED_CLASS,     0, 0, 60,  100, DMG(D(4)), DMG(D(4)), 0, 0, 0, 2000, CLR_WHITE),
+OBJECT(("Bergonic chair", "strange chair"), BITS(0,0,0,0,0,0,0,0,MZ_LARGE,1,0,0,0,P_NONE,METAL,0), {0},		/*Needs encyc entry*/
+		BED_CLASS,     0, 0, 60,  100, DMG(D(4)), DMG(D(4)), 0, 0, 0, 2000, HI_ZAP),
 
 #ifdef CONVICT
 OBJECT(("heavy iron ball"), BITS(1,0,0,0,0,0,0,0,MZ_LARGE,0,0,0,WHACK,P_FLAIL,IRON,0), {0},

@@ -161,10 +161,14 @@ struct flag {
 	boolean goldka_level;		/* the current level has a gold kamerel golem on it */
 
 	boolean silence_level;		/* the current level has an avatar of The Silence on it */
+
+	boolean spriest_level;		/* the current level has a priest of the serpent on it */
 	boolean made_first;			/* the first word slab has been created */
 	boolean made_divide;		/* the dividing word slab has been created */
 	boolean made_life;			/* the nurturing word slab has been created */
 	boolean made_know;			/* the word of knowledge slab has been created */
+
+	boolean made_twin;			/* your yog sothoth twin has been created */
 
 	boolean disp_inv;			/* currently displaying inventory, use separate obuf list */
 
@@ -198,6 +202,7 @@ struct flag {
 	int	 initrace;	/* starting race      (index into races[])   */
 	int	 initgend;	/* starting gender    (index into genders[]) */
 	int	 initalign;	/* starting alignment (index into aligns[])  */
+	int	 descendant;	/* start as descendant */
 	int	 chaosvar;	/* Set chaos variant */
 	int	 randomall;	/* randomly assign everything not specified */
 	int	 pantheon;	/* deity selection for priest character */
@@ -243,12 +248,14 @@ struct instance_flags {
 	boolean  cbreak;	/* in cbreak mode, rogue format */
 #ifdef CURSES_GRAPHICS
 	boolean  classic_status;	/* What kind of horizontal statusbar to use */
+	boolean  classic_colors; 	/* Use traditional curses colors (normally terminal settings)? */
 	boolean  cursesgraphics;	/* Use portable curses extended characters */
 #endif
 	boolean  DECgraphics;	/* use DEC VT-xxx extended character set */
 	boolean  echo;		/* 1 to echo characters */
 	boolean  IBMgraphics;	/* use IBM extended character set */
 	boolean  UTF8graphics;	/* use UTF-8 characters */
+	int supports_utf8;	/* if the terminal supports utf8 */
 	unsigned msg_history;	/* hint: # of top lines to save */
 	boolean  num_pad;	/* use numbers for movement commands */
 	boolean  news;		/* print news */
@@ -340,6 +347,8 @@ struct instance_flags {
 	boolean  paranoid_hit;  /* Ask for 'yes' when hitting peacefuls */
 	boolean  paranoid_quit; /* Ask for 'yes' when quitting */
 	boolean  paranoid_remove; /* Always show menu for 'T' and 'R' */
+	boolean  paranoid_swim; /* Require 'm' prefix to move into water/lava/air unless it's safe */
+	boolean  no_forget_map; /* Amnesia doesn't blank map layouts. */
 #endif
 #ifdef USE_TILES
 	boolean  vt_nethack;
@@ -365,9 +374,16 @@ struct instance_flags {
     boolean invweight;
 	boolean quick_m_abilities;
 	boolean default_template_hilite;
+	long long statuseffects;
 	int statuslines;
 
 	int pokedex;	/* default monster stats to show in the pokedex */
+	
+	boolean save_uinwater; /* tracks if we're actually buried etc. for #terrain*/
+	boolean save_uburied;
+	boolean save_uswallow;
+	
+	boolean autodescribe;
 /*
  * Window capability support.
  */

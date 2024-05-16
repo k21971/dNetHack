@@ -38,6 +38,7 @@ struct thoughtglyph {
 #define	BEASTS_EMBRACE					0x0000000000100000L
 #define	SIGHT							0x0000000000200000L
 
+#define FIRST_GLYPH	ANTI_CLOCKWISE_METAMORPHOSIS_G
 static struct thoughtglyph thoughtglyphs[] =
 {
 	{ ANTI_CLOCKWISE_METAMORPHOSIS_G, PM_ETHEREAL_DERVISH, ANTI_CLOCKWISE_METAMORPHOSIS,
@@ -103,9 +104,11 @@ static struct thoughtglyph thoughtglyphs[] =
 	{ BEAST_S_EMBRACE_GLYPH, NON_PM, BEASTS_EMBRACE,
 	0, 99, "A bestial figure takes refuge inside you." },
 
-	{ ORRERY_GLYPH, NON_PM, SIGHT,
+	{ ORRERY_GLYPH, PM_GROTESQUE_PEEPER, SIGHT,
 	16, 100, "Your brain blinks open. There is an eye within an eye within an eye within an...." }
 };
+#define LAST_GLYPH	ORRERY_GLYPH
+
 
 
 

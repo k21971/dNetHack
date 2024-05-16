@@ -52,6 +52,7 @@
 #define AT_OBIT		42	/* "Other" bite. Medusa's hair, an ancient naga's canopy, and the ring armor's skirt */
 #define AT_WBIT		43	/* Wolf-head bite */
 #define AT_TAIL		44	/* Tail-slap */
+#define AT_TONG		45	/* Tongue attack */
 
 #define AT_WEAP		252	/* uses weapon */
 #define AT_XWEP		253	/* uses offhanded weapon */
@@ -72,6 +73,19 @@
 	(aatyp) == AT_MSPR || \
 	(aatyp) == AT_DSPR || \
 	(aatyp) == AT_ESPR \
+	)
+
+#define is_bite_at(aatyp)	(\
+		(aatyp) == AT_BITE\
+		|| (aatyp) == AT_LNCK\
+		|| (aatyp) == AT_5SBT\
+		|| (aatyp) == AT_OBIT\
+		|| (aatyp) == AT_WBIT\
+	)
+
+#define is_insight_tentacle_at(aatyp)	(\
+		(aatyp) == AT_TENT\
+		|| (aatyp) == AT_WISP\
 	)
 /*	Add new damage types below.
  *
@@ -230,11 +244,14 @@
 #define AD_TSMI     150 /* Tentacles Steal Magic Items */
 #define AD_BYAK     151 /* Byakhee eggs */
 #define AD_BSTR		152 /* Black star rapier */
+#define AD_UNRV		153 /* Unnerving gaze */
+#define AD_MADF		154 /* Madness fire */
+#define AD_FATK		155 /* Force target to attack */
 
 //#define AD_AHAZU	116 /*  */
 //Amon is a headbutt (AT_BUTT/AD_PHYS)
 //Chupoclops is a poisonous bite (AT_BITE/AD_DRST)
-#define AD_DUNSTAN	153
+#define AD_DUNSTAN	156
 #define AD_IRIS		AD_DUNSTAN+1
 #define AD_NABERIUS	AD_DUNSTAN+2
 #define AD_OTIAX	AD_DUNSTAN+3
@@ -260,9 +277,14 @@
 #define AD_CURS		AD_CLRC+6	/* random curse (ex. gremlin) */
 #define AD_SQUE		AD_CLRC+7	/* hits, may steal Quest Art or Amulet (Nemeses) */
 
+#define NUM_AD_TYPES AD_SQUE+1
+
 #define real_spell_adtyp(adtyp) \
 	((adtyp) == AD_SPEL || (adtyp) == AD_CLRC || (adtyp) == AD_PSON)
 
+#define no_contact_attk(attk) (\
+	(spirit_rapier_at(attk->aatyp) && attk->adtyp != AD_MERC) || \
+	attk->aatyp == AT_WISP || attk->aatyp == AT_HITS)
 /*
  *  Monster to monster attacks.  When a monster attacks another (mattackm),
  *  any or all of the following can be returned.  See mattackm() for more

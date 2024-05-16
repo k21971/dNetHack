@@ -9,6 +9,10 @@
 #include "lev_comp.h"
 #include "sp_lev.h"
 
+/* We need to declare this here, since lex includes stdio.h before _POSIX_C_SOURCE is set */
+/* On FreeBSD and OpenBSD, fileno is a macro, so parenthesize it to prevent expansion */
+extern int (fileno)(FILE *);
+
 /* Most of these don't exist in flex, yywrap is macro and
  * yyunput is properly declared in flex.skel.
  */
@@ -127,6 +131,7 @@ PORTAL		return PORTAL_ID;
 TELEPORT_REGION	return TELEPRT_ID;
 BRANCH		return BRANCH_ID;
 FOUNTAIN	return FOUNTAIN_ID;
+FORGE	return FORGE_ID;
 SINK		return SINK_ID;
 POOL		return POOL_ID;
 NON_DIGGABLE	return NON_DIGGABLE_ID;

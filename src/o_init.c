@@ -159,7 +159,7 @@ register char oclass;
 		for(i = first; i < last; i++) sum += objects[i].oc_prob;
 		if(sum == 0) {
 			if(objects[first].oc_class == RING_CLASS)
-				first++;//Ring of wishes should remain 0
+				first+=2;//Rings of wishes and nothing should remain 0
 			for(i = first; i < last; i++)
 			    objects[i].oc_prob = (1000+i-first)/(last-first);
 			goto check;
@@ -195,9 +195,9 @@ shuffle_all()
 			int j = last-1;
 
 			if (oclass == POTION_CLASS)
-			    j -= 6;  /* goat's milk, space mead, water, starlight, amnesia, and blood have fixed descriptions */
+			    j -= 7;  /* primordial waters, goat's milk, space mead, water, starlight, amnesia, and blood have fixed descriptions */
 			if (oclass == RING_CLASS)
-				first += 1;	/* three wishes has a fixed description */
+				first += 2;	/* three wishes and nothing have fixed descriptions */
 			if (oclass == WAND_CLASS)
 			    first += 3;  /* light, darkness, and wishing have fixed descriptions */
 			else if (oclass == AMULET_CLASS ||

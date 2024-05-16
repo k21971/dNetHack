@@ -85,6 +85,10 @@ int mtyp;
 			ptr->mname = EHOR(mon)->randname;
 			bas->mname = EHOR(mon)->randname;
 		}
+		else {
+			ptr->mname = mons[ptr->mtyp].mname;
+			bas->mname = mons[bas->mtyp].mname;
+		}
 		/* adjust permonst if needed */
 		if (mon != &youmonst && templated(mon))
 			set_template_data(bas, ptr, get_template(mon));
@@ -198,6 +202,10 @@ int newpm;
 		default:
 			//mon->mvar_ancient_breath_cooldown = 0;
 			//mon->mvar_yellow_lifesaved = FALSE;
+			//mon->mvar_twin_lifesaved = FALSE;
+			//mon->mvar_witchID = 0;
+			//mon->mvar_suryaID = 0;
+			//mon->mvar_huskID = 0;
 			mon->mvar1 = 0;
 		break;
 	}
@@ -691,7 +699,7 @@ int template;
 		AVG_DR(ldr)
 		AVG_DR(gdr)
 		AVG_DR(fdr)
-		if(ptr->mtyp == PM_PRIESTESS){
+		if(ptr->mtyp == PM_ITINERANT_PRIESTESS){
 			AVG_AC(dac)
 			AVG_AC(pac)
 			ptr->spe_bdr += 4;
@@ -911,7 +919,7 @@ int template;
 			ptr->mresists = MR_ALL|MR_MAGIC;
 			ptr->mflagsm |= MM_FLY|MM_BREATHLESS|MM_FLOAT;
 			ptr->mflagst &= ~(MT_ANIMAL | MT_PEACEFUL | MT_CARNIVORE | MT_HERBIVORE | MT_TRAITOR);
-			ptr->mflagst |= MT_WANDER|MT_STALK|MT_HOSTILE|MT_MINDLESS;
+			ptr->mflagst |= MT_WANDER|MT_STALK|MT_HOSTILE|MT_DETACHED;
 			ptr->mflagsb |= MB_UNSOLID|MB_INSUBSTANTIAL;
 			ptr->mflagsg &= ~(MG_PNAME);
 			ptr->mflagsg |= MG_NASTY|MG_HATESUNHOLY;
@@ -1985,9 +1993,11 @@ int level_bonus;
 		if (horror->mflagst & MT_NOTAKE)
 			horror->mflagst &= ~MT_MAID;
 		if (horror->mflagst & MT_MINDLESS)
-			horror->mflagst &= ~MT_ANIMAL;
+			horror->mflagst &= ~(MT_ANIMAL | MT_DETACHED);
+		if (horror->mflagst & MT_DETACHED)
+			horror->mflagst &= ~(MT_MINDLESS | MT_ANIMAL);
 		if (horror->mflagst & MT_ANIMAL)
-			horror->mflagst &= ~MT_MINDLESS;
+			horror->mflagst &= ~(MT_MINDLESS | MT_DETACHED);
 		if (horror->mflagsb & MB_MALE)
 			horror->mflagsb &= ~(MB_FEMALE | MB_NEUTER);
 		if (horror->mflagsb & MB_FEMALE)
@@ -2049,6 +2059,21 @@ int atyp, dtyp;
     return (struct attack *)0;
 }
 
+struct attack *
+permonst_dmgtype(ptr, dtyp)
+struct permonst *ptr;
+int dtyp;
+{
+    struct attack *a;
+
+    for (a = &ptr->mattk[0]; a < &ptr->mattk[NATTK]; a++){
+		if ((dtyp == AD_ANY || a->adtyp == dtyp)) 
+			return a;
+	}
+
+    return (struct attack *)0;
+}
+
 boolean
 at_least_one_attack(magr)
 struct monst *magr;
@@ -2056,7 +2081,7 @@ struct monst *magr;
 	struct attack *attk;
 	struct attack prev_attk = {0};
 	int	indexnum = 0,	/* loop counter */
-		subout = 0,	/* remembers what attack substitutions have been made for [magr]'s attack chain */
+		subout[SUBOUT_ARRAY_SIZE] = {0},	/* remembers what attack substitutions have been made for [magr]'s attack chain */
 		tohitmod = 0,	/* flat accuracy modifier for a specific attack */
 		res[4];		/* results of previous 2 attacks ([0] -> current attack, [1] -> 1 ago, [2] -> 2 ago) -- this is dynamic! */
 
@@ -2066,9 +2091,9 @@ struct monst *magr;
 	res[2] = MM_MISS;
 	res[3] = MM_MISS;
 	
-	for(attk = getattk(magr, (struct monst *) 0, res, &indexnum, &prev_attk, FALSE, &subout, &tohitmod);
+	for(attk = getattk(magr, (struct monst *) 0, res, &indexnum, &prev_attk, FALSE, subout, &tohitmod);
 		!is_null_attk(attk);
-		attk = getattk(magr, (struct monst *) 0, res, &indexnum, &prev_attk, FALSE, &subout, &tohitmod)
+		attk = getattk(magr, (struct monst *) 0, res, &indexnum, &prev_attk, FALSE, subout, &tohitmod)
 	){
 		if(attk->aatyp != AT_NONE && attk->aatyp != AT_SPIT && attk->aatyp != AT_BREA
 		&& attk->aatyp != AT_BOOM && attk->aatyp != AT_GAZE && attk->aatyp != AT_ARRW
@@ -2113,7 +2138,7 @@ int atyp;
 	struct attack *attk;
 	struct attack prev_attk = {0};
 	int	indexnum = 0,	/* loop counter */
-		subout = 0,	/* remembers what attack substitutions have been made for [mon]'s attack chain */
+		subout[SUBOUT_ARRAY_SIZE] = {0},	/* remembers what attack substitutions have been made for [mon]'s attack chain */
 		tohitmod = 0,	/* flat accuracy modifier for a specific attack */
 		res[4];		/* results of previous 2 attacks ([0] -> current attack, [1] -> 1 ago, [2] -> 2 ago) -- this is dynamic! */
 	int counter = 0;
@@ -2124,9 +2149,9 @@ int atyp;
 	res[2] = MM_MISS;
 	res[3] = MM_MISS;
 	
-	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk, TRUE, &subout, &tohitmod);
+	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk, TRUE, subout, &tohitmod);
 		!is_null_attk(attk);
-		attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk, TRUE, &subout, &tohitmod)
+		attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk, TRUE, subout, &tohitmod)
 	){
 		if(attk->aatyp == atyp)
 			counter++;
@@ -2145,7 +2170,7 @@ struct attack *prev_attk;
 {
 	struct attack *attk;
 	int	indexnum = 0,	/* loop counter */
-		subout = 0,	/* remembers what attack substitutions have been made for [mon]'s attack chain */
+		subout[SUBOUT_ARRAY_SIZE] = {0},	/* remembers what attack substitutions have been made for [mon]'s attack chain */
 		tohitmod = 0,	/* flat accuracy modifier for a specific attack */
 		res[4];		/* results of previous 2 attacks ([0] -> current attack, [1] -> 1 ago, [2] -> 2 ago) -- this is dynamic! */
 
@@ -2155,9 +2180,9 @@ struct attack *prev_attk;
 	res[2] = MM_MISS;
 	res[3] = MM_MISS;
 	
-	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, prev_attk, TRUE, &subout, &tohitmod);
+	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, prev_attk, TRUE, subout, &tohitmod);
 		!is_null_attk(attk);
-		attk = getattk(mon, (struct monst *) 0, res, &indexnum, prev_attk, TRUE, &subout, &tohitmod)
+		attk = getattk(mon, (struct monst *) 0, res, &indexnum, prev_attk, TRUE, subout, &tohitmod)
 	){
 		if(attk->aatyp == atyp)
 			return attk;
@@ -2173,7 +2198,7 @@ struct monst *mon;
 	struct attack *attk;
 	struct attack prev_attk_buffer = {0};
 	int	indexnum = 0,	/* loop counter */
-		subout = 0,	/* remembers what attack substitutions have been made for [mon]'s attack chain */
+		subout[SUBOUT_ARRAY_SIZE] = {0},	/* remembers what attack substitutions have been made for [mon]'s attack chain */
 		tohitmod = 0,	/* flat accuracy modifier for a specific attack */
 		res[4];		/* results of previous 2 attacks ([0] -> current attack, [1] -> 1 ago, [2] -> 2 ago) -- this is dynamic! */
 
@@ -2183,9 +2208,9 @@ struct monst *mon;
 	res[2] = MM_MISS;
 	res[3] = MM_MISS;
 	
-	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk_buffer, TRUE, &subout, &tohitmod);
+	for(attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk_buffer, TRUE, subout, &tohitmod);
 		!is_null_attk(attk);
-		attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk_buffer, TRUE, &subout, &tohitmod)
+		attk = getattk(mon, (struct monst *) 0, res, &indexnum, &prev_attk_buffer, TRUE, subout, &tohitmod)
 	){
 		if(attk->offhand || attk->aatyp == AT_XSPR || (attk->aatyp == AT_XWEP && MON_SWEP(mon)))
 			return TRUE;
@@ -2364,6 +2389,7 @@ struct monst *mon;
 		|| youracedata->mtyp == PM_RED_DRAGON
 		|| is_rider(youracedata)
 		|| wearing_dragon_armor(mon, PM_RED_DRAGON)
+		|| (Race_if(PM_HALF_DRAGON) && flags.HDbreath == AD_FIRE && u.ulevel >= 15)
 		);
 	//else
 	return (Change_res(mon) || mon_resistance(mon, GOOD_HEALTH) || flaming(mon->data) 
@@ -2374,6 +2400,7 @@ struct monst *mon;
 		|| has_template(mon, SLIME_REMNANT)
 		|| is_rider(mon->data)
 		|| wearing_dragon_armor(mon, PM_RED_DRAGON)
+		|| (is_half_dragon(mon->data) && mon->mvar_hdBreath == AD_FIRE && mon->m_lev >= 15)
 		);
 }
 
@@ -2584,13 +2611,13 @@ struct permonst * ptr;
 }
 
 boolean
-ranged_attk(ptr)	/* returns TRUE if monster can attack at range */
-struct permonst *ptr;
+ranged_attk(struct permonst *ptr) /* returns TRUE if monster can attack at range */
 {
 	register int i, atyp;
-	long atk_mask = (1L << AT_BREA) | (1L << AT_BRSH) | (1L << AT_SPIT) | (1L << AT_GAZE) | (1L << AT_LRCH) | (1L << AT_LNCK)
-					| (1L << AT_MMGC) | (1L << AT_TNKR) | (1L << AT_ARRW) | (1L << AT_BEAM) | (1L << AT_5SQR)
-					| (1L << AT_5SBT);
+	long long atk_mask = (1LL << AT_BREA) | (1LL << AT_BRSH) | (1LL << AT_SPIT)
+					| (1LL << AT_GAZE) | (1LL << AT_LRCH) | (1LL << AT_LNCK)
+					| (1LL << AT_MMGC) | (1LL << AT_TNKR) | (1LL << AT_ARRW)
+					| (1LL << AT_BEAM) | (1LL << AT_5SQR) | (1LL << AT_5SBT);
 
 	/* was: (attacktype(ptr, AT_BREA) || attacktype(ptr, AT_WEAP) ||
 		attacktype(ptr, AT_SPIT) || attacktype(ptr, AT_GAZE) ||
@@ -2601,7 +2628,7 @@ struct permonst *ptr;
 	    atyp = ptr->mattk[i].aatyp;
 	    if (atyp >= AT_WEAP) return TRUE;
 	 /* assert(atyp < 32); */
-	    if ((atk_mask & (1L << atyp)) != 0L) return TRUE;
+	    if ((atk_mask & (1LL << atyp)) != 0L) return TRUE;
 	}
 
 	return FALSE;
@@ -3018,6 +3045,7 @@ static const short grownups[][2] = {
 	{PM_GREEN_ELF, PM_ELF_LADY}, {PM_GREY_ELF, PM_ELF_LADY},
 	{PM_ELF_LADY, PM_ELVENQUEEN},
 	{PM_ALABASTER_ELF, PM_ALABASTER_ELF_ELDER},
+	{PM_STAR_ELF, PM_STAR_EMPEROR}, {PM_STAR_ELF, PM_STAR_EMPRESS},
 	{PM_DROW, PM_HEDROW_WARRIOR},
 	{PM_DROW, PM_DROW_CAPTAIN}, {PM_DROW_CAPTAIN, PM_DROW_MATRON},
 	{PM_NUPPERIBO, PM_METAMORPHOSED_NUPPERIBO}, {PM_METAMORPHOSED_NUPPERIBO, PM_ANCIENT_NUPPERIBO},
@@ -3061,7 +3089,7 @@ static const short grownups[][2] = {
 	{PM_STUDENT, PM_ARCHEOLOGIST},
 	{PM_RHYMER, PM_BARD},
 	{PM_HEDROW_WIZARD, PM_HEDROW_MASTER_WIZARD},
-	{PM_MYRKALFR, PM_MYRKALFAR_WARRIOR}, {PM_MYRKALFAR_WARRIOR, PM_MYRKALFAR_MATRON},
+	{PM_MYRKALFR, PM_MYRKALFAR_WARRIOR},
 	{PM_ATTENDANT, PM_HEALER},
 	{PM_PAGE, PM_KNIGHT},
 	{PM_ACOLYTE, PM_PRIEST},
@@ -3442,25 +3470,43 @@ int
 hd_size(ptr)
 struct permonst *ptr;
 {
+	int size = 8;
 	if(ptr->mtyp == PM_ZHI_REN_MONK)
-		return 4;
-	return 8;
-	
-	// switch(ptr->msize){
-		// case MZ_TINY:
-			// return 4;
-		// case MZ_SMALL:
-			// return 6;
-		// case MZ_MEDIUM:
-			// return 8;
-		// case MZ_LARGE:
-			// return 10;
-		// case MZ_HUGE:
-			// return 12;
-		// case MZ_GIGANTIC:
-			// return 20;
-	// }
-	// return 8;
+		size = 4;
+	else if(ptr->mtyp == PM_ANCIENT_OF_DEATH)
+		size = 20;
+	else switch(ptr->msize){
+		case MZ_TINY:
+			size = 4;
+		break;
+		case MZ_SMALL:
+			size = 6;
+		break;
+		case MZ_MEDIUM:
+			size = 8;
+		break;
+		case MZ_LARGE:
+			size = 10;
+		break;
+		case MZ_HUGE:
+			size = 12;
+		break;
+		case MZ_GIGANTIC:
+			size = 20;
+		break;
+	}
+
+	if(centauroid(ptr) && size < 20){
+		size += 2;
+	}
+
+	if(is_elf(ptr)){
+		size += 3;
+	}
+	else if(is_drow(ptr)){
+		size += 2;
+	}
+	return size;
 }
 
 #endif /* OVLB */

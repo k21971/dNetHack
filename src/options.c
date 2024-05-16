@@ -12,6 +12,7 @@ NEARDATA struct instance_flags iflags;	/* provide linkage */
 #else
 #include "hack.h"
 #include "tcap.h"
+#include "botl.h"
 #include <ctype.h>
 #endif
 #include <errno.h>
@@ -83,6 +84,7 @@ static struct Bool_Opt
 #endif
 #ifdef CURSES_GRAPHICS
 	{"classic_status", &iflags.classic_status, TRUE, SET_IN_FILE},
+	{"classic_colors", &iflags.classic_colors, TRUE, DISP_IN_GAME},
 #endif
 	{"cmdassist", &iflags.cmdassist, TRUE, SET_IN_GAME},
 # if defined(MICRO) || defined(WIN32) || defined(CURSES_GRAPHICS)
@@ -198,6 +200,7 @@ static struct Bool_Opt
 	{"news", (boolean *)0, FALSE, SET_IN_FILE},
 #endif
 	{"msg_wall_hits", &iflags.notice_walls, FALSE, SET_IN_GAME},
+	{"block_forget_map", &iflags.no_forget_map, FALSE, SET_IN_GAME},
 	{"null", &flags.null, TRUE, SET_IN_GAME},
 	{"old_C_behaviour", &iflags.old_C_behaviour, FALSE, SET_IN_GAME},
 #ifdef MAC
@@ -210,6 +213,7 @@ static struct Bool_Opt
 	{"paranoid_hit", &iflags.paranoid_hit, FALSE, SET_IN_GAME},
 	{"paranoid_quit", &iflags.paranoid_quit, FALSE, SET_IN_GAME},
 	{"paranoid_remove", &iflags.paranoid_remove, FALSE, SET_IN_GAME},
+	{"paranoid_swim", &iflags.paranoid_swim, TRUE, SET_IN_GAME},
 #endif
 	{"perm_invent", &flags.perm_invent, FALSE, SET_IN_GAME},
        {"pickup_thrown", &iflags.pickup_thrown, FALSE, SET_IN_GAME},
@@ -342,10 +346,11 @@ static struct Comp_Opt
 #ifdef DUMP_LOG
 	{ "dumpfile", "where to dump data (e.g., dumpfile:/tmp/dump.nh)",
 #ifdef DUMP_FN
-						PL_PSIZ, DISP_IN_GAME },
+						PL_PSIZ, DISP_IN_GAME
 #else
-						PL_PSIZ, SET_IN_GAME },
+						PL_PSIZ, SET_IN_GAME
 #endif
+	},
 #endif
 	{ "dungeon",  "the symbols to use in drawing the dungeon map",
 						MAXDCHARS+1, SET_IN_FILE },
@@ -367,6 +372,8 @@ static struct Comp_Opt
 	{ "gender",   "your starting gender (male or female)",
 						8, DISP_IN_GAME },
 	{ "horsename", "the name of your (first) horse (e.g., horsename:Silver)",
+						PL_PSIZ, DISP_IN_GAME },
+	{ "inherited",  "the name of your chosen inherited artifact (e.g., inherited:Dirge)",
 						PL_PSIZ, DISP_IN_GAME },
 	{ "hp_notify_fmt", "hp_notify format string", 20, SET_IN_GAME },
 	{ "map_mode", "map display mode under Windows", 20, DISP_IN_GAME },	/*WC*/
@@ -444,7 +451,8 @@ static struct Comp_Opt
 #ifdef MSDOS
 	{ "soundcard", "type of sound card to use", 20, SET_IN_FILE },
 #endif
-	{ "statuslines", "number of status lines (2 or 3)", 20, SET_IN_GAME },
+	{ "statuseffects", "status effects to show in the status line", 20, SET_IN_GAME },
+	{ "statuslines", "number of status lines (2, 3, or 4)", 20, SET_IN_GAME },
 	{ "suppress_alert", "suppress alerts about version-specific features",
 						8, SET_IN_GAME },
 	{ "tile_width", "width of tiles", 20, DISP_IN_GAME},	/*WC*/
@@ -657,11 +665,13 @@ initoptions()
 #endif
 	iflags.menu_headings = ATR_INVERSE;
 	iflags.attack_mode = ATTACK_MODE_CHAT;
-	iflags.statuslines = 3;
+	iflags.statuseffects = ~0;
+	iflags.statuslines = 4;
 
 	/* Use negative indices to indicate not yet selected */
 	flags.initrole = -1;
 	flags.initrace = -1;
+	flags.descendant = -1;
 	flags.initgend = -1;
 	flags.initalign = -1;
 
@@ -733,14 +743,14 @@ initoptions()
 		switch_graphics(DEC_GRAPHICS);
 	}
 # endif
-#  ifdef HAVE_SETLOCALE
+# ifdef HAVE_SETLOCALE
 	/* try to detect if a utf-8 locale is supported */
 	if (setlocale(LC_ALL, "") &&
 	    (opts = setlocale(LC_CTYPE, NULL)) &&
 	    ((strstri(opts, "utf8") != 0) || (strstri(opts, "utf-8") != 0))) {
-		switch_graphics(UTF8_GRAPHICS);
+	        switch_graphics(UTF8_GRAPHICS);
 	}
-#  endif
+# endif
 #endif /* UNIX || VMS */
 
 #ifdef MAC_GRAPHICS_ENV
@@ -1298,6 +1308,94 @@ parse_status_color_options(start)
 #endif /* STATUS_COLORS */
 
 
+struct rgb_color_option *setcolor_opts = NULL;
+struct rgb_color_option *resetcolor_opts = NULL;
+
+struct rgb_color_option * add_rgb_color_option(new_option, list_head)
+     struct rgb_color_option *new_option;
+     struct rgb_color_option *list_head;
+{
+    if (list_head == NULL)
+		return new_option;
+
+	new_option->next = list_head;
+    return new_option;
+}
+
+boolean
+parse_rgbcolor(char* cptr, boolean reset)
+{
+	int clr;
+
+	char hpre[BUFSZ] = "0x";
+	long hexcode = -1;
+	int r, g, b, l = 0;
+
+	if 		(!strncmpi(cptr, "black",		l=5))	clr = CLR_BLACK;
+	else if (!strncmpi(cptr, "red",			l=3))	clr = CLR_RED;
+	else if (!strncmpi(cptr, "green",	 	l=5))	clr = CLR_GREEN;
+	else if (!strncmpi(cptr, "brown",		l=5))	clr = CLR_BROWN;
+	else if (!strncmpi(cptr, "blue", 		l=4))	clr = CLR_BLUE;
+	else if (!strncmpi(cptr, "magenta",		l=7))	clr = CLR_MAGENTA;
+	else if (!strncmpi(cptr, "cyan",		l=4))	clr = CLR_CYAN;
+	else if (!strncmpi(cptr, "gray", 		l=4))	clr = CLR_GRAY;
+	else if (!strncmpi(cptr, "orange",		l=6))	clr = CLR_ORANGE;
+	else if (!strncmpi(cptr, "brightgreen",	l=11))	clr = CLR_BRIGHT_GREEN;
+	else if (!strncmpi(cptr, "lightgreen",	l=10))	clr = CLR_BRIGHT_GREEN;
+	else if (!strncmpi(cptr, "yellow",		l=6))	clr = CLR_YELLOW;
+	else if (!strncmpi(cptr, "brightblue",	l=10))	clr = CLR_BRIGHT_BLUE;
+	else if (!strncmpi(cptr, "lightblue",	l=9))	clr = CLR_BRIGHT_BLUE;
+	else if (!strncmpi(cptr, "brightmagenta",l=13))	clr = CLR_BRIGHT_MAGENTA;
+	else if (!strncmpi(cptr, "lightmagenta",l=12))	clr = CLR_BRIGHT_MAGENTA;
+	else if (!strncmpi(cptr, "brightcyan",	l=10))	clr = CLR_BRIGHT_CYAN;
+	else if (!strncmpi(cptr, "lightcyan",	l=9))	clr = CLR_BRIGHT_CYAN;
+	else if (!strncmpi(cptr, "white",		l=5))	clr = CLR_WHITE;
+	else return FALSE;
+
+	cptr += l+1;
+
+	if (cptr[0] == '#'){
+		cptr++;
+		strcat(hpre, cptr);
+		hexcode = strtol(cptr, NULL, 16);
+		r = (int) (hexcode & 0xff0000) >> 16;
+		g = (int) (hexcode & 0x00ff00) >> 8;
+		b = (int) (hexcode & 0x0000ff);
+	} else {
+		r = (int) strtol(cptr, &cptr, 10);
+		g = (int) strtol(cptr, &cptr, 10);
+		b = (int) strtol(cptr, NULL,  10);
+	}
+
+	r = r * 1000 / 255;
+	g = g * 1000 / 255;
+	b = b * 1000 / 255;
+
+	struct rgb_color_option *rgb_opt = (struct rgb_color_option *)alloc(sizeof(struct rgb_color_option));
+	rgb_opt->color = clr;
+	rgb_opt->r = r;
+	rgb_opt->g = g;
+	rgb_opt->b = b;
+	rgb_opt->next = NULL;
+
+	if (reset) resetcolor_opts = add_rgb_color_option(rgb_opt, resetcolor_opts);
+	else setcolor_opts = add_rgb_color_option(rgb_opt, setcolor_opts);
+
+    return TRUE;
+}
+
+
+boolean
+parse_setcolor(char* cptr){
+	return parse_rgbcolor(cptr, FALSE);
+}
+
+boolean
+parse_resetcolor(char* cptr){
+	return parse_rgbcolor(cptr, TRUE);
+}
+
+
 void
 set_duplicate_opt_detection(on_or_off)
 int on_or_off;
@@ -1630,6 +1728,10 @@ char * str;
 		template = POISON_TEMPLATE;
 	else if (strstri(s_temp, "moly") == s_temp)
 		template = MOLY_TEMPLATE;
+	else if (strstri(s_temp, "cordyceps") == s_temp)
+		template = CORDYCEPS;
+	else if (strstri(s_temp, "spore") == s_temp)
+		template = SPORE_ZOMBIE;
 	else
 		return FALSE;
 
@@ -1851,7 +1953,7 @@ const char *str;
 
 	/* find dungeon feature */
 	for (i=0; i < MAXPCHARS; i++) {
-		if (!strcmpi(feature, defsyms[i].explanation)) {
+		if (!strcmpi(feature, symbol_names[i]) || !strcmpi(feature, defsyms[i].explanation)) {
 			assign_utf8graphics_symbol(i, num);
 			return TRUE;
 		}
@@ -2578,6 +2680,21 @@ goodfruit:
 		return;
 	}
 
+	if (match_optname(opts, "descendant", 4, FALSE)) {
+		if (negated) flags.descendant = 0;
+		else flags.descendant = 1;
+		return;
+	}
+
+	fullname = "inherited";
+	if (match_optname(opts, fullname, 3, TRUE)) {
+		if (negated) bad_negation(fullname, FALSE);
+		else if ((op = string_for_env_opt(fullname, opts, FALSE)) != 0)
+			nmcpy(inherited, op, PL_PSIZ);
+		sanitizestr(inherited);
+		return;
+	}
+
 	/* altkeyhandler:string */
 	fullname = "altkeyhandler";
 	if (match_optname(opts, fullname, 4, TRUE)) {
@@ -2917,6 +3034,46 @@ goodfruit:
         }
 
 
+	fullname = "statuseffects";
+	if (match_optname(opts, fullname, sizeof("statuseffects")-1, TRUE)) {
+		int l = 0;
+		boolean negative = FALSE;
+		boolean error = FALSE;
+		if (negated) {
+			iflags.statuseffects = 0;
+		}
+		else for (op = string_for_opt(opts, FALSE); op && *op; op += l) {
+			while (*op == ' ' || *op == ',')
+				op++;
+			if (op[0] == '!') {
+				negative = TRUE;
+				op++;
+			}
+			else {
+				negative = FALSE;
+			}
+			if (!strncmpi(op, "all", l=3)) {
+				iflags.statuseffects = negative ? 0 : ~0;
+				continue;
+			}
+			boolean exists = FALSE;
+			for (i = 0; i < SIZE(status_effects); i++) {
+				struct status_effect status = status_effects[i];
+				if (!strncmpi(op, status.name, l=strlen(status.name))) {
+					exists = TRUE;
+					if (!negative)
+						iflags.statuseffects |= status.mask;
+					else
+						iflags.statuseffects &= ~status.mask;
+					break;
+				}
+			}
+			if (!exists) error = TRUE;
+		}
+		if (error) badoption(opts);
+		return;
+	}
+
 	fullname = "statuslines";
 	if (match_optname(opts, fullname, sizeof("statuslines")-1, TRUE)) {
 		op = string_for_opt(opts, negated);
@@ -2928,10 +3085,7 @@ goodfruit:
 		    if (!initial)
 		        need_redraw = TRUE;
 		    iflags.statuslines = atoi(op);
-		    if (iflags.statuslines > 3) {
-		        iflags.statuslines = 3;
-		        badoption(opts);
-		    } else if (iflags.statuslines < 2) {
+		    if (iflags.statuslines < 2) {
 		        iflags.statuslines = 2;
 		        badoption(opts);
 		    }
@@ -3956,6 +4110,46 @@ boolean setinitial,setfromfile;
 			destroy_nhwindow(tmpwin);
 		}
 		retval = TRUE;
+	} else if (!strcmp(optname, "statuseffects")) {
+		char buf[BUFSZ];
+		menu_item *mode_pick = (menu_item *)0;
+		boolean done = FALSE;
+		/*
+		 * Refresh statusline so shown status conditions don't
+		 * end up desynced while in the menu. curses doesn't
+		 * update the statusline during the menu at all and
+		 * refreshing it each time is too slow because it
+		 * redraws everything (including drawing the map and
+		 * then overwriting it), so only do this for tty.
+		 */
+		boolean refresh_botl = !strcmp(windowprocs.name, "tty");
+
+		if (refresh_botl) bot();
+		while (!done){
+			tmpwin = create_nhwindow(NHW_MENU);
+			start_menu(tmpwin);
+			for (i = 0; i < SIZE(status_effects); i++) {
+				struct status_effect status = status_effects[i];
+				/* a-z then A-Z */
+				char letter = 'a' + i;
+				if (letter > 'z')
+					letter += 'A'-'z'-1;
+				Sprintf(buf, "%-11s (%s)", status.name, iflags.statuseffects & status.mask ? "on" : "off");
+				any.a_int = i + 1;
+				add_menu(tmpwin, NO_GLYPH, &any, letter, 0,
+					ATR_NONE, buf, MENU_UNSELECTED);
+			}
+			end_menu(tmpwin, "Toggle shown status effects on/off:");
+			if (select_menu(tmpwin, PICK_ONE, &mode_pick) > 0) {
+				iflags.statuseffects ^= status_effects[mode_pick->item.a_int - 1].mask;
+				if (refresh_botl) bot();
+			}
+			else
+				done = TRUE;
+			free((genericptr_t)mode_pick);
+			destroy_nhwindow(tmpwin);
+		}
+		retval = TRUE;
 	} else if (!strcmp("wizlevelport", optname)) {
 		char buf[BUFSZ];
 		menu_item *pick = (menu_item *) 0;
@@ -4412,6 +4606,8 @@ char *buf;
 #endif
 	else if (!strcmp(optname, "hp_notify_fmt"))
 		Sprintf(buf, "%s", iflags.hp_notify_fmt ? iflags.hp_notify_fmt : "[HP%c%a=%h]" );
+	else if (!strcmp(optname, "inherited"))
+		Sprintf(buf, "%s", inherited[0] ? inherited : none );
 	else if (!strcmp(optname, "dungeon"))
 		Sprintf(buf, "%s", to_be_done);
 	else if (!strcmp(optname, "effects"))
@@ -4573,9 +4769,12 @@ char *buf;
 	else if (!strcmp(optname, "player_selection"))
 		Sprintf(buf, "%s", iflags.wc_player_selection ? "prompts" : "dialog");
 #ifdef MSDOS
-	else if (!strcmp(optname, "soundcard"))
+	else if (!strcmp(optname, "soundcard")) {
 		Sprintf(buf, "%s", to_be_done);
+	}
 #endif
+	else if (!strcmp(optname, "statuseffects"))
+		Sprintf(buf, "0x%llX", iflags.statuseffects);
 	else if (!strcmp(optname, "statuslines"))
 		Sprintf(buf, "%d", iflags.statuslines);
 	else if (!strcmp(optname, "suppress_alert")) {

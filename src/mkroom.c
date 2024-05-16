@@ -25,10 +25,10 @@ STATIC_DCL boolean FDECL(isbig, (struct mkroom *));
 STATIC_DCL int FDECL(int_sqrt, (int));
 STATIC_DCL boolean FDECL(issemispacious, (struct mkroom *));
 STATIC_DCL void NDECL(mkshop), FDECL(mkzoo,(int)), NDECL(mkswamp);
-STATIC_DCL struct monst *FDECL(prisoner,(int, int, int));
 STATIC_DCL void NDECL(mktemple);
 STATIC_DCL void NDECL(mkkamereltowers);
 STATIC_DCL void NDECL(mkminorspire);
+STATIC_DCL void NDECL(mksentenelclearing);
 STATIC_DCL void NDECL(mkfishingvillage);
 STATIC_DCL void NDECL(mkpluhomestead);
 STATIC_DCL void FDECL(mkpluroom, (int));
@@ -490,9 +490,16 @@ mklolthvaultitem()
 		type = lolth_armor[rn2(SIZE(lolth_armor))];
 		sobj = TRUE;
 	}
-	else if(rn2(2)) {
+	else if(!rn2(3)) {
 		type = lolth_weapons[rn2(SIZE(lolth_weapons))];
 		sobj = TRUE;
+	}
+	else if(rn2(2)){
+		if(rn2(2)){
+			type = find_signet_ring();
+			sobj = TRUE;
+		}
+		else type = RING_CLASS;
 	}
 	else if(rn2(2))
 		type = SCOIN_CLASS;
@@ -525,6 +532,8 @@ mklolthvaultitem()
 			if(otmp->oclass == WEAPON_CLASS || is_weptool(otmp) || otmp->oclass == ARMOR_CLASS)
 				otmp->spe = max_ints(d(2,3), otmp->spe);
 		}
+		if((otmp->oclass == WEAPON_CLASS || is_weptool(otmp) || otmp->oclass == ARMOR_CLASS) && rn2(5))
+			otmp->oerodeproof = TRUE;
 	} while (--try_limit > 0 &&
 	  !(objects[otmp->otyp].oc_magic || otmp->oartifact || !check_oprop(otmp, OPROP_NONE) || Is_container(otmp)));
 
@@ -626,6 +635,8 @@ int vn;
 			if(otmp->oclass == WEAPON_CLASS || is_weptool(otmp) || otmp->oclass == ARMOR_CLASS)
 				otmp->spe = max_ints(d(2,3), otmp->spe);
 		}
+		if((otmp->oclass == WEAPON_CLASS || is_weptool(otmp) || otmp->oclass == ARMOR_CLASS) && rn2(5))
+			otmp->oerodeproof = TRUE;
 	} while (--try_limit > 0 &&
 	  !(objects[otmp->otyp].oc_magic || otmp->oartifact || !check_oprop(otmp, OPROP_NONE) || Is_container(otmp)));
 
@@ -2393,6 +2404,110 @@ mkminorspire()
 	}
 }
 
+int yog_list[] = {PM_KOBOLD_SHAMAN, PM_ORC_SHAMAN, PM_GNOMISH_WIZARD, PM_HEDROW_WIZARD, PM_DWARF_CLERIC, PM_ELF_LADY};
+
+STATIC_OVL
+void
+mksentenelclearing()
+{
+	int x,y,ix, iy, tries=0;
+	int i,j, c;
+	boolean good=FALSE, okspot;
+	struct obj *otmp;
+	struct monst *mtmp;
+	while(!good && tries < 50){
+		x = rn2(COLNO-8)+4;
+		y = rn2(ROWNO-7)+3;
+		tries++;
+		okspot = TRUE;
+		for(i=-6;i<6 && okspot;i++)
+			for(j=-6;j<6 && okspot;j++){
+				if(!isok(x+i,y+j))
+					okspot = FALSE;
+				else if(
+				 levl[x+i][y+j].typ == CORR
+				 || levl[x+i][y+j].typ == ROOM
+				 || IS_WALL(levl[x+i][y+j].typ)
+				)
+					okspot = FALSE;
+			}
+		if(okspot){
+			good = TRUE;
+		} else continue;
+		
+		ix = x;
+		iy = y;
+		for(i=-10;i<=10;i++){
+			for(j=-10;j<=10;j++){
+				if(isok(ix+i,iy+j) && dist2(ix, iy, ix+i, iy+j)<105){
+					if(levl[ix+i][iy+j].typ == TREE
+					   && (dist2(ix, iy, ix+i, iy+j)) < (rnd(8)*rnd(8)+36)
+					)
+						levl[ix+i][iy+j].typ = GRASS;
+					levl[ix+i][iy+j].lit = 1;
+				}
+			}
+		}
+		for(i=-6;i<=6;i++){
+			for(j=-6;j<=6;j++){
+				if(isok(ix+i,iy+j) && dist2(ix, iy, ix+i, iy+j)<41){
+					if((levl[ix+i][iy+j].typ == TREE 
+							|| levl[ix+i][iy+j].typ == GRASS
+							|| levl[ix+i][iy+j].typ == PUDDLE
+						)
+						&& (dist2(ix, iy, ix+i, iy+j)) < (rnd(5)*rnd(5)+18)
+					)
+						levl[ix+i][iy+j].typ = SOIL;
+					levl[ix+i][iy+j].lit = 1;
+				}
+			}
+		}
+#define MAKE_STANDING_STONE(a, b) mksobj_at(BOULDER, a, b, NO_MKOBJ_FLAGS);\
+								   levl[a][b].lit = 1;\
+								   levl[a][b].typ = VWALL;\
+								   levl[a][b].wall_info = W_NONDIGGABLE;\
+								   if(m_at(a, b)) rloc(m_at(a, b), TRUE);\
+								   if(t_at(a, b)) rloc_trap(t_at(a, b));
+		MAKE_STANDING_STONE(x-1, y-2);
+		MAKE_STANDING_STONE(x+1, y-2);
+		MAKE_STANDING_STONE(x-1, y+2);
+		MAKE_STANDING_STONE(x+1, y+2);
+		MAKE_STANDING_STONE(x-3, y);
+		MAKE_STANDING_STONE(x+3, y);
+#define MAKE_YOG_CULTIST(a, b) mtmp = makemon(&mons[ROLL_FROM(yog_list)], a, b, NO_MINVENT);\
+				if(mtmp){\
+					if(mtmp->m_lev < 14)\
+						mtmp->m_lev = 14;\
+					mtmp->mhpmax = d(mtmp->m_lev, hd_size(mtmp->data));\
+					mongets(mtmp, WITCH_HAT, NO_MKOBJ_FLAGS);\
+					mongets(mtmp, !rn2(20) ? CLOAK_OF_MAGIC_RESISTANCE : CLOAK, NO_MKOBJ_FLAGS);\
+					mongets(mtmp, QUARTERSTAFF, NO_MKOBJ_FLAGS);\
+					mtmp->msleeping = TRUE;\
+					set_faction(mtmp, YOG_FACTION);\
+					if(u.yog_sothoth_atten){\
+						mtmp->mpeaceful = TRUE;\
+						set_malign(mtmp);\
+					}\
+				}
+		MAKE_YOG_CULTIST(x-3, y-1);
+		MAKE_YOG_CULTIST(x-3, y+1);
+		MAKE_YOG_CULTIST(x+3, y-1);
+		MAKE_YOG_CULTIST(x+3, y+1);
+		MAKE_YOG_CULTIST(x, y-3);
+		MAKE_YOG_CULTIST(x, y+3);
+		if(m_at(x, y))
+			rloc(m_at(x, y), TRUE);
+		if(t_at(x, y))
+			rloc_trap(t_at(x, y));
+		if(levl[x][y].typ == MOAT || levl[x][y].typ == POOL)
+			levl[x][y].typ = SOIL;
+
+		struct trap *ttmp = maketrap(x, y, LEVEL_TELEP);
+		if(ttmp)
+			ttmp->special = TRUE;
+	}
+}
+
 STATIC_OVL
 void
 mkfishingvillage()
@@ -3137,6 +3252,86 @@ int left;
 
 STATIC_OVL
 void
+mkelfforge(background, foreground, left, mithril)
+int background;
+int foreground;
+int left;
+char mithril;
+{
+	int x,y,tries=0;
+	int i,j, pathto = 0;
+	boolean good=FALSE, okspot, accessible;
+	int size = 5;
+	while(!good && tries < 1500){
+		if(left){
+			x = rn2(COLNO/2);
+			y = rn2(ROWNO-3);
+		} else {
+			x = rn2(COLNO-10)+1;
+			y = rn2(ROWNO-3);
+		}
+		tries++;
+		okspot = TRUE;
+		accessible = FALSE;
+		for(i=0;i<size;i++)
+			for(j=0;j<size;j++){
+				if(!isok(x+i,y+j) || t_at(x+i, y+j) || !(levl[x+i][y+j].typ == background || IS_WALL(levl[x+i][y+j].typ)))
+					okspot = FALSE;
+			}
+		pathto = 0;
+		for(i = x+1; i < x+size-1; i++){
+			if(isok(i,y-1) && (levl[i][y-1].typ == foreground || levl[i][y-1].typ == ROOM)) pathto++;
+			if(isok(i,y+size) && (levl[i][y+size].typ == foreground || levl[i][y+size].typ == ROOM)) pathto++;
+		}
+		for(i = y+1; i < y+size-1; i++){
+			if(isok(x+size,i) && (levl[x+size][i].typ == foreground || levl[x+size][i].typ == ROOM)) pathto++;
+			if(isok(x-1,i) && (levl[x-1][i].typ == foreground || levl[x-1][i].typ == ROOM)) pathto++;
+		}
+		if(pathto) accessible = TRUE;
+		if(okspot && accessible){
+			good = TRUE;
+		} else continue;
+		
+		for(i=0;i<size;i++){
+			for(j=0;j<size;j++){
+				levl[x+i][y+j].typ = HWALL;
+				if(m_at(x+i, y+j)) rloc(m_at(x+i, y+j), TRUE);
+			}
+		}
+		for(i=1;i<size-1;i++){
+			for(j=1;j<size-1;j++){
+				levl[x+i][y+j].typ = mithril ? ROOM : GRASS;
+				// if(!rn2(3)) mkobj_at((rn2(2) ? WEAPON_CLASS : rn2(2) ? TOOL_CLASS : ARMOR_CLASS), x+i, y+j, NO_MKOBJ_FLAGS);
+			}
+		}
+		if(mithril){
+			levl[x+(size)/2][y+(size)/2].typ = FORGE;
+			makemon(&mons[PM_MITHRIL_SMITH], x+(size)/2, y+(size)/2, NO_MM_FLAGS);
+		}
+		else {
+			levl[x+(size)/2][y+(size)/2].typ = TREE;
+			makemon(&mons[PM_TREESINGER], x+(size-2)/2, y+(size-2)/2, NO_MM_FLAGS);
+		}
+		// wallification(x, y, x+3, y+3);//Can be adjacent, do wallification after all huts placed
+		
+		pathto = rn2(pathto);
+		for(i = x+1; i < x+size-1 && pathto >= 0; i++){
+			if(isok(i,y-1) && (levl[i][y-1].typ == foreground || levl[i][y-1].typ == ROOM) && !(pathto--))
+				levl[i][y+0].typ = DOOR, levl[i][y+0].doormask = rn2(3) ? D_CLOSED : D_LOCKED;
+			if(isok(i,y+size) && (levl[i][y+size].typ == foreground || levl[i][y+size].typ == ROOM) && !(pathto--))
+				levl[i][y+size-1].typ = DOOR, levl[i][y+size-1].doormask = rn2(3) ? D_CLOSED : D_LOCKED;
+		}
+		for(i = y+1; i < y+size-1 && pathto >= 0; i++){
+			if(isok(x+size,i) && (levl[x+size][i].typ == foreground || levl[x+size][i].typ == ROOM) && !(pathto--))
+				levl[x+size-1][i].typ = DOOR, levl[x+size-1][i].doormask = rn2(3) ? D_CLOSED : D_LOCKED;
+			if(isok(x-1,i) && (levl[x-1][i].typ == foreground || levl[x-1][i].typ == ROOM) && !(pathto--))
+				levl[x+0][i].typ = DOOR, levl[x+0][i].doormask = rn2(3) ? D_CLOSED : D_LOCKED;
+		}
+	}
+}
+
+STATIC_OVL
+void
 mkelffountain()
 {
 	int x,y,tries=0;
@@ -3205,8 +3400,9 @@ int x, y, w;
 		if(mon){
 			while((obj = mon->minvent)){
 				obj_extract_and_unequip_self(obj);
-				place_object(obj, x, y);
-				rloco(obj);
+				obj->ox = x;
+				obj->oy = y;
+				randomly_place_obj(obj);
 			}
 			obj = mongets(mon, SHACKLES, NO_MKOBJ_FLAGS);
 			if(obj){
@@ -5698,6 +5894,7 @@ place_elfquest_forest_features()
 		for(; i > 0; i--)
 			mkelfhut(TREE, GRASS, 0);
 		// i = rn2(3) ? 1 : d(1,3);
+		mkelfforge(TREE, GRASS, 0, TRUE);
 		i = 1;
 		for(; i > 0; i--)
 			mkelffountain();
@@ -5707,6 +5904,8 @@ place_elfquest_forest_features()
 		int i = rn2(4) + rn2(4);
 		for(; i > 0; i--)
 			mkelfhut(TREE, GRASS, 0);
+		if(rn2(3))
+			mkelfforge(TREE, GRASS, 0, FALSE);
 		for(i=rn1(20,20); i > 0; i--)
 			mktowntree();
 		wallification(1,0,COLNO-1,ROWNO-1);
@@ -5735,13 +5934,21 @@ place_chaos_forest_features()
 	if(In_mordor_forest(&u.uz)){
 		int i = 6 + d(2,6);
 		mkforest12river();
-		for(; i > 0; i--)
+		if(!rn2(10))
+			mkelfforge(TREE, SOIL, 0, TRUE);
+		for(; i > 0; i--){
 			mkelfhut(TREE, SOIL, 0);
+			if(!rn2(6))
+				mkelfforge(TREE, SOIL, 0, FALSE);
+		}
 		wallification(1,0,COLNO-1,ROWNO-1);
 	} else if(Is_ford_level(&u.uz)){
 		int i = 3 + d(2,3);
-		for(; i > 0; i--)
+		for(; i > 0; i--){
 			mkelfhut(TREE, SOIL, 1);
+			if(!rn2(6))
+				mkelfforge(TREE, SOIL, 1, FALSE);
+		}
 		i = 1 + d(3,4);
 		for(; i > 0; i--)
 			mkwraithclearing(1);
@@ -5842,6 +6049,10 @@ place_neutral_features()
 		for(; n > 0; n--)
 			mkpluhomestead();
 	} 
+
+	if(!rn2(20)){
+		mksentenelclearing();
+	}
 	wallification(1, 0, COLNO - 1, ROWNO - 1);
 }
 
@@ -6002,60 +6213,59 @@ mkshop()
 #ifndef MAC
 		ep = nh_getenv("SHOPTYPE");
 		if(ep){
-			if(*ep == 'z' || *ep == 'Z'){
-				mkzoo(ZOO);
+			switch(*ep){
+				case 'z':
+				case 'Z':
+					mkzoo(ZOO);
 				return;
-			}
-			if(*ep == 'm' || *ep == 'M'){
-				mkzoo(MORGUE);
+				case 'm':
+				case 'M':
+					mkzoo(MORGUE);
 				return;
-			}
-			if(*ep == 'b' || *ep == 'B'){
-				mkzoo(BEEHIVE);
+				case 'b':
+				case 'B':
+					mkzoo(BEEHIVE);
 				return;
-			}
-			if(*ep == 't' || *ep == 'T' || *ep == '\\'){
-				mkzoo(COURT);
+				case 't':
+				case 'T':
+				case '\\':
+					mkzoo(COURT);
 				return;
-			}
-			if(*ep == 's' || *ep == 'S'){
-				mkzoo(BARRACKS);
+				case 's':
+				case 'S':
+					mkzoo(BARRACKS);
 				return;
-			}
-			if(*ep == 'a' || *ep == 'A'){
-				mkzoo(ANTHOLE);
+				case 'a':
+				case 'A':
+					mkzoo(ANTHOLE);
 				return;
-			}
-			if(*ep == 'c' || *ep == 'C'){
-				mkzoo(COCKNEST);
+				case 'c':
+				case 'C':
+					mkzoo(COCKNEST);
 				return;
-			}
-			if(*ep == 'l' || *ep == 'L'){
-				mkzoo(LEPREHALL);
+				case 'l':
+				case 'L':
+					mkzoo(LEPREHALL);
 				return;
-			}
-			if(*ep == 'o' || *ep == 'O'){
-				mkpoolroom();
+				case 'o':
+				case 'O':
+					mkpoolroom();
 				return;
-			}
-			if(*ep == '_'){
-				mktemple();
+				case '_':
+					mktemple();
 				return;
-			}
-			if(*ep == 'n'){
-				mkgarden((struct mkroom *)0);
+				case 'n':
+					mkgarden((struct mkroom *)0);
 				return;
-			}
-			if(*ep == '\''){
-				mklibrary((struct mkroom *)0);
+				case '\'':
+					mklibrary((struct mkroom *)0);
 				return;
-			}
-			if(*ep == '}'){
-				mkswamp();
+				case '}':
+					mkswamp();
 				return;
-			}
-			if(*ep == 'w' || *ep == 'W'){
-				mkisland();
+				case 'w':
+				case 'W':
+					mkisland();
 				return;
 			}
 			/* note: shops >= UNIQUESHOP don't have valid class symbols, nor are generated randomly */
@@ -6065,6 +6275,8 @@ mkshop()
 				    goto gottype;
 			if(*ep == 'g' || *ep == 'G')
 				i = 0;
+			else if(*ep == 'u' || *ep == 'U')
+				i = 10;
 			else
 				i = -1;
 		}
@@ -6211,7 +6423,7 @@ int sx,sy;
 	return TRUE;
 }
 
-STATIC_OVL struct monst *
+struct monst *
 prisoner(kingtype, sx, sy)
 int kingtype;
 int sx,sy;
@@ -6230,8 +6442,8 @@ int sx,sy;
 			minmlev = (zlevel + u.ulevel) / 3 - 5;
 			/* determine the level of the strongest monster to make. */
 			maxmlev = (zlevel + u.ulevel) / 2 + 5;
-			int prisoners[] = { PM_GRIMLOCK, PM_GARGOYLE, PM_WINGED_GARGOYLE, PM_HOBBIT, PM_DWARF, PM_BUGBEAR, 
-				PM_DWARF_LORD, PM_DWARF_CLERIC, PM_DEEP_ONE, PM_DEEPER_ONE, PM_GNOLL, PM_GITHYANKI_PIRATE,
+			int prisoners[] = { PM_GRIMLOCK, PM_GARGOYLE, PM_WINGED_GARGOYLE, PM_HOBBIT, PM_DWARF, PM_BUGBEAR,
+				PM_DWARF_LORD, PM_DWARF_CLERIC, PM_DEEP_ONE, PM_DEEPER_ONE, PM_GNOLL, PM_GITHYANKI_PIRATE, PM_DWARF_SMITH,
 				PM_ELOCATOR,
 				PM_IMP, PM_QUASIT, PM_TENGU, PM_URANIUM_IMP, 
 				PM_KOBOLD, PM_LARGE_KOBOLD, 
@@ -6240,7 +6452,7 @@ int sx,sy;
 				PM_QUICKLING, PM_DRYAD,
 				PM_NAIAD, PM_OREAD, PM_SWAMP_NYMPH, PM_YUKI_ONNA, PM_DEMINYMPH, 
 				PM_GOBLIN, PM_HOBGOBLIN,
-				PM_HILL_ORC, PM_MORDOR_ORC, PM_URUK_HAI, PM_ORC_SHAMAN, PM_ORC_CAPTAIN, PM_URUK_CAPTAIN,
+				PM_HILL_ORC, PM_MORDOR_ORC, PM_URUK_HAI, PM_ORC_SHAMAN, PM_ORC_CAPTAIN, PM_URUK_CAPTAIN, PM_GOBLIN_SMITH,
 				PM_ANGBAND_ORC, 
 				PM_ANGEL, PM_KI_RIN,
 				PM_JUSTICE_ARCHON, PM_SWORD_ARCHON, PM_SHIELD_ARCHON, PM_TRUMPET_ARCHON, PM_WARDEN_ARCHON, PM_THRONE_ARCHON,
@@ -6265,7 +6477,9 @@ int sx,sy;
 				PM_LIVING_DOLL,
 				PM_PLUMACH_RILMANI, PM_FERRUMACH_RILMANI, PM_CUPRILACH_RILMANI, PM_ARGENACH_RILMANI,
 				PM_PEASANT, PM_MINER, PM_WEREJACKAL, PM_WOODLAND_ELF, PM_DROW_CAPTAIN, PM_GREEN_ELF,
+				PM_TREESINGER, PM_MITHRIL_SMITH,
 				PM_WERERAT, PM_GREY_ELF, PM_WEREWOLF, PM_HEDROW_WARRIOR, PM_ELF_LORD, PM_ELF_LADY,
+				PM_SHADOWSMITH, PM_HUMAN_SMITH,
 				PM_DOPPELGANGER, PM_HEDROW_WIZARD, PM_NURSE, PM_MAID, PM_UNEARTHLY_DROW, PM_DROW_MATRON,
 				PM_HEDROW_BLADEMASTER,
 				PM_PRISONER, PM_MINDLESS_THRALL,
@@ -6290,8 +6504,11 @@ int sx,sy;
 		case PM_DWARF_QUEEN:{
 			int prisoners[] = {
 				PM_MINER, PM_MINER, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN, 
+				PM_HUMAN_SMITH,
 				PM_WOODLAND_ELF, PM_WOODLAND_ELF, PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF,
+				PM_TREESINGER, PM_MITHRIL_SMITH,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_CAPTAIN,
+				PM_SHADOWSMITH,
 				PM_HOBBIT, PM_HOBBIT,
 				PM_DRYAD, PM_NAIAD, PM_OREAD, PM_YUKI_ONNA, PM_DEMINYMPH
 			};
@@ -6299,17 +6516,20 @@ int sx,sy;
 		}break;
 		case PM_KOBOLD_LORD:{
 			int prisoners[] = {PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME_LORD, PM_GNOME_LADY, PM_TINKER_GNOME, PM_GNOMISH_WIZARD,
-									PM_WOODLAND_ELF, PM_DWARF, PM_HOBBIT
+									PM_WOODLAND_ELF, PM_DWARF, PM_HOBBIT, PM_TREESINGER, PM_MITHRIL_SMITH, PM_DWARF_SMITH
 								};
 			mtyp = ROLL_FROM(prisoners);
 		}break;
 		case PM_ORC_CAPTAIN:{
 			int prisoners[] = {PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME_LORD, PM_GNOME_LADY, PM_TINKER_GNOME, PM_GNOMISH_WIZARD,
 									PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+									PM_TREESINGER, PM_MITHRIL_SMITH,
 									PM_NURSE, PM_MAID, PM_WATCHMAN, PM_WATCHMAN, PM_WATCHMAN,
+									PM_HUMAN_SMITH,
 									PM_HEDROW_WARRIOR, PM_HEDROW_WARRIOR, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+									PM_SHADOWSMITH,
 									PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
-									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD, PM_DWARF_SMITH,
 									PM_DEMINYMPH
 								};
 			mtyp = ROLL_FROM(prisoners);
@@ -6317,6 +6537,7 @@ int sx,sy;
 		case PM_URUK_CAPTAIN:{
 			int prisoners[] = {PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME_LORD, PM_GNOME_LADY, PM_TINKER_GNOME, PM_GNOMISH_WIZARD,
 									PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+									PM_TREESINGER, PM_MITHRIL_SMITH,
 									PM_NURSE, PM_MAID, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN,
 									PM_NOBLEMAN, PM_NOBLEWOMAN, PM_RANGER, PM_RANGER, PM_ROGUE, PM_WIZARD, PM_KNIGHT, PM_KNIGHT,
 									PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
@@ -6328,9 +6549,12 @@ int sx,sy;
 		case PM_ORC_OF_THE_AGES_OF_STARS:{
 			int prisoners[] = {
 									PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+									PM_MITHRIL_SMITH,
 									PM_WATCH_CAPTAIN, PM_WATCH_CAPTAIN,
 									PM_HEDROW_BLADEMASTER, PM_DROW_CAPTAIN, PM_DROW_MATRON, PM_UNEARTHLY_DROW,
+									PM_SHADOWSMITH,
 									PM_DWARF_CLERIC, PM_DWARF_LORD, PM_DWARF_QUEEN, PM_DWARF_KING,
+									PM_DWARF_SMITH,
 									PM_NOBLEMAN, PM_NOBLEWOMAN, PM_RANGER, PM_RANGER, PM_ROGUE, PM_WIZARD, PM_KNIGHT, PM_KNIGHT, PM_VALKYRIE,
 									PM_DEMINYMPH,
 									PM_JUSTICE_ARCHON, PM_SWORD_ARCHON, PM_SHIELD_ARCHON, PM_TRUMPET_ARCHON,
@@ -6345,8 +6569,10 @@ int sx,sy;
 			int prisoners[] = {
 				PM_MINER, PM_MINER, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN, 
 				PM_WOODLAND_ELF, PM_WOODLAND_ELF, PM_GREEN_ELF,
+				PM_TREESINGER,
 				PM_HOBBIT, PM_HOBBIT,
 				PM_KOBOLD, PM_LARGE_KOBOLD,
+				PM_GOBLIN_SMITH,
 			};
 			mtyp = ROLL_FROM(prisoners);
 		}break;
@@ -6364,6 +6590,7 @@ int sx,sy;
 			int prisoners[] = {
 									PM_HOBBIT, PM_HOBBIT,
 									PM_NURSE, PM_MAID, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN, PM_WATCH_CAPTAIN,
+									PM_HUMAN_SMITH,
 									PM_ARCHEOLOGIST, PM_ARCHEOLOGIST, PM_BARBARIAN, PM_BARBARIAN, PM_BARD, PM_BARD, PM_HEALER, PM_HEALER,
 									PM_MONK, PM_MONK, PM_MADMAN, PM_MADMAN, PM_MADWOMAN, PM_MADWOMAN, PM_PRIEST, PM_PRIESTESS, PM_PIRATE, PM_PIRATE,
 									PM_NOBLEMAN, PM_NOBLEWOMAN, PM_RANGER, PM_RANGER, PM_ROGUE, PM_ROGUE, PM_WIZARD, PM_WIZARD, PM_KNIGHT, PM_KNIGHT,
@@ -6396,9 +6623,12 @@ int sx,sy;
 		case PM_OGRE_KING:{
 			int prisoners[] = {
 									PM_ELF_LORD, PM_ELF_LADY, PM_ELVENKING, PM_ELVENQUEEN,
+									PM_MITHRIL_SMITH,
 									PM_WATCH_CAPTAIN, PM_WATCH_CAPTAIN,
 									PM_HEDROW_BLADEMASTER, PM_DROW_CAPTAIN, PM_DROW_MATRON, PM_UNEARTHLY_DROW,
+									PM_SHADOWSMITH,
 									PM_DWARF_CLERIC, PM_DWARF_LORD, PM_DWARF_QUEEN, PM_DWARF_KING,
+									PM_DWARF_SMITH,
 									PM_NOBLEMAN, PM_NOBLEWOMAN, PM_RANGER, PM_RANGER, PM_ROGUE, PM_WIZARD, PM_KNIGHT, PM_KNIGHT, PM_VALKYRIE,
 									PM_DEMINYMPH,
 									PM_JUSTICE_ARCHON, PM_SWORD_ARCHON, PM_SHIELD_ARCHON,
@@ -6412,14 +6642,19 @@ int sx,sy;
 		case PM_VAMPIRE_LORD:{
 			int prisoners[] = {
 									PM_WOODLAND_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_ELF_LADY,
+									PM_TREESINGER, PM_MITHRIL_SMITH,
 									PM_NURSE, PM_MAID, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN, PM_WATCH_CAPTAIN,
+									PM_HUMAN_SMITH,
 									PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON, PM_SPROW, PM_DRIDER,
+									PM_SHADOWSMITH,
 									PM_HOBBIT, PM_HOBBIT,
 									PM_ARCHEOLOGIST, PM_BARBARIAN, PM_BARD, PM_HEALER,
 									PM_MONK, PM_MADWOMAN, PM_PRIESTESS, PM_PIRATE,
 									PM_NOBLEWOMAN, PM_RANGER, PM_ROGUE, PM_WIZARD, PM_KNIGHT,
 									PM_VALKYRIE, PM_SAMURAI, PM_TOURIST,
+									PM_HUMAN_SMITH,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC,
+									PM_DWARF_SMITH,
 									PM_DEMINYMPH
 								};
 			mtyp = ROLL_FROM(prisoners);
@@ -6430,9 +6665,11 @@ int sx,sy;
 									PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN,
 									PM_KNIGHT, PM_KNIGHT, PM_NOBLEMAN, PM_NOBLEWOMAN,
 									PM_HEDROW_WARRIOR, PM_HEDROW_WARRIOR, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+									PM_SHADOWSMITH,
 									PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+									PM_DWARF_SMITH,
 									PM_HILL_ORC, PM_ORC_SHAMAN, PM_ORC_CAPTAIN, PM_ANGBAND_ORC,
 									PM_UNEARTHLY_DROW, PM_UNEARTHLY_DROW, PM_LILITU, PM_MARILITH,
 									PM_MIRKWOOD_SPIDER, PM_MIRKWOOD_SPIDER, PM_MIRKWOOD_ELDER,
@@ -6444,12 +6681,15 @@ int sx,sy;
 			int prisoners[] = {
 									PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
 									PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+									PM_MITHRIL_SMITH,
 									PM_NURSE, PM_MAID, PM_WATCHMAN, PM_WATCHMAN, PM_WATCH_CAPTAIN,
 									PM_HEDROW_WARRIOR, PM_HEDROW_WARRIOR, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+									PM_SHADOWSMITH,
 									PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR, PM_STJARNA_ALFR,
 									PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+									PM_DWARF_SMITH,
 									PM_HILL_ORC, PM_ORC_SHAMAN, PM_ORC_CAPTAIN, PM_ANGBAND_ORC,
 									PM_DEMINYMPH
 								};
@@ -6458,11 +6698,14 @@ int sx,sy;
 		case PM_EMBRACED_DROWESS:{
 			int prisoners[] = {
 									PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+									PM_MITHRIL_SMITH,
 									PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
 									PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+									PM_SHADOWSMITH, PM_SHADOWSMITH, PM_SHADOWSMITH, PM_SHADOWSMITH,
 									PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR,
 									PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR,
 									PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+									PM_DWARF_SMITH,
 									PM_UNEARTHLY_DROW, PM_UNEARTHLY_DROW, PM_LILITU, PM_MARILITH,
 									PM_DEMINYMPH
 								};
@@ -6471,15 +6714,21 @@ int sx,sy;
 		case PM_Y_CULTIST_PATRON:{
 			int prisoners[] = {
 				PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+				PM_TREESINGER, PM_MITHRIL_SMITH,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+				PM_SHADOWSMITH,
+				PM_SHADOWSMITH,
 				PM_DROW, PM_DROW, PM_DROW, PM_DROW, PM_DROW,
 				PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR,
 				PM_PEN_A_MENDICANT, PM_PEN_A_MENDICANT, PM_MENDICANT_DRIDER, PM_MENDICANT_SPROW,
 				PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
 				PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+				PM_DWARF_SMITH,
+				PM_DWARF_SMITH,
 				PM_NOBLEMAN, PM_NOBLEWOMAN, PM_RANGER, PM_RANGER, PM_ROGUE, PM_WIZARD, PM_KNIGHT, PM_KNIGHT,
 				PM_HOBBIT, PM_GNOME, PM_ALLIANCE_VANGUARD, PM_ALLIANCE_VANGUARD,
+				PM_HUMAN_SMITH,
 				PM_UNEARTHLY_DROW, PM_UNEARTHLY_DROW, PM_LILITU, PM_MARILITH,
 				PM_DEMINYMPH
 			};
@@ -6489,11 +6738,15 @@ int sx,sy;
 			int prisoners[] = {
 				PM_WOODLAND_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELVENKING,
 				PM_WOODLAND_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LADY, PM_ELVENQUEEN,
+				PM_MITHRIL_SMITH,
+				PM_MITHRIL_SMITH,
 				PM_ALABASTER_ELF, PM_ALABASTER_ELF, PM_ALABASTER_ELF_ELDER,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_HEDROW_BLADEMASTER, PM_DROW_CAPTAIN, PM_DROW_MATRON,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WIZARD, PM_HEDROW_BLADEMASTER, PM_DROW_CAPTAIN, PM_DROW_MATRON,
 				PM_SPROW, PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR, PM_STJARNA_ALFR,
 				PM_SPROW, PM_DRIDER, PM_PRIESTESS_OF_GHAUNADAUR, PM_STJARNA_ALFR, PM_STJARNA_ALFR,
+				PM_SHADOWSMITH,
+				PM_SHADOWSMITH,
 				PM_HILL_ORC, PM_ORC_SHAMAN, PM_ORC_CAPTAIN, PM_ANGBAND_ORC,
 				PM_DRYAD, PM_NAIAD, PM_OREAD, PM_SWAMP_NYMPH, PM_YUKI_ONNA, PM_THRIAE, PM_SELKIE, PM_OCEANID, PM_DEMINYMPH,
 				PM_YURIAN, PM_FORMIAN_TASKMASTER,
@@ -6512,20 +6765,61 @@ int sx,sy;
 			int prisoners[] = {
 				PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME_LORD, PM_GNOME_LADY, PM_TINKER_GNOME, PM_GNOMISH_WIZARD,
 				PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+				PM_TREESINGER, PM_MITHRIL_SMITH,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WARRIOR, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+				PM_SHADOWSMITH,
 				PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
 				PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+				PM_DWARF_SMITH,
 				PM_DEMINYMPH,
 				PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME, PM_GNOME_LORD, PM_GNOME_LADY, PM_TINKER_GNOME, PM_GNOMISH_WIZARD,
 				PM_GREEN_ELF, PM_GREEN_ELF, PM_GREY_ELF, PM_GREY_ELF, PM_ELF_LORD, PM_ELF_LADY,
+				PM_TREESINGER, PM_MITHRIL_SMITH,
 				PM_HEDROW_WARRIOR, PM_HEDROW_WARRIOR, PM_DROW_CAPTAIN, PM_DROW_CAPTAIN, PM_DROW_MATRON,
+				PM_SHADOWSMITH,
 				PM_HOBBIT, PM_HOBBIT, PM_HOBBIT, PM_HOBBIT,
 				PM_DWARF, PM_DWARF, PM_DWARF_CLERIC, PM_DWARF_LORD,
+				PM_DWARF_SMITH,
 				PM_DEMINYMPH,
 				PM_JUSTICE_ARCHON, PM_SWORD_ARCHON, PM_SHIELD_ARCHON,
 				PM_MOVANIC_DEVA, PM_MONADIC_DEVA, PM_ASTRAL_DEVA,
 				PM_LILLEND,
 				PM_COURE_ELADRIN, PM_NOVIERE_ELADRIN, PM_BRALANI_ELADRIN, PM_FIRRE_ELADRIN, PM_SHIERE_ELADRIN, PM_GHAELE_ELADRIN
+			};
+			mtyp = ROLL_FROM(prisoners);
+		}break;
+		case PM_PSYCHOPOMP:{
+			int prisoners[] = {
+				PM_ELVENKING,
+				PM_ELVENQUEEN,
+				PM_UNEARTHLY_DROW,
+				PM_DROW_MATRON,
+				PM_ORC_OF_THE_AGES_OF_STARS,
+				PM_ORC_OF_THE_AGES_OF_STARS,
+				PM_DOKKALFAR_ETERNAL_MATRIARCH,
+				PM_DOKKALFAR_ETERNAL_MATRIARCH,
+				PM_BARBARIAN,
+				PM_HALF_DRAGON,
+				PM_HEALER,
+				PM_HEALER,
+				PM_KNIGHT,
+				PM_KNIGHT,
+				PM_MONK,
+				PM_MONK,
+				PM_NOBLEMAN,
+				PM_NOBLEWOMAN,
+				PM_PRIEST,
+				PM_PRIESTESS,
+				PM_RANGER,
+				PM_RANGER,
+				PM_ROGUE,
+				PM_ROGUE,
+				PM_SAMURAI,
+				PM_SAMURAI,
+				PM_VALKYRIE,
+				PM_WIZARD,
+				PM_DEMINYMPH,
+				PM_DEMINYMPH,
 			};
 			mtyp = ROLL_FROM(prisoners);
 		}break;
@@ -6555,12 +6849,26 @@ int sx,sy;
 		}
 	}
 	if(mtyp != NON_PM){
-		int equipLevel = ((kingtype == PM_TITAN || kingtype == PM_EMBRACED_DROWESS || kingtype == PM_AVATAR_OF_LOLTH || kingtype == PM_DEEPEST_ONE || kingtype == PM_ORC_OF_THE_AGES_OF_STARS) ? MM_GOODEQUIP : 0);
-		if(is_mplayer(&mons[mtyp])){
-			mon = mk_mplayer(&mons[mtyp], sx, sy, NO_MM_FLAGS|equipLevel);
+		if(kingtype == PM_PSYCHOPOMP){
+			if(is_mplayer(&mons[mtyp])){
+				mon = mk_mplayer(&mons[mtyp], sx, sy, MM_GOODEQUIP);
+			}
+			else {
+				mon = makemon(&mons[mtyp], sx, sy, MM_GOODEQUIP|MM_ENDGEQUIP);
+			}
 		}
 		else {
-			mon = makemon(&mons[mtyp], sx, sy, NO_MM_FLAGS|equipLevel);
+			int equipLevel = ((kingtype == PM_TITAN
+				|| kingtype == PM_EMBRACED_DROWESS
+				|| kingtype == PM_AVATAR_OF_LOLTH
+				|| kingtype == PM_DEEPEST_ONE
+				|| kingtype == PM_ORC_OF_THE_AGES_OF_STARS) ? MM_GOODEQUIP : 0);
+			if(is_mplayer(&mons[mtyp])){
+				mon = mk_mplayer(&mons[mtyp], sx, sy, NO_MM_FLAGS|equipLevel);
+			}
+			else {
+				mon = makemon(&mons[mtyp], sx, sy, NO_MM_FLAGS|equipLevel);
+			}
 		}
 		if(mon){
 			if(mon->mtyp == PM_SURYA_DEVA){
@@ -6825,7 +7133,8 @@ struct mkroom *sroom;
 							set_curhouse(mon->mfaction);
 						}
 						//Note: court monsters are always part of rodney's forces.
-						set_faction(mon, YENDORIAN_FACTION);
+						if(!mon->mfaction)
+							set_faction(mon, YENDORIAN_FACTION);
 						if(mon->mpeaceful){
 							mon->mpeaceful = 0;
 							set_malign(mon);
@@ -6906,7 +7215,8 @@ struct mkroom *sroom;
 				}
 				if (type==COURT) {
 					//Note: court monsters are always part of rodney's forces, even if they are angels.
-					set_faction(mon, YENDORIAN_FACTION);
+					if(!mon->mfaction)
+						set_faction(mon, YENDORIAN_FACTION);
 					if(mon->mpeaceful){
 						mon->mpeaceful = 0;
 						set_malign(mon);
@@ -7064,7 +7374,7 @@ struct mkroom *sroom;
 					break;
 					case 3:
 						otmp = mksobj_at(SLIME_MOLD, sx, sy, NO_MKOBJ_FLAGS);
-						otmp->spe = fruitadd("honey drop");
+						otmp->spe = fruitadd("honeydew");
 					break;
 					case 4:
 						otmp = mksobj_at(TIN, sx, sy, NO_MKOBJ_FLAGS);
