@@ -69,7 +69,9 @@ fi
 
 echo "Copying NetHack playground stuff"
 cp "$NETHACK_GIT/dat/nhdat" "$NAO_CHROOT/$NHSUBDIR"
+cp "$NETHACK_GIT/dat/license" "$NAO_CHROOT/$NHSUBDIR"
 chmod 644 "$NAO_CHROOT/$NHSUBDIR/nhdat"
+chmod 644 "$NAO_CHROOT/$NHSUBDIR/license"
 
 echo "Creating NetHack variable dir stuff."
 # mkdir -p "$NAO_CHROOT/$NHSUBDIR/var"
