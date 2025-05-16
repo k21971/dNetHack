@@ -11,7 +11,6 @@ STATIC_DCL void FDECL(return_thrownobj, (struct monst *, struct obj *));
 STATIC_DCL void FDECL(toss_up, (struct obj *, boolean));
 STATIC_DCL int FDECL(calc_multishot, (struct monst *, struct obj *, struct obj *, int));
 STATIC_DCL int FDECL(calc_range, (struct monst *, struct obj *, struct obj *, int *));
-STATIC_DCL int FDECL(uthrow, (struct obj *, struct obj *, int, boolean));
 STATIC_DCL boolean FDECL(misthrow, (struct monst *, struct obj *, struct obj *, boolean, int *, int *, int *));
 STATIC_DCL struct obj * FDECL(blaster_ammo, (struct obj *));
 
@@ -236,7 +235,7 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 	/* player exercises STR just be throwing heavy things */
 	if (youagr && !launcher && !(hmoncode & HMON_KICKED) && (
 		is_boulder(thrownobj) ||
-		thrownobj->otyp == HEAVY_IRON_BALL
+		thrownobj->otyp == BALL
 		))
 	{
 		exercise(A_STR, TRUE);
@@ -261,7 +260,7 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 		/* random slips can cause projectiles to go down, though */
 
 		/* fired bullets should always disappear without a message */
-		if (fired && is_bullet(thrownobj))
+		if (fired && (is_bullet(thrownobj) && thrownobj->otyp != BLOOD_SPEAR))
 			return MM_MISS;
 
 		/* if we are outdoors... */
@@ -319,7 +318,7 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 		/* random slips can cause projectiles to go down, though */
 
 		/* fired bullets should specifically disappear without a message */
-		if (fired && is_bullet(thrownobj))
+		if (fired && (is_bullet(thrownobj) && thrownobj->otyp != BLOOD_SPEAR))
 			return MM_MISS;
 
 		/* returning weapons don't return when thrown downwards */
@@ -481,7 +480,7 @@ boolean impaired;				/* TRUE if throwing/firing slipped OR magr is confused/stun
 		}
 
 		/* limit range of iron balls so hero won't make an invalid move */
-		if (range > 0 && thrownobj && thrownobj->otyp == HEAVY_IRON_BALL) {
+		if (range > 0 && thrownobj && thrownobj->otyp == BALL) {
 			struct obj *bobj;
 			struct trap *t;
 			if ((bobj = boulder_at(bhitpos.x, bhitpos.y)) != 0) {
@@ -975,7 +974,7 @@ boolean forcedestroy;			/* If TRUE, make sure the projectile is destroyed */
 		thrownobj->otyp == BLASTER_BOLT ||
 		thrownobj->otyp == HEAVY_BLASTER_BOLT ||
 		thrownobj->otyp == CARCOSAN_BOLT ||
-		is_bullet(thrownobj)
+		(is_bullet(thrownobj) && thrownobj->otyp != BLOOD_SPEAR)
 		))
 	{
 		destroy_projectile(magr, thrownobj);
@@ -1162,7 +1161,7 @@ boolean forcedestroy;
 	/* specific effects before end_projectile, if thrownobj still exists */
 	if (youagr) {
 		if (IS_ALTAR(levl[bhitpos.x][bhitpos.y].typ))
-			doaltarobj((*obj_p));
+			doaltarobj((*obj_p), god_at_altar(bhitpos.x,bhitpos.y));
 		else
 			pline("%s hit%s the %s.", Doname2((*obj_p)),
 			((*obj_p)->quan == 1L) ? "s" : "", surface(bhitpos.x, bhitpos.y));
@@ -1537,6 +1536,7 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 				(thrownobj->oartifact == ART_HOUCHOU) ||
 				(fired && thrownobj->otyp == BULLET) || 
 				(fired && thrownobj->otyp == SILVER_BULLET) || 
+				(fired && thrownobj->otyp == BLOOD_BULLET) || 
 				(fired && thrownobj->otyp == SHOTGUN_SHELL) || 
 				(fired && thrownobj->otyp == ROCKET) || 
 				(fired && thrownobj->otyp == BLASTER_BOLT) ||
@@ -1559,11 +1559,11 @@ boolean forcedestroy;			/* TRUE if projectile should be forced to be destroyed a
 				* we still don't want anything to survive unconditionally,
 				* but we need ammo to stay around longer on average.
 				*/
-				int break_chance = 3 + greatest_erosion(thrownobj) - thrownobj->spe;
+				int break_chance = 3 + greatest_erosion(thrownobj) - thrownobj->spe - ((launcher && launcher->oartifact == ART_UNSTOPPABLE) ? 3 : 0);
 				if (break_chance > 1)
 					broken = rn2(break_chance);
 				else
-					broken = !rn2(4);
+					broken = !rn2(4 - break_chance);
 				if (thrownobj->blessed && rnl(100) < 25)
 					broken = FALSE;
 			}
@@ -1937,6 +1937,7 @@ int shotlimit;
 {
 	boolean youagr = (magr == &youmonst);
 	int multishot = 1;
+	int minmulti = 1;
 	int skill;
 	
 	if (launcher && !(launcher->oartifact == ART_PEN_OF_THE_VOID))
@@ -1962,18 +1963,31 @@ int shotlimit;
 		int magr_wepskill;
 		if (youagr)
 			magr_wepskill = P_SKILL(weapon_type((launcher && launcher->oartifact != ART_PEN_OF_THE_VOID) ? launcher : ammo));
-		else if(magr->mformication || magr->mscorpions)
+		else if(magr->mformication || magr->mscorpions || magr->mcaterpillars)
 			magr_wepskill = P_UNSKILLED;
 		else
 			magr_wepskill = m_martial_skill(magr->data);
 
-		switch (magr_wepskill) {
+		if(launcher && launcher->otyp == TWINGUN_SHANTA){
+			//No bonus shots from skill, base rof is 2
+			multishot = 1;
+		}
+		else switch (magr_wepskill) {
 		default:
 			multishot = 1; break;
 		case P_SKILLED:
 			multishot = 2; break;
 		case P_EXPERT:
 			multishot = 3; break;
+		}
+
+		if(youagr ? QuickDraw : mon_resistance(magr, QUICK_DRAW)){
+			if(multishot > 2){
+				minmulti++;
+				multishot--;
+			}
+			else
+				multishot++;
 		}
 
 		/* The legendary Longbow increases skilled RoF */
@@ -1993,17 +2007,28 @@ int shotlimit;
 			break;
 		case PM_RANGER:
 			multishot++;
-			if (launcher && launcher->oartifact == ART_LONGBOW_OF_DIANA) multishot++;//double bonus for Rangers
+			if(!Upolyd && u.ulevel >= 14)
+				minmulti++;
+			if(!Upolyd && u.ulevel >= 30)
+				multishot++;
+			if (launcher && launcher->oartifact == ART_LONGBOW_OF_DIANA) minmulti++;//Max and min for Rangers
+			if (Race_if(PM_ELF) && launcher && launcher->oartifact == ART_BELTHRONDING) minmulti++;//Max and min for Rangers
 			break;
 		case PM_ROGUE:
-			if (skill == P_DAGGER) multishot++;
+			if (skill == P_DAGGER){
+				if(QuickDraw)
+					minmulti++;
+				else
+					multishot++;
+			}
 			break;
 		case PM_NINJA:
 		case PM_SAMURAI:
 			if (ammo->otyp == YA && launcher && launcher->otyp == YUMI) multishot++;
 			break;
+		case PM_KNIGHT:
 		case PM_WIZARD:
-			if (skill == P_DAGGER) multishot -= 3;	/* very bad at throwing daggers */
+			if (skill == P_DAGGER) multishot -= 3;	/* very bad at throwing daggers, but good at stabbing with them */
 		default:
 			break;	/* No bonus */
 		}
@@ -2030,11 +2055,11 @@ int shotlimit;
 	/* Okay. */
 	if (youagr && barrage) {
 		/* Spirit power barrage maximized multishot */
-		multishot += u.ulevel / 10 + 1;
+		multishot += u.ulevel / 10 + 1 + minmulti;
 	}
 	else {
 		/* normal behaviour: randomize multishot */
-		multishot = rnd(multishot);
+		multishot = rn1(multishot, minmulti);
 	}
 
 	/* The Sansara Mirror doubles your multishooting ability,
@@ -2131,7 +2156,7 @@ int * hurtle_dist;
 		* than 1, so the effects from throwing attached balls are
 		* actually possible
 		*/
-		if (ammo->otyp == HEAVY_IRON_BALL)
+		if (ammo->otyp == BALL)
 			range = urange - (heaviness / 100);
 		else
 			range = urange - (heaviness / 40);
@@ -2154,11 +2179,11 @@ int * hurtle_dist;
 		/* some things maximize range */
 		if ((launcher->oartifact == ART_LONGBOW_OF_DIANA) ||
 			(launcher->oartifact == ART_XIUHCOATL) ||
-			(launcher->oartifact == ART_PEN_OF_THE_VOID && launcher->ovar1_seals&SEAL_EVE && mvitals[PM_ACERERAK].died > 0)
+			(launcher->oartifact == ART_PEN_OF_THE_VOID && launcher->ovara_seals&SEAL_EVE && mvitals[PM_ACERERAK].died > 0)
 			) {
 			range = 1000;
 		}
-		else if (launcher->oartifact == ART_PEN_OF_THE_VOID && launcher->ovar1_seals&SEAL_EVE) {
+		else if (launcher->oartifact == ART_PEN_OF_THE_VOID && launcher->ovara_seals&SEAL_EVE) {
 			/* the pen, being an athame, has a conflict between oc_range and oc_wsdam */
 			range = 8;	/* arbitrary */
 		}
@@ -2265,6 +2290,52 @@ dothrow()
 	return (result);
 }
 
+int
+ufire_blaster(struct obj *launcher, int shotlimit)
+{
+	/* blasters need to generate their ammo on the fly */
+	struct obj * ammo = (struct obj *)0;
+	int result = MOVE_CANCELLED;
+					/* do we have enough charge to fire? */
+	if (!launcher->ovar1_charges || (launcher->otyp == MASS_SHADOW_PISTOL && (!launcher->cobj || Has_contents(launcher->cobj)))) {
+		if (launcher->otyp == RAYGUN) You("push the firing stud, but nothing happens.");
+		else pline("Nothing happens when you pull the trigger.");
+		/* nothing else happens */
+	}
+	else {
+		switch (launcher->otyp) {
+			case CUTTING_LASER:
+			case HAND_BLASTER:
+			case ARM_BLASTER:
+			case MASS_SHADOW_PISTOL:
+			case CARCOSAN_STING:
+				ammo = blaster_ammo(launcher);
+				break;
+			case RAYGUN:
+				/* create fake ammo in order to calculate multishot correctly */
+				ammo = blaster_ammo(launcher);
+				if (getdir((char *)0))
+					result = zap_raygun(launcher, calc_multishot(&youmonst, ammo, launcher, shotlimit), shotlimit);
+				/* destroy ammo and don't go through uthrow */
+				obfree(ammo, 0);
+				ammo = (struct obj *)0;
+				break;
+			default:
+				impossible("Unhandled blaster %d!", launcher->otyp);
+				break;
+		}
+		/* always destroy ammo fired from a blaster */
+		if (ammo) {
+			if (launcher->otyp == MASS_SHADOW_PISTOL)
+				ammo->ovar1_projectileSkill = -P_FIREARM;	/* special case to use FIREARM skill instead of SLING */
+
+			result = uthrow(ammo, launcher, shotlimit, TRUE);
+			/* and now delete the ammo object we created */
+			obfree(ammo, 0);
+		}
+	}
+	return result;
+}
 
 /*
  * dofire()
@@ -2324,47 +2395,7 @@ dofire()
 					result = uthrow(uquiver, launcher, shotlimit, FALSE);
 				}
 				else if (is_blaster(launcher)) {
-					/* blasters need to generate their ammo on the fly */
-					struct obj * ammo = (struct obj *)0;
-
-					/* do we have enough charge to fire? */
-					if (!launcher->ovar1_charges || (launcher->otyp == MASS_SHADOW_PISTOL && (!launcher->cobj || Has_contents(launcher->cobj)))) {
-						if (launcher->otyp == RAYGUN) You("push the firing stud, but nothing happens.");
-						else pline("Nothing happens when you pull the trigger.");
-						/* nothing else happens */
-					}
-					else {
-						switch (launcher->otyp) {
-						case CUTTING_LASER:
-						case HAND_BLASTER:
-						case ARM_BLASTER:
-						case MASS_SHADOW_PISTOL:
-						case CARCOSAN_STING:
-							ammo = blaster_ammo(launcher);
-							break;
-						case RAYGUN:
-							/* create fake ammo in order to calculate multishot correctly */
-							ammo = blaster_ammo(launcher);
-							if (getdir((char *)0))
-								result = zap_raygun(launcher, calc_multishot(&youmonst, ammo, launcher, shotlimit), shotlimit);
-							/* destroy ammo and don't go through uthrow */
-							obfree(ammo, 0);
-							ammo = (struct obj *)0;
-							break;
-						default:
-							impossible("Unhandled blaster %d!", launcher->otyp);
-							break;
-						}
-						/* always destroy ammo fired from a blaster */
-						if (ammo) {
-							if (launcher->otyp == MASS_SHADOW_PISTOL)
-								ammo->ovar1_projectileSkill = -P_FIREARM;	/* special case to use FIREARM skill instead of SLING */
-
-							result = uthrow(ammo, launcher, shotlimit, TRUE);
-							/* and now delete the ammo object we created */
-							obfree(ammo, 0);
-						}
-					}
+					return ufire_blaster(launcher, shotlimit);
 				}
 			}
 			return result;
@@ -2394,7 +2425,20 @@ dofire()
 
 		/* Holy Moonlight Sword's magic blast -- mainhand only */
 		if (uwep && uwep->oartifact == ART_HOLY_MOONLIGHT_SWORD && uwep->lamplit && u.uen >= 25){
-			int dmg = d(2, 12) + 2 * uwep->spe;
+			int n = 2;
+			if(u.explosion_up){
+				int out = 2;
+				int count = u.explosion_up;
+				while(count >= out){
+					count -= out;
+					n++;
+					out += 1;
+				}
+				if(count > rn2(out)){
+					n++;
+				}
+			}
+			int dmg = d(n, 12) + n * uwep->spe;
 			int range = (Double_spell_size) ? 6 : 3;
 			xchar lsx, lsy, sx, sy;
 			struct monst *mon;
@@ -2408,7 +2452,7 @@ dofire()
 			flags.forcefight = 0;
 
 			if (u.uswallow){
-				explode(u.ux, u.uy, AD_MAGM, WAND_CLASS, (d(2, 12) + 2 * uwep->spe) * ((Double_spell_size) ? 3 : 2) / 2, EXPL_CYAN, 1 + !!Double_spell_size);
+				explode(u.ux, u.uy, AD_MAGM, WAND_CLASS, (d(n, 12) + n * uwep->spe) * ((Double_spell_size) ? 3 : 2) / 2, EXPL_CYAN, 1 + !!Double_spell_size);
 				return MOVE_STANDARD;
 			}
 			else {
@@ -2671,8 +2715,14 @@ boolean forcedestroy;
 		if (ammo->ostolen && u.sealsActive&SEAL_ANDROMALIUS) unbind(SEAL_ANDROMALIUS, TRUE);
 		if (breaktest(ammo) && u.sealsActive&SEAL_ASTAROTH) unbind(SEAL_ASTAROTH, TRUE);
 		if ((ammo->otyp == EGG) && u.sealsActive&SEAL_ECHIDNA) unbind(SEAL_ECHIDNA, TRUE);
-		/* degrade engravings on this spot */
-		u_wipe_engr(2);
+		if(launcher && is_firearm(launcher)){
+			/* degrade engravings on this spot (less) */
+			u_wipe_engr(1);
+		}
+		else {
+			/* degrade engravings on this spot */
+			u_wipe_engr(2);
+		}
 	}
 
 	/* you touch the rubber chicken */
@@ -2724,6 +2774,10 @@ boolean forcedestroy;
 				multishot,
 				(multishot != 1 ? "s" : ""));	/* (might be 1 if player gave shotlimit) */
 		}
+	}
+	if(launcher && is_firearm(launcher)){
+		/* bang! */
+		wake_nearto_noisy(u.ux, u.uy, (multishot+1)*2);
 	}
 
 	/* get range calculation */
@@ -3357,7 +3411,7 @@ int n;	/* number to try to fire */
 		ammo_type = SILVER_ARROW;
 		break;
 	case AD_BALL:
-		ammo_type = HEAVY_IRON_BALL;
+		ammo_type = BALL;
 		qvr = mksobj(ammo_type, MKOBJ_NOINIT);
 		rngmod = 8;
 		break;
@@ -3373,7 +3427,7 @@ int n;	/* number to try to fire */
 		rngmod = 8;
 		break;
 	case AD_VBLD:
-		ammo_type = HEAVY_IRON_BALL;
+		ammo_type = BALL;
 		qvr = mksobj(ammo_type, MKOBJ_NOINIT);
 		rngmod = 8;
 		volley = TRUE;

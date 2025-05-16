@@ -191,7 +191,7 @@ A("Grimtooth",			ORCISH_DAGGER,					(const char *)0,
 	),
 
 /*Needs encyc entry*/
-A("Carnwennan",			DAGGER,							(const char *)0,
+A("Carnwennan",			RONDEL_DAGGER,							(const char *)0,
 	4000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
 	A_LAWFUL, PM_KNIGHT, NON_PM, TIER_C, (ARTG_NOGEN),	/* ARTG_NAME is added during game-creation for eligible characters */
 	MONS(vsMT(MT_MAGIC), vsMA(MA_FEY)),
@@ -555,7 +555,7 @@ A("Frost Brand",		LONG_SWORD,						"ice-runed %s",
 	3000L, GLASS, MZ_DEFAULT, WT_DEFAULT,
 	A_NONE, NON_PM, NON_PM, TIER_B, (ARTG_GIFT),
 	NO_MONS(),
-	ATTK(AD_COLD, 1, 0), NOFLAG,
+	ATTK(AD_COLD, 1, 0), NOFLAG, //Also +3d8 cold +3d8 phys
 	PROPS(COLD_RES), NOFLAG,
 	PROPS(), NOFLAG,
 	NOINVOKE, (ARTI_PLUSSEV)
@@ -564,7 +564,7 @@ A("Fire Brand",			LONG_SWORD,						"ember-runed %s",
 	3000L, OBSIDIAN_MT, MZ_DEFAULT, WT_DEFAULT,
 	A_NONE, NON_PM, NON_PM, TIER_B, (ARTG_GIFT),
 	NO_MONS(),
-	ATTK(AD_FIRE, 1, 0), NOFLAG,
+	ATTK(AD_FIRE, 1, 0), NOFLAG, //Also +6d6 fire
 	PROPS(FIRE_RES), NOFLAG,
 	PROPS(), NOFLAG,
 	NOINVOKE, (ARTI_PLUSSEV)
@@ -572,7 +572,7 @@ A("Fire Brand",			LONG_SWORD,						"ember-runed %s",
 
 A("The Green Dragon Crescent Blade",		NAGINATA,	(const char *)0,
 	1200L, MT_DEFAULT, MZ_DEFAULT, WT_SPECIAL,
-	A_LAWFUL, NON_PM, NON_PM, TIER_B, (ARTG_GIFT),
+	A_LAWFUL, NON_PM, NON_PM, TIER_D, (ARTG_GIFT),
 	NO_MONS(),
 	ATTK(AD_PHYS, 1, 25), NOFLAG,
 	PROPS(), NOFLAG,
@@ -720,7 +720,7 @@ A("The Silver Sky",		LONG_SWORD,					(const char *)0,
 	1500L, SILVER, MZ_MEDIUM, WT_DEFAULT,
 	A_NONE, NON_PM, PM_GITHYANKI_PIRATE, TIER_B, (ARTG_INHER),
 	NO_MONS(),
-	ATTK(AD_PHYS, 1, 12), (ARTA_VORPAL),
+	ATTK(AD_PHYS, 1, 12), (ARTA_SILVER|ARTA_VORPAL),
 	PROPS(ANTIMAGIC), NOFLAG,
 	PROPS(), NOFLAG,
 	GITH_ART, NOFLAG
@@ -791,7 +791,7 @@ A("The Lifehunt Scythe",SCYTHE,							(const char *)0,
 /* effectively becomes two sizes larger when lit, requiring two hands */
 /* attack bonus only applies vs non-magic resistant targets and only when lit */
 A("The Holy Moonlight Sword",	LONG_SWORD,				(const char *)0, // begging for a description but i couldn't think of a good one
-	4000L, METAL, MZ_DEFAULT, WT_DEFAULT, // if it gets one, it would be sick to have a slightly different one while lit, requires some work tho
+	4000L, METAL, MZ_DEFAULT, WT_SPECIAL, // if it gets one, it would be sick to have a slightly different one while lit, requires some work tho
 	A_NONE, NON_PM, NON_PM, TIER_A, (ARTG_GIFT|ARTG_INHER),
 	NO_MONS(),
 	ATTK(AD_PHYS, 12, 0), NOFLAG,
@@ -899,7 +899,7 @@ A("The Limb of the Black Tree",		CLUB,				"gnarled tree branch",
 /*Needs encyc entry*/
 A("Hellfire",			CROSSBOW,						(const char *)0,
 	3000L, GREEN_STEEL, MZ_DEFAULT, 30,
-	A_CHAOTIC, NON_PM, NON_PM, TIER_D, (ARTG_GIFT),
+	A_CHAOTIC, NON_PM, NON_PM, TIER_D, (ARTG_GIFT|ARTG_INHER),
 	NO_MONS(),
 	ATTK(AD_FIRE, 4, 1), (ARTA_EXPLFIREX),
 	PROPS(FIRE_RES), NOFLAG,
@@ -967,7 +967,7 @@ A("Callandor",			CRYSTAL_SWORD,					(const char *)0,
 /*Needs encyc entry*/
 A("The Unstoppable",	CROSSBOW,						(const char *)0,
 	3000L, MITHRIL, MZ_DEFAULT, WT_DEFAULT,
-	A_NEUTRAL, NON_PM, NON_PM, TIER_C, (ARTG_GIFT),
+	A_NEUTRAL, NON_PM, NON_PM, TIER_C, (ARTG_GIFT|ARTG_INHER),
 	NO_MONS(),
 	ATTK(AD_PHYS, 12, 8), NOFLAG,
 	PROPS(), NOFLAG,
@@ -990,7 +990,7 @@ A("Yoichi no yumi",		YUMI,							(const char *)0,
 /* all arrows fired from it are treated as poisoned (or filthed for a short period after invoking) */
 A("Plague",				BOW,							(const char *)0,
 	4000L, BONE, MZ_DEFAULT, WT_DEFAULT,
-	A_CHAOTIC, NON_PM, NON_PM, TIER_C, (ARTG_GIFT),
+	A_CHAOTIC, NON_PM, NON_PM, TIER_C, (ARTG_GIFT|ARTG_INHER),
 	NO_MONS(),
 	ATTK(AD_DRST, 5, 7), NOFLAG,
 	PROPS(POISON_RES, SICK_RES), NOFLAG,
@@ -1001,7 +1001,7 @@ A("Plague",				BOW,							(const char *)0,
 /* all arrows fired from it return to your inventory 5 turns later */
 A("Epoch's Curve",			BOW,							"white ash longbow",
 	4000L, WOOD, MZ_DEFAULT, WT_DEFAULT,
-	A_NEUTRAL, NON_PM, NON_PM, TIER_B, (ARTG_GIFT),
+	A_NEUTRAL, NON_PM, NON_PM, TIER_B, (ARTG_GIFT|ARTG_INHER),
 	NO_MONS(),
 	ATTK(AD_PHYS, 5, 1), NOFLAG,
 	PROPS(TELEPORT_CONTROL), NOFLAG,
@@ -1217,7 +1217,7 @@ A("The Grappler's Grasp",			GAUNTLETS_OF_POWER,	(const char *)0,
 	),
 
 A("The Shield of the Resolute Heart",	GAUNTLETS_OF_DEXTERITY,			(const char *)0,
-	4000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
+	4000L, GEMSTONE, MZ_DEFAULT, 15,
 	A_NONE, NON_PM, NON_PM, TIER_D, NOFLAG,
 	NO_MONS(),
 	NO_ATTK(), NOFLAG,
@@ -1659,6 +1659,17 @@ A("The Spell-warded Wrappings of Nitocris",		MUMMY_WRAPPING,			(const char *)0,
 	),
 
 /*Needs encyc entry*/
+A("Fingerprint Shield",	TOWER_SHIELD,			"fingerprint-covered %s",
+	4000L, MINERAL, MZ_HUGE, WT_DEFAULT,
+	A_NEUTRAL, NON_PM, NON_PM, TIER_S, (ARTG_NOGEN|ARTG_INHER),
+	NO_MONS(),
+	NO_ATTK(), NOFLAG,
+	PROPS(HALF_PHDAM, HALF_SPDAM), NOFLAG,
+	PROPS(), NOFLAG,
+	NOINVOKE, (ARTI_PLUSTEN)
+	),
+
+/*Needs encyc entry*/
 /*from the works of HP Lovecraft*/
 A("The Hand-Mirror of Cthylla",		MIRROR,					(const char *)0,
 	5000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
@@ -1720,7 +1731,7 @@ A("Clarent",						LONG_SWORD,				(const char *)0,
 /* sdice are a copy of ldice, ocn +=1  */
 A("The Dark Claymore",						TWO_HANDED_SWORD,				(const char *)0,
 	4000L, OBSIDIAN_MT, MZ_LARGE, WT_DEFAULT,
-	A_CHAOTIC, PM_KNIGHT, NON_PM, TIER_A, (ARTG_NOGEN|ARTG_NOWISH|ARTG_MAJOR),
+	A_CHAOTIC, PM_KNIGHT, NON_PM, TIER_A, (ARTG_NOGEN|ARTG_NOWISH|ARTG_MAJOR|ARTG_FXALGN),
 	NO_MONS(),
 	ATTK(AD_DARK, 1, 6), NOFLAG,
 	PROPS(), NOFLAG,
@@ -1729,7 +1740,7 @@ A("The Dark Claymore",						TWO_HANDED_SWORD,				(const char *)0,
 	),
 
 /*Needs encyc entry*/
-A("Reaver",							SCIMITAR,				(const char *)0,
+A("Reaver",							FLINTLOCK,				(const char *)0,
 	6000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
 	A_CHAOTIC, PM_PIRATE, NON_PM, TIER_C, (ARTG_NOGEN|ARTG_NOWISH|ARTG_MAJOR),
 	NO_MONS(),
@@ -2046,14 +2057,14 @@ A("The Sceptre of Might",			MACE,				(const char *)0,
 	CONFLICT, NOFLAG
 	),
 // old-style artifact block
-// A("The Iron Ball of Liberation", HEAVY_IRON_BALL,	0,			0,
+// A("The Iron Ball of Liberation", BALL,	0,			0,
 	// (SPFX_NOGEN|SPFX_RESTR|SPFX_LUCK|SPFX_INTEL),
 		// (SPFX_SEARCH|SPFX_SEEK|SPFX_WARN), 0,
 	// NO_ATTK(),	NO_DFNS,	CARY(AD_MAGM),
 	// PHASING,	A_CHAOTIC, PM_CONVICT, NON_PM, 5000L,
 	// SPFX2_STLTH,0,0), /*Note: it had caried stealth before*/
 	
-A("The Iron Ball of Levitation",	HEAVY_IRON_BALL,	(const char *)0,
+A("The Iron Ball of Levitation",	BALL,	(const char *)0,
 	5000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
 	A_CHAOTIC, PM_CONVICT, NON_PM, TIER_A, (ARTG_NOGEN|ARTG_NOWISH|ARTG_MAJOR),
 	NO_MONS(),
@@ -2832,6 +2843,16 @@ A("The Platinum Yendorian Express Card",		CREDIT_CARD,			(const char *)0,
 	CHARGE_OBJ, NOFLAG
 	),
 #endif
+
+A("Stake of Withering", STAKE,					(const char *)0,
+	5000L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
+	A_CHAOTIC, PM_UNDEAD_HUNTER, NON_PM, TIER_F, (ARTG_NOGEN|ARTG_NOWISH),
+	NO_MONS(),
+	ATTK(AD_DRLI, 10, 24), NOFLAG,
+	PROPS(), NOFLAG,
+	PROPS(COLD_RES, ANTIMAGIC, WITHERING_STAKE), NOFLAG,
+	ENERGY_BOOST, NOFLAG
+	),
 
 A("The Orb of Fate",				CRYSTAL_BALL,		(const char *)0,
 	3500L, MT_DEFAULT, MZ_DEFAULT, WT_DEFAULT,
