@@ -351,6 +351,20 @@ char *nam;
 			sprintf(nam, "Sir %s", ROLL_FROM(masculine));
 		}
 	}break;
+	case PM_KENSEI:{
+		//Character names from Crouching Tiger Hidden Dragon and Detective Dee.
+		// Includes a duplicate
+		const char *masculine[] = {
+			"Mubai", "Xiaohou", "Taibao", "Junpei", "Junxiong", "Donglai", "Renjie"
+		};
+		const char *feminine[] = {
+			"Jiaolong", "Jen", "Xiulian","Huli", "Biyan", "Mei", "Jing'er"
+		};
+		const char *family[] = {
+			"Li","Yu","Lo","Te","Tsai","Liu","Wu", "Lu", "Pei", "Di", "Shangguan"
+		};
+		sprintf(nam, "%s %s", ROLL_FROM(family), fmlkind ? ROLL_FROM(feminine) : ROLL_FROM(masculine));
+	}break;
 	case PM_MONK:{
 		//Character names from Journey to the West, "transcribed" via Google Translate.
 		// Some include titles (or are titles)
@@ -1154,7 +1168,7 @@ long flags;
 			init_mon_wield_item(mtmp);
 			m_level_up_intrinsic(mtmp);
 		}
-		if(!uh_patient){
+		if(!uh_patient && (in_mklev || !rn2(20) || special)){
 #define In_plat_tower (dungeon_topology.alt_tower && (Is_arcadiatower2(&u.uz) || Is_arcadiatower3(&u.uz) || Is_arcadiadonjon(&u.uz)))
 			quan = In_plat_tower ? 1 : rnd(3);
 			while(quan--)
@@ -1197,6 +1211,14 @@ long flags;
 					otmp->oeroded3 = 1;
 				}
 			}
+			otmp = mongets(mtmp, SHACKLES, NO_MKOBJ_FLAGS);
+			if(otmp){
+				mtmp->entangled_otyp = SHACKLES;
+				mtmp->entangled_oid = otmp->o_id;
+			}
+		}
+		if((mtmp->mtyp == PM_WIZARD || mtmp->mtyp == PM_ROGUE) && In_quest(&u.uz)
+			&& u.uz.dlevel == nemesis_level.dlevel && urole.neminum == PM_DARK_ONE){
 			otmp = mongets(mtmp, SHACKLES, NO_MKOBJ_FLAGS);
 			if(otmp){
 				mtmp->entangled_otyp = SHACKLES;

@@ -701,6 +701,10 @@ int godnum;
 			mksobj_at(PHLEBOTOMY_KIT, x, y, NO_MKOBJ_FLAGS);
 		}
 	}
+	if (Is_qlocate(&u.uz) && Role_if(PM_ARCHEOLOGIST)) {
+		altars[altarindex].god = rn2(2) ? GOD_XOLOTL : GOD_TLALOC;
+		altars[altarindex].align = galign(altars[altarindex].god);
+	}
 	
 	altarindex++;
 }
@@ -981,6 +985,7 @@ clear_level_structures()
 	level.flags.goldkamcount_peace = 0;
 	
 	level.flags.sp_lev_nroom = 0;
+	level.flags.rage = 0;
 	
 	level.flags.has_shop = 0;
 	level.flags.has_vault = 0;
@@ -1016,6 +1021,10 @@ clear_level_structures()
 	level.flags.outside = 0;
 	level.flags.has_minor_spire = 0;
 	level.flags.has_kamerel_towers = 0;
+	
+	level.flags.mirror = 0;
+	level.flags.day = 0;
+	level.flags.walkers = 0;
 	
 	level.lastmove = monstermoves;
 
@@ -1055,12 +1064,36 @@ makelevel()
 	{
 	    register s_level *slev = Is_special(&u.uz);
 
+	    /* Kensei quest subout */
+		if(Role_if(PM_KENSEI) && qstart_level.dnum == u.uz.dnum && qlocate_level.dlevel == u.uz.dlevel){
+		    char	fillname[9];
+			if(u.role_variant == ART_SKY_REFLECTED)
+				Sprintf(fillname, "%s-locb", urole.filecode);
+			else if(u.role_variant == ART_SILVER_SKY)
+				Sprintf(fillname, "%s-locc", urole.filecode);
+			else if(u.role_variant == ART_ANGUIREL)
+				Sprintf(fillname, "%s-locd", urole.filecode);
+			else if(u.role_variant == ART_RINGIL)
+				Sprintf(fillname, "%s-loce", urole.filecode);
+			else if(u.role_variant == ART_ANSERMEE)
+				Sprintf(fillname, "%s-locf", urole.filecode);
+			else if(u.role_variant == ART_EPITAPH_OF_WONGAS)
+				Sprintf(fillname, "%s-locg", urole.filecode);
+			else if(u.role_variant == ART_WINTER_REAPER)
+				Sprintf(fillname, "%s-loch", urole.filecode);
+			else if(u.role_variant == ART_BOREAL_SCEPTER)
+				Sprintf(fillname, "%s-loci", urole.filecode);
+			else if(u.role_variant == ART_MALICE)
+				Sprintf(fillname, "%s-locj", urole.filecode);
+			else if(u.role_variant == ART_KIKU_ICHIMONJI)
+				Sprintf(fillname, "%s-lock", urole.filecode);
+			else 
+				Sprintf(fillname, "%s-loca", urole.filecode);
+			makemaz(fillname);
+		    return;
+		}
 	    /* check for special levels */
-#ifdef REINCARNATION
 	    if (slev && !Is_rogue_level(&u.uz))
-#else
-	    if (slev)
-#endif
 	    {
 		    makemaz(slev->proto);
 		    return;
@@ -1536,7 +1569,7 @@ mineralize()
 					if (!rn2(3) && Can_dig_down(&u.uz)) add_to_buried(otmp);
 					else place_object(otmp, x, y);
 				}
-				else if ((otmp = mksobj(FOSSIL, 0)) != 0) {
+				else if ((otmp = mksobj(FOSSIL, NO_MKOBJ_FLAGS)) != 0) {
 					otmp->quan = 1L;
 					otmp->owt = weight(otmp);
 					otmp->ox = x,  otmp->oy = y;

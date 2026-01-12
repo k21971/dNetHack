@@ -63,7 +63,7 @@ struct monst *magr;
 			if(!(mtmp = m_u_at(ix, jy)))
 				continue;
 			if(mtmp == &youmonst){
-				if(mtmp->mpeaceful)
+				if(magr->mpeaceful)
 					continue;
 				else return TRUE;
 			}
@@ -117,6 +117,8 @@ boolean use_find_offensive;	/* if TRUE, we have some offensive item ready that w
 		weap_attack = mon_attacktype(magr, AT_WEAP);
 		if(!weap_attack)
 			weap_attack = mon_attacktype(magr, AT_DEVA);
+		if(!weap_attack)
+			weap_attack = mon_attacktype(magr, AT_JUGL);
 	}
 	boolean breath_attack = 0;
 	boolean splash_attack = 0;

@@ -32,7 +32,7 @@ STATIC_DCL void NDECL(mksentinelclearing);
 STATIC_DCL void NDECL(mkfishingvillage);
 STATIC_DCL void NDECL(mkpluhomestead);
 STATIC_DCL void FDECL(mkpluroom, (int));
-STATIC_DCL void FDECL(mkelfhut, (int, int, int));
+STATIC_DCL void FDECL(mkelfhut, (int, int, int, boolean));
 STATIC_DCL void FDECL(mkruinedelfhut, (int, int));
 STATIC_DCL void FDECL(mkdrowshanty, (int));
 STATIC_DCL void FDECL(mkorccave, (int));
@@ -224,6 +224,13 @@ mklolthsepulcher()
 				for(j=-2;j<3;j++) {
 					levl[x+i][y+j].lit = 0;
 					levl[x+i][y+j].wall_info |= W_NONDIGGABLE;
+				}
+			}
+			for(i=-1;i<2;i++) {
+				for(j=-1;j<2;j++) {
+					levl[x+i][y+j].lit = 0;
+					levl[x+i][y+j].wall_info |= W_NONDIGGABLE;
+					levl[x+i][y+j].wall_info |= W_NONPASSWALL;
 				}
 			}
 			makemon(&mons[PM_DREAD_SERAPH], x, y, 0);
@@ -3235,10 +3242,7 @@ int width;
 
 STATIC_OVL
 void
-mkelfhut(background, foreground, left)
-int background;
-int foreground;
-int left;
+mkelfhut(int background, int foreground, int left, boolean quest)
 {
 	int x,y,tries=0;
 	int i,j, pathto = 0;
@@ -3291,6 +3295,12 @@ int left;
 			if(!rn2(3))
 				mkobj_at(RANDOM_CLASS, x+rnd(2), y+rnd(2), MKOBJ_ARTIF);
 		}
+		if(quest){
+			if(!rn2(3))
+				mksobj_at(EXPENSIVE_BED, x+rnd(2), y+rnd(2), NO_MKOBJ_FLAGS);
+		}
+		else
+			mksobj_at(BEDROLL, x+rnd(2), y+rnd(2), NO_MKOBJ_FLAGS); // only one, they all share it
 		
 		// wallification(x, y, x+3, y+3);//Can be adjacent, do wallification after all huts placed
 		
@@ -3368,7 +3378,15 @@ char mithril;
 				// if(!rn2(3)) mkobj_at((rn2(2) ? WEAPON_CLASS : rn2(2) ? TOOL_CLASS : ARMOR_CLASS), x+i, y+j, NO_MKOBJ_FLAGS);
 			}
 		}
-		if(mithril){
+		if(Role_if(PM_KENSEI) && In_quest(&u.uz) && in_mklev){
+			levl[x+(size)/2][y+(size)/2].typ = mithril ? FORGE : TREE;
+			makemon_full(&mons[mithril ? PM_MITHRIL_SMITH : PM_TREESINGER],
+				x+(size)/2, y+(size)/2,
+				NO_MM_FLAGS,
+				SKELIFIED,
+				NECROMANCY_FACTION);
+		}
+		else if(mithril){
 			levl[x+(size)/2][y+(size)/2].typ = FORGE;
 			makemon(&mons[PM_MITHRIL_SMITH], x+(size)/2, y+(size)/2, NO_MM_FLAGS);
 		}
@@ -4313,6 +4331,11 @@ mkpluvillage()
 			levl[x][y+3].typ = TLCORNER;
 			levl[x][y+3].lit = 1;
 			
+			for(i=0;i<=sizebig1;i++){
+				for(j=3;j<=4+3;j++){
+					levl[x+i][y+j].roomno = NO_ROOM;
+				}
+			}
 			switch(rn2(8)){
 				case 0: //Random store
 					for(i=1;i<sizebig1;i++){
@@ -4512,6 +4535,11 @@ mkpluvillage()
 			levl[x+sizetot+1-sizebig2][y+3].typ = TLCORNER;
 			levl[x+sizetot+1-sizebig2][y+3].lit = 1;		
 			
+			for(i=sizetot-sizebig2+1;i<=sizetot+1;i++){
+				for(j=3;j<=4+3;j++){
+					levl[x+i][y+j].roomno = NO_ROOM;
+				}
+			}
 			switch(rn2(8)){
 				case 0: //Shop
 					for(i=sizetot+1-sizebig2+1;i<sizetot+1;i++){
@@ -6100,12 +6128,22 @@ place_lolth_vaults()
 }
 
 void
+place_elfhaunt_forest_features()
+{
+	mkelfforge(TREE, SOIL, 0, TRUE);
+	int i = 1 + d(3,4);
+	for(; i > 0; i--)
+		mkwraithclearing(0);
+	wallification(1,0,COLNO-1,ROWNO-1);
+}
+
+void
 place_elfquest_forest_features()
 {
 	if(Is_qhome(&u.uz)){
 		int i = d(1,4);
 		for(; i > 0; i--)
-			mkelfhut(TREE, GRASS, 0);
+			mkelfhut(TREE, GRASS, 0, TRUE);
 		// i = rn2(3) ? 1 : d(1,3);
 		mkelfforge(TREE, GRASS, 0, TRUE);
 		i = 1;
@@ -6116,7 +6154,7 @@ place_elfquest_forest_features()
 	else if(u.uz.dlevel < qlocate_level.dlevel){
 		int i = rn2(4) + rn2(4);
 		for(; i > 0; i--)
-			mkelfhut(TREE, GRASS, 0);
+			mkelfhut(TREE, GRASS, 0, TRUE);
 		if(rn2(3))
 			mkelfforge(TREE, GRASS, 0, FALSE);
 		for(i=rn1(20,20); i > 0; i--)
@@ -6150,7 +6188,7 @@ place_chaos_forest_features()
 		if(!rn2(10))
 			mkelfforge(TREE, SOIL, 0, TRUE);
 		for(; i > 0; i--){
-			mkelfhut(TREE, SOIL, 0);
+			mkelfhut(TREE, SOIL, 0, FALSE);
 			if(!rn2(6))
 				mkelfforge(TREE, SOIL, 0, FALSE);
 		}
@@ -6158,7 +6196,7 @@ place_chaos_forest_features()
 	} else if(Is_ford_level(&u.uz)){
 		int i = 3 + d(2,3);
 		for(; i > 0; i--){
-			mkelfhut(TREE, SOIL, 1);
+			mkelfhut(TREE, SOIL, 1, FALSE);
 			if(!rn2(6))
 				mkelfforge(TREE, SOIL, 1, FALSE);
 		}
@@ -7601,16 +7639,21 @@ struct mkroom *sroom;
 					}
 					chest->owt = weight(chest);
 				}
-			} else if(!rn2(20)){
-				/* the payroll and some loot */
-				struct obj *chest, *gold;
-				gold = mksobj(GOLD_PIECE, NO_MKOBJ_FLAGS);
-				gold->quan = (long) rn1(9 * level_difficulty(), level_difficulty()); //1 - 10
-				u.spawnedGold += gold->quan;
-				gold->owt = weight(gold);
-			    chest = mksobj_at((rn2(3)) ? BOX : CHEST, sx, sy, NO_MKOBJ_FLAGS);
-				add_to_container(chest, gold);
-				chest->owt = weight(chest);
+			} else {
+				if(!rn2(20)){
+					/* the payroll and some loot */
+					struct obj *chest, *gold;
+					gold = mksobj(GOLD_PIECE, NO_MKOBJ_FLAGS);
+					gold->quan = (long) rn1(9 * level_difficulty(), level_difficulty()); //1 - 10
+					u.spawnedGold += gold->quan;
+					gold->owt = weight(gold);
+					chest = mksobj_at((rn2(3)) ? BOX : CHEST, sx, sy, NO_MKOBJ_FLAGS);
+					add_to_container(chest, gold);
+					chest->owt = weight(chest);
+				}
+				else if(!rn2(3)){
+					mksobj_at(BED, sx, sy, NO_MKOBJ_FLAGS);
+				}
 			}
 			break;
 		    case COCKNEST:

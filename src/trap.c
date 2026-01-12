@@ -625,6 +625,7 @@ int *fail_reason;
 	if(mon && ((cause == ANIMATE_SPELL 
 		&& ((In_quest(&u.uz) && Role_if(PM_HEALER) && (mon->mtyp == PM_IASOIAN_ARCHON || mon->mtyp == PM_PANAKEIAN_ARCHON || mon->mtyp == PM_HYGIEIAN_ARCHON || mon->mtyp == PM_IKSH_NA_DEVA))
 			||  rnd(!always_hostile(mon->data) ? 12 : 20) < ACURR(A_CHA)
+			|| carrying_art(ART_LUCK_BLADE)
 		) && !(is_animal(mon->data) || mindless_mon(mon))
 		)
 		|| statue->spe&STATUE_LOYAL)
@@ -2692,11 +2693,9 @@ const char *str;
 }
 
 void
-minstapetrify(mon,byplayer)
-struct monst *mon;
-boolean byplayer;
+minstapetrify(struct monst *mon,boolean byplayer, boolean bypass_resistance)
 {
-	if (resists_ston(mon)) return;
+	if (resists_ston(mon) && !bypass_resistance) return;
 	if (poly_when_stoned(mon->data)) {
 		mon_to_stone(mon);
 		return;
@@ -2798,7 +2797,7 @@ boolean byplayer;
 			    arg ? arg : "", arg ? mon_nam(mon) : Monnam(mon),
 			    mons[mwep->corpsenm].mname);
 		}
-		minstapetrify(mon, byplayer);
+		minstapetrify(mon, byplayer, FALSE);
 	}
 }
 
@@ -3331,7 +3330,7 @@ xchar x, y;
 	     */
 	    return FALSE;
 	} else if (obj->oclass == SCROLL_CLASS || obj->oclass == SPBOOK_CLASS) {
-	    if (obj->otyp == SCR_FIRE || obj->otyp == SCR_RESISTANCE || obj->otyp == SPE_FIREBALL || obj->oartifact)
+	    if (obj->otyp == SCR_FIRE || obj->otyp == SCR_RESISTANCE || obj->otyp == SPE_FIREBALL || obj->otyp == SPE_FIRE_STORM || obj->oartifact)
 			return FALSE;
 	    dindx = (obj->oclass == SCROLL_CLASS) ? 2 : 3;
 	    if (in_sight)
@@ -3383,12 +3382,6 @@ struct monst *owner;
 	struct obj *obj_original = obj;
 	boolean obj_destroyed = FALSE;
 	int is_lethe = lethe;
-	if(owner && ProtectItems(owner) &&
-		(obj->oclass == POTION_CLASS
-		 || obj->oclass == SCROLL_CLASS
-		 || obj->oclass == WAND_CLASS
-	))
-		return 0;
 	if(owner == &youmonst){
 		if(Waterproof) {
 			return 0;
@@ -3417,6 +3410,12 @@ struct monst *owner;
 	for (; obj; obj = otmp) {
 		otmp = here ? obj->nexthere : obj->nobj;
 
+		if(owner && ProtectItems(owner) &&
+			(obj->oclass == POTION_CLASS
+			 || obj->oclass == SCROLL_CLASS
+			 || obj->oclass == WAND_CLASS
+		))
+			continue;
 		(void) snuff_lit(obj);
 
 		if(obj->otyp == CAN_OF_GREASE && obj->spe > 0) {
@@ -3993,8 +3992,11 @@ struct trap *ttmp;
 	if (ttmp && ttmp->madeby_u) chance--;
 	if (Role_if(PM_ROGUE)) {
 	    if (rn2(2 * MAXULEV) < u.ulevel) chance--;
-	    if (u.uhave.questart && chance > 1) chance--;
-	} else if (Role_if(PM_RANGER) && chance > 1) chance--;
+	    if (u.uhave.questart) chance--;
+	} else if (Role_if(PM_RANGER)) chance--;
+	if(DefensiveLuck && u.uluck > 0)
+		chance--;
+	if (chance < 1) chance = 1;
 	return rn2(chance);
 }
 
@@ -4247,6 +4249,7 @@ void
 unshackle_mon(mtmp)
 struct monst * mtmp;
 {
+	boolean luck_tame = (carrying_art(ART_LUCK_BLADE) != 0);
 	if (!mtmp || mtmp->entangled_otyp != SHACKLES) {
 		impossible("%s not shackled?", m_monnam(mtmp));
 		return;
@@ -4258,7 +4261,7 @@ struct monst * mtmp;
 	if (mtmp->mtame){
 		verbalize("Thank you for rescuing me!");
 	}
-	else if (rnd(20) < ACURR(A_CHA) && !(is_animal(mtmp->data) || mindless_mon(mtmp))){
+	else if ((luck_tame || rnd(20) < ACURR(A_CHA)) && !(is_animal(mtmp->data) || mindless_mon(mtmp))){
 		struct monst *newmon;
 		pline("%s is very grateful!", Monnam(mtmp));
 		newmon = tamedog_core(mtmp, (struct obj *)0, TRUE);
@@ -4272,7 +4275,7 @@ struct monst * mtmp;
 	if (mtmp->mpeaceful){
 		pline("%s is grateful for the assistance, but makes no move to help you in return.", Monnam(mtmp));
 	}
-	else if (!mtmp->mpeaceful && rnd(10) < ACURR(A_CHA) && !(is_animal(mtmp->data) || mindless_mon(mtmp))){
+	else if (!mtmp->mpeaceful && (luck_tame || rnd(10) < ACURR(A_CHA)) && !(is_animal(mtmp->data) || mindless_mon(mtmp))){
 		mtmp->mpeaceful = 1;
 		pline("%s is thankful enough for the rescue to not attack you, at least.", Monnam(mtmp));
 	}
@@ -5615,7 +5618,7 @@ uescape_entanglement()
 	for(obj = invent; obj; obj = obj->nobj){
 		if(obj->o_id == u.uentangled_oid){
 			//Very hard to escape from the diamond snare
-			if(obj->oartifact == ART_JIN_GANG_ZUO && rn2(20))
+			if(is_returning_snare(obj) && rn2(20))
 				break;
 			You("slip loose from the entangling %s!", xname(obj));
 			obj->spe = 0;

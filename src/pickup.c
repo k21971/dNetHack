@@ -348,7 +348,7 @@ allow_category(struct obj *obj, int qflags)
 {
 	if(qflags&NO_EQUIPMENT && obj->owornmask)
 		return FALSE;
-    if (Role_if(PM_PRIEST)) obj->bknown = TRUE;
+    if (u.upriest) obj->bknown = TRUE;
     if (((index(valid_menu_classes,'u') != (char *)0) && obj->unpaid) ||
 	(index(valid_menu_classes, obj->oclass) != (char *)0))
 	return TRUE;
@@ -2277,6 +2277,8 @@ register struct obj *obj;
 			weldmsg(obj);
 			return 0;
 		}
+		if (obj->oartifact == ART_MORTAL_BLADE && yesno("Sheathe the Mortal Blade?", TRUE) == 'n')
+			return(0);
 		setuwep((struct obj *) 0);
 		if (uwep) return 0;	/* unwielded, died, rewielded */
 	} else if (obj == uswapwep) {
@@ -2881,11 +2883,12 @@ boolean past;
 	
 	while(howMany){
 		howMany--;
-		daughter = makemon(&mons[PM_DAUGHTER_OF_BEDLAM], box->ox, box->oy, MM_ADJACENTOK);
+		daughter = makemon(&mons[PM_DAUGHTER_OF_BEDLAM], box->ox, box->oy, MM_ADJACENTOK|NO_MINVENT);
 		if(!daughter){
 			//empty;
 			break;
 		}
+		daughter->mpeaceful = FALSE;
 		set_malign(daughter);
 		daughter->m_lev = 14;
 		daughter->mhpmax = 13*8+4;
@@ -2947,6 +2950,30 @@ boolean past;
 		}
 		m_dowear(daughter, TRUE);
 		m_level_up_intrinsic(daughter);
+	}
+	
+	if(Role_if(PM_CONVICT)){
+		daughter = makemon(&mons[PM_CHAIN_DEVIL], box->ox, box->oy, MM_ADJACENTOK);
+		if(daughter){
+			daughter->mpeaceful = FALSE;
+			daughter->female = TRUE;
+			set_malign(daughter);
+			daughter->m_lev = 14;
+			daughter->mhpmax = 13*8+4;
+			daughter->mhp = daughter->mhpmax;
+			if (!canspotmon(daughter)){
+				You("think %s brushed against your %s.", something, body_part(HAND));
+			}
+			else{
+				pline("%s climbs out of the %s!", An(daughter->data->mname), past ? "wreckage" : simple_typename(box->otyp));
+			}
+			otmp = mongets(daughter, PLAIN_DRESS, MKOBJ_NOINIT);
+			if(otmp){
+				set_material_gm(otmp, LEATHER);
+			}
+			m_dowear(daughter, TRUE);
+			m_level_up_intrinsic(daughter);
+		}
 	}
     box->owt = weight(box);
     return;
@@ -3048,10 +3075,12 @@ boolean past;
 			free_skill_up(P_BROAD_SWORD);
 			skilled_weapon_skill(P_SHIELD);
 			free_skill_up(P_SHIELD);
-			skilled_weapon_skill(P_RIDING);
+			expert_weapon_skill(P_RIDING);
 			free_skill_up(P_RIDING);
 			expert_weapon_skill(P_WAND_POWER);
 			skilled_weapon_skill(P_FIREARM);
+			expert_weapon_skill(P_BEAST_MASTERY);
+			free_skill_up(P_BEAST_MASTERY);
 			knows_object(ELVEN_SHORT_SWORD);
 			knows_object(ELVEN_ARROW);
 			knows_object(ELVEN_BOW);

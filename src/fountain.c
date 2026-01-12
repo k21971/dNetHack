@@ -11,10 +11,8 @@
 STATIC_DCL void NDECL(dowatersnakes);
 STATIC_DCL void NDECL(dowaterdemon);
 STATIC_DCL void NDECL(dowaternymph);
-STATIC_DCL void NDECL(dolavademon);
 STATIC_PTR void FDECL(gush, (int,int,genericptr_t));
 STATIC_DCL void NDECL(dofindgem);
-STATIC_DCL void FDECL(blowupforge, (int, int));
 
 void
 floating_above(what)
@@ -60,7 +58,7 @@ dowaterdemon() /* Water demon */
 	    if (rnd(100) > (80 + level_difficulty())) {
 		pline("Grateful for %s release, %s grants you a wish!",
 		      mhis(mtmp), mhe(mtmp));
-		makewish(allow_artwish() | WISH_VERBOSE);
+		makewish(WISH_SINGLE_USE | allow_artwish() | WISH_VERBOSE);
 		mongone(mtmp);
 	    } else if (t_at(mtmp->mx, mtmp->my))
 		(void) mintrap(mtmp);
@@ -70,13 +68,13 @@ dowaterdemon() /* Water demon */
 }
 
 /* Lava Demon */
-STATIC_OVL void
+void
 dolavademon()
 {
     struct monst *mtmp;
 
-    if (!(mvitals[PM_LAVA_DEMON].mvflags & G_GONE)) {
-        if ((mtmp = makemon(&mons[PM_LAVA_DEMON], u.ux, u.uy,
+    if (!(mvitals[PM_AFREET].mvflags & G_GONE)) {
+        if ((mtmp = makemon(&mons[PM_AFREET], u.ux, u.uy,
                             MM_ADJACENTOK)) != 0) {
             if (!Blind)
                 You("summon %s!", a_monnam(mtmp));
@@ -509,78 +507,164 @@ expert_undead_hunter_skill()
 			else {
 				expert_weapon_skill(skill);
 				if(skill == P_DAGGER){
-					expert_weapon_skill(rn2(2) ? P_SHORT_SWORD : P_SABER);
+					if(rn2(2)){
+						expert_weapon_skill(P_SHORT_SWORD);
+						knows_object(BLADE_OF_MERCY);
+						knows_object(BLADE_OF_GRACE);
+						knows_object(BLADE_OF_PITY);
+					}
+					else {
+						expert_weapon_skill(P_SABER);
+						knows_object(RAKUYO);
+						knows_object(RAKUYO_SABER);
+						knows_object(RAKUYO_DAGGER);
+					}
 					expert_weapon_skill(P_TWO_WEAPON_COMBAT);
 				}
 				else if(skill == P_SHORT_SWORD){
 					if(!rn2(3)){
 						expert_weapon_skill(P_DAGGER);
 						expert_weapon_skill(P_TWO_WEAPON_COMBAT);
+						knows_object(BLADE_OF_MERCY);
+						knows_object(BLADE_OF_GRACE);
+						knows_object(BLADE_OF_PITY);
 					}
 					else if(rn2(2)){
 						expert_weapon_skill(P_PICK_AXE);
+						knows_object(CHURCH_SHORTSWORD);
+						knows_object(CHURCH_PICK);
 					}
 					else {
 						expert_weapon_skill(P_HAMMER);
+						knows_object(CHURCH_HAMMER);
+						knows_object(HUNTER_S_SHORTSWORD);
+						knows_object(CHURCH_BRICK);
 					}
 				}
 				else if(skill == P_TWO_HANDED_SWORD){
 					expert_weapon_skill(P_LONG_SWORD);
+					knows_object(CHURCH_BLADE);
+					knows_object(HUNTER_S_LONGSWORD);
+					knows_object(CHURCH_SHEATH);
 				}
 				else if(skill == P_SCIMITAR){
 					expert_weapon_skill(P_BOW);
+					expert_weapon_skill(P_QUARTERSTAFF);
+					knows_object(BOW_BLADE);
+					knows_object(BLADED_BOW);
 				}
 				else if(skill == P_SABER){
 					if(rn2(2)){
 						expert_weapon_skill(P_DAGGER);
 						expert_weapon_skill(P_TWO_WEAPON_COMBAT);
+						knows_object(RAKUYO);
+						knows_object(RAKUYO_SABER);
+						knows_object(RAKUYO_DAGGER);
 					}
 					else {
 						expert_weapon_skill(P_FIREARM);
+						knows_object(SOLDIER_S_RAPIER);
+						knows_object(SOLDIER_S_SABER);
 					}
 				}
 				else if(skill == P_HAMMER){
 					expert_weapon_skill(P_SHORT_SWORD);
+					knows_object(CHURCH_HAMMER);
+					knows_object(HUNTER_S_SHORTSWORD);
+					knows_object(CHURCH_BRICK);
 				}
 				else if(skill == P_SPEAR){
 					expert_weapon_skill(P_HARVEST);
+					knows_object(SAW_SPEAR);
+					knows_object(LONG_SAW);
 				}
 				else if(skill == P_BOW){
 					expert_weapon_skill(P_SCIMITAR);
+					expert_weapon_skill(P_QUARTERSTAFF);
+					knows_object(BOW_BLADE);
+					knows_object(BLADED_BOW);
+				}
+				else if(skill == P_QUARTERSTAFF){
+					expert_weapon_skill(P_SCIMITAR);
+					expert_weapon_skill(P_BOW);
+					knows_object(BOW_BLADE);
+					knows_object(BLADED_BOW);
 				}
 				else if(skill == P_WHIP){
 					expert_weapon_skill(P_LONG_SWORD);
+					knows_object(CANE);
+					knows_object(WHIP_SAW);
 				}
 				else if(skill == P_HARVEST){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_SPEAR);
+						knows_object(SAW_SPEAR);
+						knows_object(LONG_SAW);
+					}
+					else {
+						knows_object(SAW_CLEAVER);
+						knows_object(RAZOR_CLEAVER);
+					}
 				}
 				else if(skill == P_CLUB){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_FLAIL);
+						knows_object(BEAST_CRUSHER);
+						knows_object(BEAST_CUTTER);
+					}
+					else knows_object(CLUB);
 				}
 				else if(skill == P_FLAIL){
 					expert_weapon_skill(P_CLUB);
+					knows_object(BEAST_CRUSHER);
+					knows_object(BEAST_CUTTER);
 				}
 				else if(skill == P_MACE){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_PICK_AXE);
+						knows_object(DEVIL_FIST);
+						knows_object(DEMON_CLAW);
+					}
+					else knows_object(TONITRUS);
 				}
 				else if(skill == P_PICK_AXE){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_MACE);
-					else
+						knows_object(DEVIL_FIST);
+						knows_object(DEMON_CLAW);
+					}
+					else{
 						expert_weapon_skill(P_SHORT_SWORD);
+						knows_object(CHURCH_SHORTSWORD);
+						knows_object(CHURCH_PICK);
+					}
 				}
 				else if(skill == P_FIREARM){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_BARE_HANDED_COMBAT);
-					else
+						knows_object(SHANTA_PATA);
+						knows_object(TWINGUN_SHANTA);
+					}
+					else{
 						expert_weapon_skill(P_SABER);
+						knows_object(SOLDIER_S_RAPIER);
+						knows_object(SOLDIER_S_SABER);
+					}
 				}
 				else if(skill == P_BARE_HANDED_COMBAT){
-					if(rn2(2))
+					if(rn2(2)){
 						expert_weapon_skill(P_FIREARM);
+						knows_object(SHANTA_PATA);
+						knows_object(TWINGUN_SHANTA);
+					}
+					else knows_object(BESTIAL_CLAW);
+				}
+				else if(skill == P_AXE){
+					knows_object(HUNTER_S_AXE);
+					knows_object(HUNTER_S_LONG_AXE);
+				}
+				else if(skill == P_BROAD_SWORD){
+					knows_object(ISAMUSEI);
 				}
 				return;
 			}
@@ -618,7 +702,12 @@ smithing_object(struct obj *obj)
 	int selection;
 	boolean upgradeable = obj->oclass == WEAPON_CLASS || is_weptool(obj) || obj->oclass == ARMOR_CLASS || obj->otyp == KIDNEY_BELT || (obj->oclass == RING_CLASS && is_chargeable(obj));
 	boolean opropable = (obj->oclass == WEAPON_CLASS || is_weptool(obj) || obj->otyp == NIGHTMARE_S_BULLET_MOLD) && !is_ammo(obj);
-	boolean upgrade_gem_required; 
+	boolean upgrade_gem_required;
+
+	if(is_lasersword_otyp(obj->otyp)){
+		pline("This device seems pretty indestructible; and, though clearly magical in nature, it is far too advanced for you to improve.");
+		return;
+	}
 
 	while(TRUE){
 		tmpwin = create_nhwindow(NHW_MENU);
@@ -915,9 +1004,17 @@ smithing_object(struct obj *obj)
 			case ENCHANT_OBJ:
 				if(!upgrade_gem_required){
 					obj->spe++;
-					if(obj->otyp == CHURCH_HAMMER || obj->otyp == CHURCH_BLADE)
-						if(obj->cobj && obj->spe > obj->cobj->spe) /*Note: base obj already incremented*/
+					if(Race_if(PM_INCANTIFIER))
+						morehungry(5*INC_BASE_NUTRITION);
+					flags.botl = 1;
+					if(obj->otyp == CHURCH_HAMMER || obj->otyp == CHURCH_BLADE){
+						if(obj->cobj && obj->spe > obj->cobj->spe){
+							/*Note: base obj already incremented*/
 							obj->cobj->spe++;
+							if(Race_if(PM_INCANTIFIER))
+								morehungry(5*INC_BASE_NUTRITION);
+						}
+					}
 					You("successfully improve your %s.", xname(obj));
 					use_skill(P_SMITHING, 2);
 					exercise(A_DEX, TRUE);
@@ -1480,14 +1577,15 @@ reshape_brand(struct obj *obj)
 			 || objects[i].oc_class == TOOL_CLASS
 			 || objects[i].oc_class == WEAPON_CLASS
 			 || objects[i].oc_class == RING_CLASS
+			 || objects[i].oc_class == BALL_CLASS
 		))
 			continue;
 		if(!(objects[i].oc_name_known
 			|| objects[i].oc_class == RING_CLASS
 		))
 			continue;
-		if(objects[i].oc_class == WEAPON_CLASS || (objects[i].oc_class == TOOL_CLASS && objects[i].oc_skill != P_NONE)){
-			if(P_SKILL(objects[i].oc_skill < 0 ? -1*objects[i].oc_skill : objects[i].oc_skill) < P_SKILLED || !has_object_type(invent, i))
+		if(objects[i].oc_class == WEAPON_CLASS || i == BALL || (objects[i].oc_class == TOOL_CLASS && objects[i].oc_skill != P_NONE)){
+			if(P_SKILL(objects[i].oc_skill < 0 ? -1*objects[i].oc_skill : objects[i].oc_skill) < P_SKILLED && !has_object_type(invent, i))
 				continue;
 		}
 		if(!brandtype(i))
@@ -1552,7 +1650,7 @@ dipforge(struct obj *obj)
 	burn_away_slime();
 	melt_frozen_air();
 	
-	boolean forgeable = (u.ublood_smithing && (!is_flammable(obj) || obj->oerodeproof)) || is_metallic(obj);
+	boolean forgeable = (u.ublood_smithing && (!is_flammable(obj) || obj->oerodeproof || obj->oartifact)) || is_metallic(obj);
 
 	if(obj->oartifact == ART_FIRE_BRAND && (P_RESTRICTED(P_SMITHING) || yn("Reshape Fire Brand?") == 'y')){
 		if(obj->owornmask&W_ARMOR){
@@ -1566,13 +1664,18 @@ dipforge(struct obj *obj)
 	 * lava, probably not the smartest thing to do. This is gonna hurt.
 	 * Non-metallic objects are handled by lava_damage().
 	 */
-	if(obj->otyp == CHIKAGE && obj_is_material(obj, HEMARGYOS)){
+	if(obj->otyp == CHIKAGE && (obj_is_material(obj, HEMARGYOS) || check_oprop(obj, OPROP_HAEM))){
 		pline("The blood burns off the sword!");
-		set_material_gm(obj, obj->ovar1_alt_mat);
-		set_object_color(obj);
-		obj->oeroded = access_oeroded(obj->ovar2_alt_erosion);
-		obj->oeroded2 = access_oeroded2(obj->ovar2_alt_erosion);
-		obj->oeroded3 = access_oeroded3(obj->ovar2_alt_erosion);
+		if(check_oprop(obj, OPROP_HAEM)){
+			remove_oprop(obj, OPROP_HAEM);
+		}
+		else {
+			set_material_gm(obj, obj->ovar1_alt_mat);
+			obj->oeroded = access_oeroded(obj->ovar2_alt_erosion);
+			obj->oeroded2 = access_oeroded2(obj->ovar2_alt_erosion);
+			obj->oeroded3 = access_oeroded3(obj->ovar2_alt_erosion);
+			set_object_color(obj);
+		}
 		(void) stop_timer(REVERT_OBJECT, obj->timed);
 		fix_object(obj);
 		update_inventory();

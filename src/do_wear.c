@@ -119,6 +119,7 @@ Boots_on()
 	case JUMPING_BOOTS:
 	case KICKING_BOOTS:
 	case HARMONIUM_BOOTS:
+	case SILVERKNIGHT_BOOTS:
 	case STILETTOS:
 	case WIND_AND_FIRE_WHEELS:
 		break;
@@ -240,6 +241,7 @@ Boots_off()
 	case JUMPING_BOOTS:
 	case KICKING_BOOTS:
 	case HARMONIUM_BOOTS:
+	case SILVERKNIGHT_BOOTS:
 	case STILETTOS:
 	case WIND_AND_FIRE_WHEELS:
 		break;
@@ -431,6 +433,7 @@ Helmet_on()
 	case HELM_OF_TELEPATHY:
 	case HELM_OF_DRAIN_RESISTANCE:
 	case HARMONIUM_HELM:
+	case SILVERKNIGHT_HELM:
 	case HELM_OF_BRILLIANCE:
 	case SUNLIGHT_MAGGOT:
 		break;
@@ -445,7 +448,7 @@ Helmet_on()
 		 * about, but it takes trained arrogance to pull it off,
 		 * and the actual enchantment of the hat is irrelevant.
 		 */
-		ABON(A_CHA) += ((Role_if(PM_WIZARD) || Race_if(PM_INCANTIFIER)) ? 1 : -1);
+		ABON(A_CHA) += ((u.uwizard || Race_if(PM_INCANTIFIER)) ? 1 : -1);
 		flags.botl = 1;
 		makeknown(uarmh->otyp);
 		break;
@@ -553,6 +556,7 @@ Helmet_off()
 	case DWARVISH_HELM:
 	case GNOMISH_POINTY_HAT:
 	case ORCISH_HELM:
+	case SILVERKNIGHT_HELM:
 	case HARMONIUM_HELM:
 	case SUNLIGHT_MAGGOT:
 	    break;
@@ -567,7 +571,7 @@ Helmet_off()
 	    break;
 	case CORNUTHAUM:
 	    if (!cancelled_don) {
-			ABON(A_CHA) += ((Role_if(PM_WIZARD) || Race_if(PM_INCANTIFIER)) ? -1 : 1);
+			ABON(A_CHA) += ((u.uwizard || Race_if(PM_INCANTIFIER)) ? -1 : 1);
 			flags.botl = 1;
 	    }
 	    break;
@@ -636,6 +640,7 @@ Gloves_on()
 	case IMPERIAL_ELVEN_GAUNTLETS:
 	case GAUNTLETS:
 	case HARMONIUM_GAUNTLETS:
+	case SILVERKNIGHT_GAUNTLETS:
 	case ARCHAIC_GAUNTLETS:
 	case CRYSTAL_GAUNTLETS:
 	case PLASTEEL_GAUNTLETS:
@@ -683,6 +688,7 @@ Gloves_off()
 	case IMPERIAL_ELVEN_GAUNTLETS:
 	case GAUNTLETS:
 	case HARMONIUM_GAUNTLETS:
+	case SILVERKNIGHT_GAUNTLETS:
 	case ARCHAIC_GAUNTLETS:
 	case CRYSTAL_GAUNTLETS:
 	case PLASTEEL_GAUNTLETS:
@@ -948,7 +954,7 @@ Armor_off()
 {
 	boolean checkweight = FALSE;
     takeoff_mask &= ~W_ARM;
-	if(arti_lighten(uarmu, FALSE)) checkweight = TRUE;
+	if(arti_lighten(uarm, FALSE)) checkweight = TRUE;
 
 	if(!uarm) {
 		impossible("Armor_off called with no uarm");
@@ -2374,7 +2380,7 @@ struct obj * otmp;
 	if (otmp->otyp == find_gcirclet()) def /= 2;
 
 	// add enchantment
-	if (otmp->spe && (!is_belt(otmp) || otmp->otyp == KIDNEY_BELT))
+	if (!Is_spire(&u.uz) && otmp->spe && (!is_belt(otmp) || otmp->otyp == KIDNEY_BELT))
 	{
 		int spemult = 1; // out of 2
 		// shields get full enchantment to AC
@@ -2396,7 +2402,7 @@ struct obj * otmp;
 	}
 
 	// artifact bonus def
-	switch (otmp->oartifact)
+	if(!Is_spire(&u.uz)) switch (otmp->oartifact)
 	{
 	case ART_STEEL_SCALES_OF_KURTULMAK:
 		def += objects[otmp->otyp].a_ac;
@@ -2483,7 +2489,7 @@ struct obj * otmp;
 
 
 	// add enchantment
-	if (otmp->spe && (!is_belt(otmp) || otmp->otyp == KIDNEY_BELT))
+	if (!Is_spire(&u.uz) && otmp->spe && (!is_belt(otmp) || otmp->otyp == KIDNEY_BELT))
 	{
 		int spemult = 1; // out of 2
 		// shields get no enchantment to DR
@@ -2500,7 +2506,7 @@ struct obj * otmp;
 	}
 
 	// artifact bonus def
-	switch (otmp->oartifact)
+	if(!Is_spire(&u.uz)) switch (otmp->oartifact)
 	{
 	case ART_STEEL_SCALES_OF_KURTULMAK:
 		def += objects[otmp->otyp].a_dr;
@@ -2542,16 +2548,18 @@ struct obj * otmp;
 }
 
 int
-properties_dr(arm, agralign, agrmoral)
-struct obj *arm;
-int agralign;
-int agrmoral;
+properties_dr(struct obj *arm, int agralign, int agrmoral, int agrimpure, int agrrot)
 {
 	int bonus = 0;
 	int base = arm_dr_bonus(arm);
 	if(is_harmonium_armor(arm)){
 		if(agralign == 0) bonus += 1;
 		else if(agralign < 0) bonus += 2;
+	}
+	if(is_silverknight_armor(arm)){
+		if(agrmoral < 0) bonus += 3;
+		if(agrimpure > 0) bonus += 2;
+		if(agrrot > 0) bonus += 2;
 	}
 	if(check_oprop(arm, OPROP_ANAR)){
 		if(agralign >= 0) bonus += base;
@@ -2694,7 +2702,7 @@ base_uac()
 				else
 					uac -= 3;
 			}
-			else if(you_merc_kinstealing(obj)){
+			else if(you_merc_kinstealing(uwep)){
 				if(u.ulevel < 10);
 				else if(u.ulevel < 18)
 					uac -= 1;
@@ -2753,7 +2761,7 @@ base_uac()
 		if(Race_if(PM_ORC)){
 			dexbonus += (u.ulevel+1)/3;
 		}
-		if(Role_if(PM_MONK) && !(uarm && arm_blocks_upper_body(uarm->otyp))){
+		if((Role_if(PM_MONK) && Role_if(PM_KENSEI)) && !(uarm && arm_blocks_upper_body(uarm->otyp))){
 			if(dexbonus < 0) dexbonus = (int)(dexbonus / 2);
 			dexbonus += max((int)( (ACURR(A_WIS)-1)/2 - 5 ),0) + (int)(u.ulevel/6 + 1);
 			if(Confusion && u.udrunken>u.ulevel) dexbonus += u.udrunken/9+1;
@@ -2857,15 +2865,18 @@ find_ac()
 			else
 				uac -= 1+(uwep->spe)/2;
 		}
+		if(uwep->otyp == SILVERKNIGHT_SPEAR && !uarms){
+			uac -= 1+uwep->spe+shield_skill(uwep);
+		}
 		const struct artifact *weap = get_artifact(uwep);
 		if(weap && (weap->inv_prop == GITH_ART || weap->inv_prop == AMALGUM_ART) && activeMentalEdge(GSTYLE_DEFENSE)){
-			uac -= u.usanity < 50 ? 0 : u.usanity < 75 ? max(uwep->spe,0) : u.usanity < 90 ? 2+max(uwep->spe,0) : 5+max(uwep->spe,0);
+			uac -= EDGE_KENSEI ? 5+max(uwep->spe,0) : u.usanity < 50 ? 0 : u.usanity < 75 ? max(uwep->spe,0) : u.usanity < 90 ? 2+max(uwep->spe,0) : 5+max(uwep->spe,0);
 		}
 	}
 	if(uswapwep){
 		const struct artifact *weap = get_artifact(uswapwep);
 		if(weap && (weap->inv_prop == GITH_ART || weap->inv_prop == AMALGUM_ART) && activeMentalEdge(GSTYLE_DEFENSE)){
-			uac -= u.usanity < 50 ? 0 : u.usanity < 75 ? max(uswapwep->spe/2,0) : u.usanity < 90 ? 1+max(uswapwep->spe/2,0) : 3+max(uswapwep->spe/2,0);
+			uac -= EDGE_KENSEI ? 3+max(uswapwep->spe/2,0) : u.usanity < 50 ? 0 : u.usanity < 75 ? max(uswapwep->spe/2,0) : u.usanity < 90 ? 1+max(uswapwep->spe/2,0) : 3+max(uswapwep->spe/2,0);
 		}
 	}
 	if(Race_if(PM_HALF_DRAGON)){
@@ -3017,6 +3028,8 @@ uchar aatyp;
 	/* for use vs specific magr */
 	int agralign = 0;
 	int agrmoral = 0;
+	int agrimpure = 0;
+	int agrrot = 0;
 	if(magr){
 		agralign = (magr == &youmonst) ? sgn(u.ualign.type) : sgn(magr->data->maligntyp);
 		
@@ -3026,11 +3039,13 @@ uchar aatyp;
 			else if(hates_unholy(youracedata))
 				agrmoral = 1;
 		} else {
-		if(hates_holy_mon(magr))
-			agrmoral = -1;
+			if(hates_holy_mon(magr))
+				agrmoral = -1;
 			else if(hates_unholy_mon(magr))
-			agrmoral = 1;
+				agrmoral = 1;
 		}
+		agrimpure = calc_agrimpure(magr);
+		agrrot = calc_agrrot(magr);
 	}
 	
 	/* some slots may be unacceptable and must be replaced */
@@ -3052,7 +3067,7 @@ uchar aatyp;
 				if(depth && higher_depth(uarmor[i]->owornmask, depth))
 					continue;
 				arm_udr += arm_dr_bonus(uarmor[i]);
-				if (magr) arm_udr += properties_dr(uarmor[i], agralign, agrmoral);
+				if (magr) arm_udr += properties_dr(uarmor[i], agralign, agrmoral, agrimpure, agrrot);
 			}
 			else if(uarmor[i]->otyp == CLOAK_OF_PROTECTION){
 				arm_udr += arm_dr_bonus(uarmor[i])/2; //Half protection in other slots (skin depth)
@@ -3073,6 +3088,10 @@ uchar aatyp;
 			if(!u.twoweap || (uswapwep && hand_protecting(uswapwep)))
 				arm_udr += 4 + material_def_bonus(uwep, 4, FALSE) + (uwep->spe + 1) / 2 - min((int)greatest_erosion(uwep), 4);
 		}
+	}
+	if (active_glyph(BEASTS_EMBRACE) && u.uencouraged > 0 && arm_udr > 0){
+		arm_udr = max(0, arm_udr - (u.uencouraged+1)/2);
+		// can't reduce below 0, but will zero it out otherwise
 	}
 	/* Natural DR (overriden and ignored by base_nat_udr() for halfdragons) */
 	if (!Race_if(PM_HALF_DRAGON)) {
@@ -4653,7 +4672,7 @@ struct obj *armor;
 		 || mdef->mtyp == PM_PALE_NIGHT
 		) continue;
 		if (mdef && magr_can_attack_mdef(magr, mdef, x(magr) + clockwisex[(i + j) % 8], y(magr) + clockwisey[(i + j) % 8], FALSE)){
-			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE);
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE, 0);
 			if(DEADMONSTER(magr))
 				break; //oops!
 			if(youagr) morehungry(1);
@@ -4712,7 +4731,7 @@ struct obj *armor;
 		 || mdef->mtyp == PM_PALE_NIGHT
 		) continue;
 		if (mdef && magr_can_attack_mdef(magr, mdef, x(magr) + clockwisex[(i + j) % 8], y(magr) + clockwisey[(i + j) % 8], FALSE)){
-			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE);
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE, 0);
 			break;
 		}
 	}
@@ -4822,7 +4841,7 @@ struct obj *wep;
 			pline("The Dragonhead Shield bites %s!", mon_nam(mdef));
 		
 		if (mdef && magr_can_attack_mdef(magr, mdef, x(magr) + clockwisex[(i + j) % 8], y(magr) + clockwisey[(i + j) % 8], FALSE)){
-			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, 0, 0, FALSE);
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, 0, 0, FALSE, 0);
 			if(DEADMONSTER(magr))
 				break; //oops!
 			//limit of one attack for weapons
@@ -5289,7 +5308,7 @@ char etyp;
 			symbiote.damn = rnd(3) + rnd(3);
 			symbiote.damn = min(symbiote.damn, 8-lim);
 			
-			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE);
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, -1, 0, FALSE, 0);
 			if(DEADMONSTER(magr))
 				break; //oops!
 			lim+=symbiote.damn;
@@ -5463,7 +5482,7 @@ struct obj *wep;
 			if(mdef->mtyp == PM_PALE_NIGHT) continue;
 			if (magr_can_attack_mdef(magr, mdef, i, j, FALSE)){
 				wep->otyp = CLAWED_HAND;
-				xmeleehity(magr, mdef, &symbiote, &wep, -1, 0, FALSE);
+				xmeleehity(magr, mdef, &symbiote, &wep, -1, 0, FALSE, 0);
 				wep->otyp = wep->oartifact == ART_AMALGAMATED_SKIES ? TWO_HANDED_SWORD : CLUB;
 				if(DEADMONSTER(magr))
 					return; //oops!
@@ -6111,7 +6130,7 @@ boolean invoked;
 					message = FALSE;
 					pline("Pointed rocks erupt from the ground around you!");
 				}
-				xmeleehity(magr, mdef, &symbiote, (struct obj **)0, 0, 0, FALSE);
+				xmeleehity(magr, mdef, &symbiote, (struct obj **)0, 0, 0, FALSE, 0);
 				if(DEADMONSTER(magr))
 					return; //oops!
 			}
@@ -6126,6 +6145,36 @@ boolean invoked;
 				return;
 			}
 		}
+}
+
+void
+doliving_cricket(struct monst *magr)
+{
+	boolean youagr = (magr == &youmonst);
+	boolean youdef;
+	int i, j;
+	struct monst *mdef;
+	struct attack symbiote = { AT_HITS, AD_SONC, mlev(magr)/10+1, 4};
+	for(i = x(magr)-1; i <= x(magr)+1; i++)
+		for(j = y(magr)-1; j <= y(magr)+1; j++){
+			if(!isok(i,j))
+				continue;
+			if(i == x(magr) && j == y(magr))
+				continue;
+			mdef = m_u_at(i,j);
+			youdef = (mdef == &youmonst);
+			if(!mdef || DEADMONSTER(mdef))
+				continue;
+			if(youagr && mdef->mpeaceful)
+				continue;
+			if(!youagr && ((youdef && magr->mpeaceful) || (mdef->mpeaceful == magr->mpeaceful)))
+				continue;
+			if(!youdef && nonthreat(mdef))
+				continue;
+			if(mdef->mtyp == PM_PALE_NIGHT) continue;
+			xmeleehity(magr, mdef, &symbiote, (struct obj **)0, 0, 0, FALSE, 0); //Hits all adjacent targets
+			return; //only one proc per round to hit all adjacent targets
+	}
 }
 
 void
@@ -6247,7 +6296,7 @@ struct obj *wep;
 		//Note: petrifying targets are safe, it's a weapon attack
 		if(mdef->mtyp == PM_PALE_NIGHT) continue;
 		if (mdef && magr_can_attack_mdef(magr, mdef, x(magr) + clockwisex[(i + j) % 8], y(magr) + clockwisey[(i + j) % 8], FALSE)){
-			xmeleehity(magr, mdef, &symbiote, &wep, -1, 0, FALSE);
+			xmeleehity(magr, mdef, &symbiote, &wep, -1, 0, FALSE, 0);
 			if(DEADMONSTER(magr))
 				break; //oops!
 			//limit of one attack for weapons
@@ -6278,6 +6327,49 @@ struct obj *wep;
 	else if(wep->oartifact == ART_FALLINGSTAR_MANDIBLES)
 		doliving_fallingstar(magr, wep, FALSE);
 	else doliving_single_attack(magr, wep);
+}
+
+int
+calc_agrimpure(struct monst *magr)
+{
+	int agrimpure = 0;
+	if(magr == &youmonst){
+		if(defile_count() >= 6)
+			agrimpure = 1;
+	} else {
+		if(magr->mtraitor || magr->mferal)
+			agrimpure = 1;
+		else if(is_ritually_impure(magr->data))
+			agrimpure = 1;
+	}
+	return agrimpure;
+}
+
+int
+calc_agrrot(struct monst *magr)
+{
+	int agrrot = 0;
+	if(magr == &youmonst){
+		if(Sick)
+			agrrot = 1;
+		else if(rot_count() > 0)
+			agrrot = 1;
+		else if(always_rot_monster(youracedata))
+			agrrot = 1;
+		else if(dmgtype(youracedata, AD_DISE))
+			agrrot = 1;
+		else if(flat_mad_turn(MAD_SPORES) ||flat_mad_turn(MAD_ROTTING))
+			agrrot = 1;
+	}
+	else {
+		if(rot_monster(magr))
+			agrrot = 1;
+		else if(magr->mspores || magr->mrotting)
+			agrrot = 1;
+		else if(dmgtype(magr->data, AD_DISE))
+			agrrot = 1;
+	}
+	return agrrot;
 }
 
 #endif /* OVLB */

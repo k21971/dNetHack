@@ -54,6 +54,7 @@
 #define AT_TAIL		44	/* Tail-slap */
 #define AT_TONG		45	/* Tongue attack */
 #define AT_VOMT		46	/* Vomit attack */
+#define AT_JUGL		47	/* Juggles weapons */
 
 #define AT_WEAP		252	/* uses weapon */
 #define AT_XWEP		253	/* uses offhanded weapon */
@@ -65,6 +66,7 @@
 	(aatyp) == AT_XWEP || \
 	(aatyp) == AT_MARI || \
 	(aatyp) == AT_DEVA || \
+	(aatyp) == AT_JUGL || \
 	(aatyp) == AT_HODS \
 	)
 
@@ -249,15 +251,20 @@
 #define AD_MADF		154 /* Madness fire */
 #define AD_FATK		155 /* Force target to attack */
 #define AD_DRHP		156 /* Drains bonus HP */
-#define AD_PUSH		157 /* Push target away */
+#define AD_PSH1		157 /* Push target away 1 square */
 #define AD_LICK		158 /* Pull target, immobalize target, cold touch, acid touch */
 #define AD_PFBT		159 /* rot and poison damage */
 #define AD_OMUD		160 /* Acid and stab with bone daggers */
+#define AD_PSH3		161 /* Push target away 1d3 squares */
+#define AD_BLED		162 /* Bleeding wounds */
+#define AD_UHCD		163 /* Unholy cold */
+#define AD_GMLD		164 /* Gray mold spores */
+#define AD_SONC		165 /* Sonic attack */
 
 //#define AD_AHAZU	116 /*  */
 //Amon is a headbutt (AT_BUTT/AD_PHYS)
 //Chupoclops is a poisonous bite (AT_BITE/AD_DRST)
-#define AD_DUNSTAN	161
+#define AD_DUNSTAN	166
 #define AD_IRIS		AD_DUNSTAN+1
 #define AD_NABERIUS	AD_DUNSTAN+2
 #define AD_OTIAX	AD_DUNSTAN+3

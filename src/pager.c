@@ -860,10 +860,12 @@ checkfile(inp, pm, user_typed_name, without_asking, printwindow)
      * for Angel and angel, make the lookup string the same for both
      * user_typed_name and picked name.
      */
-    if (pm != (struct permonst *) 0 && !user_typed_name)
-	dbase_str = strcpy(newstr, pm->mname);
+    if (pm != (struct permonst *) 0 && !user_typed_name){
+		dbase_str = strcpy(newstr, pm->mname);
+		pline("%s", dbase_str);
+	}
     else dbase_str = strcpy(newstr, inp);
-    (void) lcase(dbase_str);
+		(void) lcase(dbase_str);
 
     if (!strncmp(dbase_str, "interior of ", 12))
 	dbase_str += 12;
@@ -968,8 +970,11 @@ bad_data_file:	impossible("'data' file in wrong format");
 		return FALSE;
 	    }
 		char *encyc_header = "Encyclopedia entry:";
+		if(wizard)
+			encyc_header = "Encyclopedia entry for ";
 		putstr(*printwindow, 0, "\n");
 		putstr(*printwindow, 0, encyc_header);
+		if(wizard) putstr(*printwindow, 0, dbase_str);
 		putstr(*printwindow, 0, "\n");
 	    for (i = 0; i < entry_count; i++) {
 		if (!dlb_fgets(buf, BUFSZ, fp)) goto bad_data_file;
@@ -1051,6 +1056,7 @@ static const char * const bogusobjects[] = {
        "bec de corwin",
        "yet another poorly-differentiated polearm",
        "cursed YAPDP",
+       "basket-case broadsword",
        "can of mace",
        "evening star",
        "dawn star",
@@ -1469,6 +1475,7 @@ do_look(quick)
 		sym = out_str[0];
     }
 
+	char name[BUFSZ] = {0};
 	if (from_screen) {
 		cc.x = u.ux;
 		cc.y = u.uy;
@@ -1504,8 +1511,15 @@ do_look(quick)
 		if (sym == '`' && iflags.bouldersym && ((int)glyph_to_obj(glyph) == BOULDER || (int)glyph_to_obj(glyph) == MASS_OF_STUFF))
 			sym = iflags.bouldersym;
 	    } else if (glyph_is_monster(glyph)) {
-		/* takes care of pets, detected, ridden, and regular mons */
-		sym = monsyms[(int)mons[glyph_to_mon(glyph)].mlet];
+			/* takes care of pets, detected, ridden, and regular mons */
+			sym = monsyms[(int)mons[glyph_to_mon(glyph)].mlet];
+			if(iflags.pokedex & POKEDEX_SHOW_ENCYC){
+				struct monst *mtmp = m_at(cc.x,cc.y);
+				if(!Hallucination && mtmp)
+					Sprintf(name, "%s", mtmp->data->mname);
+				else
+					Sprintf(name, "%s", mons[glyph_to_mon(glyph)].mname);
+			}
 	    } else if (glyph_is_cloud(glyph)) {
 		sym = showsyms[S_cloud];
 	    } else if (glyph_is_swallow(glyph)) {
@@ -1546,6 +1560,8 @@ do_look(quick)
 				"lethe" : firstmatch);
 		(void)checkfile(temp_buf, pm, FALSE, (boolean)(ans == LOOK_VERBOSE), &datawin);
 	    }
+		else if(name[0] != '\0')
+			(void)checkfile(name, pm, FALSE, TRUE, &datawin);
 		display_nhwindow(datawin, TRUE);
 		destroy_nhwindow(datawin);
 	} else {
@@ -2323,6 +2339,7 @@ get_description_of_attack_type(uchar id)
 	case AT_ESPR: return "floating spiritual blade";
 	case AT_BEAM: return "ranged beam";
 	case AT_DEVA: return "million-arm weapon";
+	case AT_JUGL: return "weapon-juggler's strike";
 	case AT_5SQR: return "long reach touch";
 	case AT_WDGZ: return "passive gaze";
 	case AT_BKGT: return "hungry mist";
@@ -2512,10 +2529,15 @@ get_description_of_damage_type(uchar id)
 	case AD_BYAK: return "byakhee eggs";
 	case AD_UNRV: return "unnerving";
 	case AD_DRHP: return "drains bonus HP";
-	case AD_PUSH: return "push away";
+	case AD_PSH1: return "push away 1 square";
+	case AD_PSH3: return "push away 1d3 squares";
 	case AD_LICK: return "monstrous tongue lick";
 	case AD_PFBT: return "poison and disease damage";
 	case AD_OMUD: return "inchoate orc-spawn";
+	case AD_BLED: return "bleeding wounds";
+	case AD_UHCD: return "unholy ice";
+	case AD_GMLD: return "gray mold spores";
+	case AD_SONC: return "sonic blast";
 	default:
 			impossible("bug in get_description_of_damage_type(%d)", id);
 			return "<MISSING DESCRIPTION, THIS IS A BUG>";
@@ -2530,6 +2552,7 @@ get_description_of_damage_prefix(uchar aatyp, uchar adtyp)
 	case AT_WEAP:
 	case AT_XWEP:
 	case AT_DEVA:
+	case AT_JUGL:
 		switch (adtyp)
 		{
 		case AD_PHYS:
@@ -2538,12 +2561,12 @@ get_description_of_damage_prefix(uchar aatyp, uchar adtyp)
 		case AD_COLD:
 		case AD_ELEC:
 		case AD_ACID:
-			return "physical + 4d6 ";
+			return "physical +  ";
 		case AD_EFIR:
 		case AD_ECLD:
 		case AD_EELC:
 		case AD_EACD:
-			return "physical + 3d7 ";
+			return "physical +  ";
 		default:
 			return "physical + ";
 		}
@@ -2553,7 +2576,7 @@ get_description_of_damage_prefix(uchar aatyp, uchar adtyp)
 }
 
 char *
-get_description_of_attack(struct attack *mattk, char * main_temp_buf)
+get_description_of_attack(struct attack *mattk, char *main_temp_buf, struct monst *mtmp)
 {
 	if (!(mattk->damn + mattk->damd + mattk->aatyp + mattk->adtyp)) {
 		main_temp_buf[0] = '\0';
@@ -2563,6 +2586,23 @@ get_description_of_attack(struct attack *mattk, char * main_temp_buf)
 	char temp_buf[BUFSZ] = "";
 	if (mattk->damn + mattk->damd) {
 		sprintf(main_temp_buf, "%dd%d", mattk->damn, mattk->damd);
+		if(strongmonst(mtmp->data) || throws_rocks(mtmp->data)) {
+			int strength;
+			if(throws_rocks(mtmp->data)){
+				strength = STR19(25);
+			}
+			else {
+				strength = default_strongmonst_strength(mtmp->data->msize);
+			}
+			strength = strscore_dbon(strength);
+			if(strength > 0)
+				sprintf(temp_buf, "+%d", strength);
+			else if(strength < 0)
+				sprintf(temp_buf, "%d", strength);
+			else
+				temp_buf[0] = '\0';
+			strcat(main_temp_buf, temp_buf);
+		}
 #ifndef USE_TILES
 		strcat(main_temp_buf, ",");
 #endif
@@ -2737,7 +2777,7 @@ get_description_of_monster_type(struct monst * mtmp, char * description)
 				attk = getattk(mtmp, (struct monst *)0, res, &indexnum, &prev_attk, TRUE, subout, &tohitmod);
 
 				main_temp_buf[0] = '\0';
-				get_description_of_attack(attk, temp_buf);
+				get_description_of_attack(attk, temp_buf, mtmp);
 				if (temp_buf[0] == '\0') {
 					if (indexnum == 0) {
 #ifndef USE_TILES

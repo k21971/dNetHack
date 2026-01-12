@@ -56,6 +56,7 @@
 #define ARTA_KNOCKBACKX	0x04000000L /* knockback; 100% chance*/
 #define ARTA_RETURNING  0x08000000L /* returns to the hand when thrown */
 #define ARTA_SONICX		0x10000000L /* thunderblasts */
+#define ARTA_LAIDTOREST	0x20000000L /* slain monsters cannot lifesave or revive post-mortem (except riders) */
 
 #define ARTP_SEEK		0x0001L /* helps you search, ie, adds enhancement bonus to attempts -- only coded for mainhand weapons */
 #define ARTP_NOCALL		0x0002L /* prevents demons from being gated in */
@@ -314,7 +315,7 @@ struct artinstance{
 #define	IPROP_LEVELPORT	0x00000010L
 #define	IPROP_BRANCHPORT	0x00000020L
 #define	IPROP_REFLECT	0x00000040L
-#define	ALL_IPROP		(0x0000000FL|IPROP_LEVELPORTIPROP_BRANCHPORT|IPROP_REFLECT)
+#define	ALL_IPROP		(0x0000000FL|IPROP_TELEPORT|IPROP_LEVELPORT|IPROP_BRANCHPORT|IPROP_REFLECT)
 #define ZerthUpgrades avar1
 #define	ZPROP_WRATH		0x00000001L
 #define	ZPROP_STEEL		0x00000002L
@@ -324,10 +325,26 @@ struct artinstance{
 #define	ZPROP_BALANCE	0x00000020L
 #define	ZPROP_PATIENCE	0x00000040L
 #define	ZPROP_FOCUS		0x00000080L
+//Seen streaming/chained/kinstealing
+#define ZPROP_SEEN_S    0x00000100L
+#define ZPROP_SEEN_C    0x00000200L
+#define ZPROP_SEEN_K    0x00000400L
+#define ZPROP_SEEN_MASK  (ZPROP_SEEN_S|ZPROP_SEEN_C|ZPROP_SEEN_K)
+//Force form
+#define ZPROP_FORCE_S   0x00000800L
+#define ZPROP_FORCE_C   0x00001000L
+#define ZPROP_FORCE_K   0x00002000L
+#define ZPROP_FORCE_MASK (ZPROP_FORCE_S|ZPROP_FORCE_C|ZPROP_FORCE_K)
+
 #define TwinSkiesEtraits	avar2
 #define CarapaceXP avar1
 #define FingerprintProgress avar1
-
+#define drawnMortal avar1
+#define BorealFace avar1
+#define FFACE_EAGLE		0
+#define FFACE_FISH		1
+#define FFACE_MAN		2
+#define FFACE_ANT		3
 	long avar2;
 #define SnSd2 avar2
 #define RoSPflights avar2
@@ -344,7 +361,8 @@ struct artinstance{
 #define LAST_GSTYLE			GSTYLE_RESONANT
 #define ZerthOtyp	avar2
 #define CarapaceLevel avar2
-
+#define mortalLives avar2
+#define BorealScorn avar2
 	long avar3;
 #define SnSd3 avar3
 #define IbiteBoons avar3
@@ -357,6 +375,9 @@ struct artinstance{
 #define	ZMAT_GOLD		0x00000008L
 #define	ZMAT_PLATINUM	0x00000010L
 #define	ZMAT_MITHRIL	0x00000020L
+#define	ZMAT_COPPER	    0x00000040L
+#define	ZMAT_LEAD   	0x00000080L
+#define mortalBloodsmoke avar3
 	long avar4;
 #define SnSd3duration avar4
 #define CarapaceAura avar4
@@ -470,8 +491,9 @@ extern struct artifact * artilist;
 #define ZERTH_ART		(LAST_PROP+93)
 #define AMALGUM_ART		(LAST_PROP+94)
 #define MORGOTH         (LAST_PROP+95)
-#define SCORPION_UPGRADES  (LAST_PROP+96)
-
+#define SCORPION_UPGRADES (LAST_PROP+96)
+#define MORTAL_DRAW     (LAST_PROP+97)
+#define BOREAL_INVOKE   (LAST_PROP+98)
 
 #define MASTERY_ARTIFACT_LEVEL 20
 
@@ -689,6 +711,13 @@ extern struct artifact * artilist;
                 (m) == ART_MARAUDER_S_MAP\
             )
 
+#define is_kensei_safe_artifact(m) ( \
+				is_monk_safe_artifact(m) \
+				|| m == ART_FIRE_BRAND \
+				|| m == ART_FROST_BRAND \
+				|| is_kensei_weapon_otyp(artilist[m].otyp) \
+				|| u.role_variant == m \
+			)
 #define double_bonus_damage_artifact(m) (\
 	(m) == ART_LIMITED_MOON ||\
 	(m) == ART_SICKLE_OF_THUNDERBLASTS ||\
