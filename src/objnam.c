@@ -873,7 +873,7 @@ boolean dofull;
 			else if (obj->oeaten)
 				Strcat(buf, "partly eaten ");
 			if (obj->researched)
-				Strcat(buf, "disected ");
+				Strcat(buf, "dissected ");
 
 #if 0	/* corpses don't tell if they're stale either */
 			if (obj->otyp == EGG && obj->known && stale_egg(obj))
@@ -5261,6 +5261,7 @@ int wishflags;
 	   strncmpi(bp, "wage of", 7) &&
 	   strncmpi(bp, "wages of", 8) &&
 	   strncmpi(bp, "ring mail", 9) &&
+	   strncmpi(bp, "ringil", 6) &&
 	   strncmpi(bp, "ringed brass armor", 18) &&
 	   strncmpi(bp, "studded leather arm", 19) &&
 	   strncmpi(bp, "armor salve", 11) &&
