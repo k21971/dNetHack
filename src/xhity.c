@@ -4553,7 +4553,7 @@ int *shield_margin;
 	}
 	/* Smaug is vulnerable to stabbings */
 	if (pd->mtyp == PM_SMAUG && fired && weapon && launcher &&
-		is_stabbing(weapon) && is_ammo(weapon))
+		attack_mask(weapon, 0, 0, magr) & PIERCE && is_ammo(weapon))
 	{
 		vdef_acc += 20;
 	}
@@ -12165,9 +12165,11 @@ int vis;
 					s_suffix(mon_nam(mdef)),
 					mbodypart(mdef, BODY_SKIN));
 		}
-		if (!(breathless || dust_mask || towel || isolation_suit))
-			mdef->mgmld_throat += dmg;
-		mdef->mgmld_skin += dmg;
+		if(!isolation_suit){
+			if (!(breathless || dust_mask || towel))
+				mdef->mgmld_throat += dmg;
+			mdef->mgmld_skin += dmg;
+		}
 		return MM_HIT;
 	}break;
 	case AD_DISE:	/* damage/effect ? */
