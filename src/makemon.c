@@ -432,11 +432,7 @@ boolean goodequip;
 }
 
 STATIC_OVL void
-yochlol_initinv(mtmp, mkobjflags, faction, goodequip)
-struct monst *mtmp;
-int mkobjflags;
-int faction;
-boolean goodequip;
+yochlol_initinv(struct monst *mtmp, int mkobjflags, int faction, boolean goodequip)
 {
 	struct obj *otmp;
 	/*weapon*/
@@ -948,7 +944,7 @@ boolean goodequip;
 	break;
 	case PM_IMP:
 		if(Inhell || goodequip){
-			chance = rn2(4);
+			chance = rnd(4);
 			if(chance == 4){
 				(void)mongets(mtmp, KNIFE, mkobjflags);
 				(void)mongets(mtmp, FEDORA, mkobjflags);
@@ -1799,7 +1795,7 @@ boolean greatequip;
 			otmp->cursed = TRUE;
 			otmp->oerodeproof = TRUE;
 			otmp->spe = 5;
-			add_oprop(otmp, OPROP_BLADED);
+			add_omod(otmp, OMOD_BLADED);
 			set_material_gm(otmp, OBSIDIAN_MT);
 			(void) mpickobj(mtmp, otmp);
 		} else if(mm == PM_HEDROW_MASTER_WIZARD){
@@ -3489,6 +3485,14 @@ boolean greatequip;
 				if(is_rottable(otmp))
 					otmp->oeroded2 = 1;
 			}
+			else if(flags.aasimar_type == AASIMAR_TYPE_SERAPH){
+				otmp = mksobj_at(EYE, mtmp->mx, mtmp->my, NO_MKOBJ_FLAGS);
+				otmp->quan = 1;
+				fully_identify_obj(otmp);
+				otmp->ovar1_your_eye = TRUE;
+				set_material_gm(otmp, GEMSTONE);
+				set_submat(otmp, DIAMOND);
+			}
 		} else if (mm == PM_PATIENT){
 			otmp = mongets(mtmp, STRAITJACKET, mkobjflags);
 			if(otmp) curse(otmp);
@@ -3547,7 +3551,7 @@ boolean greatequip;
 			(void) mongets(mtmp, LEATHER_ARMOR, mkobjflags);
 			(void) mongets(mtmp, HIGH_BOOTS, mkobjflags);
 		} else if (mm == PM_PIRATE_BROTHER){
-			(void)mongets(mtmp, SCIMITAR, mkobjflags);
+			(void)mongets(mtmp, CUTLASS, mkobjflags);
 			(void)mongets(mtmp, LEATHER_ARMOR, mkobjflags);
 			(void)mongets(mtmp, HIGH_BOOTS, mkobjflags);
 			(void)mongets(mtmp, FLINTLOCK, mkobjflags);
@@ -3639,7 +3643,7 @@ boolean greatequip;
 			(void)mongets(mtmp, LOW_BOOTS, mkobjflags);
 		}
 		else if(mm == PM_DANCING_DUELIST){
-			int weaponchoices[] = {KATANA, SCIMITAR, LONG_SWORD, SABER};
+			int weaponchoices[] = {KATANA, SCIMITAR, CUTLASS, LONG_SWORD, SABER};
 			int choice = ROLL_FROM(weaponchoices);
 			for(int i = rnd(3)+2; i > 0; i--){
 				otmp = mongets(mtmp, choice, mkobjflags);
@@ -3858,7 +3862,7 @@ boolean greatequip;
 				set_material_gm(otmp, IRON);
 				otmp->obj_color = CLR_BLACK;
 				add_oprop(otmp, OPROP_LIVEW);
-				add_oprop(otmp, OPROP_PSECW);
+				add_oprop(otmp, OPROP_SECR_POSN);
 			}
 			otmp = mongets(mtmp, CHAIN, mkobjflags|MKOBJ_NOINIT);
 			if(otmp){
@@ -3866,11 +3870,11 @@ boolean greatequip;
 				set_material_gm(otmp, IRON);
 				otmp->obj_color = CLR_BLACK;
 				add_oprop(otmp, OPROP_LIVEW);
-				add_oprop(otmp, OPROP_PSECW);
+				add_oprop(otmp, OPROP_SECR_POSN);
 			}
 		} else if (mm == PM_MAYOR_CUMMERBUND){
 			int spe2;
-			otmp = mksobj(SCIMITAR, mkobjflags|MKOBJ_NOINIT);
+			otmp = mksobj(CUTLASS, mkobjflags|MKOBJ_NOINIT);
 			curse(otmp);
 			otmp->oerodeproof = TRUE;
 			spe2 = d(1,3);
@@ -4119,7 +4123,7 @@ boolean greatequip;
 				otmp = mksobj(KHAKKHARA, mkobjflags|MKOBJ_NOINIT);
 				otmp->spe = 4;
 				set_material_gm(otmp, IRON);
-				add_oprop(otmp, OPROP_BLADED);
+				add_omod(otmp, OMOD_BLADED);
 				add_oprop(otmp, OPROP_UNHYW);
 				add_oprop(otmp, OPROP_HOLYW);
 				(void) mpickobj(mtmp,otmp);
@@ -4128,7 +4132,7 @@ boolean greatequip;
 				otmp = mksobj(QUARTERSTAFF, mkobjflags|MKOBJ_NOINIT);
 				otmp->spe = 4;
 				set_material_gm(otmp, IRON);
-				add_oprop(otmp, OPROP_SPIKED);
+				add_omod(otmp, OMOD_SPIKED);
 				add_oprop(otmp, OPROP_LESSER_UNHYW);
 				add_oprop(otmp, OPROP_LESSER_HOLYW);
 				(void) mpickobj(mtmp,otmp);
@@ -4151,6 +4155,15 @@ boolean greatequip;
 		if(otmp) otmp->obj_color = CLR_YELLOW;
 		otmp = mongets(mtmp, LOW_BOOTS, mkobjflags);
 		if(otmp) otmp->obj_color = CLR_YELLOW;
+		if(flags.aasimar_type == AASIMAR_TYPE_SERAPH){
+			otmp = mksobj(EYE, NO_MKOBJ_FLAGS);
+			otmp->quan = 1;
+			fully_identify_obj(otmp);
+			otmp->ovar1_your_eye = TRUE;
+			set_material_gm(otmp, GEMSTONE);
+			set_submat(otmp, DIAMOND);
+			(void) mpickobj(mtmp, otmp);
+		}
 	} else if (mm == PM_ASHIKAGA_TAKAUJI) {
 			otmp = mksobj(HELMET, mkobjflags|MKOBJ_NOINIT);
 			otmp->spe = 4;
@@ -4658,7 +4671,7 @@ boolean goodequip;
 			if(!rn2(4))
 				otmp->spe += rnd(4); 
 			if(!rn2(10)){
-				add_oprop(otmp, rn2(2) ? OPROP_BLADED : OPROP_SPIKED);
+				add_omod(otmp, rn2(2) ? OMOD_BLADED : OMOD_SPIKED);
 			}
 
 			if(!rn2(50)){
@@ -4689,7 +4702,7 @@ boolean goodequip;
 			if(!rn2(4))
 				otmp->spe += rnd(4); 
 			if(!rn2(10)){
-				add_oprop(otmp, rn2(2) ? OPROP_BLADED : OPROP_SPIKED);
+				add_omod(otmp, rn2(2) ? OMOD_BLADED : OMOD_SPIKED);
 			}
 
 			if(!rn2(50)){
@@ -4982,7 +4995,7 @@ int mmflags;
 			break;
 			case PM_BLACKBEARD_S_GHOST:{
 				int spe2;
-				otmp = mksobj(SCIMITAR, mkobjflags|MKOBJ_NOINIT);
+				otmp = mksobj(CUTLASS, mkobjflags|MKOBJ_NOINIT);
 				curse(otmp);
 				otmp->oerodeproof = TRUE;
 				otmp->oeroded = 1;
@@ -7163,7 +7176,7 @@ int mmflags;
 						
 						(void)mongets(mtmp, BULLET, mkobjflags);
 						
-						otmp = mksobj(SCIMITAR, mkobjflags);
+						otmp = mksobj(CUTLASS, mkobjflags);
 						otmp->oeroded = 3;
 						(void) mpickobj(mtmp, otmp);
 					break;
@@ -7828,6 +7841,7 @@ int mmflags;
 			//Note: 2/3rds get confusion, this is not an error
 			(void)mongets(mtmp, rn2(3) ? POT_CONFUSION : rn2(2) ? POT_PARALYSIS : POT_HEALING, mkobjflags);
 		} else if (mm == PM_DWARF_SMITH) {
+#define RESET_OBJ_STATE(otmp) if(otmp){ otmp->oeroded = 0; otmp->oeroded2 = 0; }
 			(void)mongets(mtmp, SHOES, mkobjflags);
 			(void)mongets(mtmp, CHAIN_MAIL, mkobjflags);
 			(void)mongets(mtmp, DWARVISH_CLOAK, mkobjflags);
@@ -7863,6 +7877,7 @@ int mmflags;
 					mtmp->mhp = mtmp->mhpmax = mtmp->m_lev*hd_size(mtmp->data) - 1;
 					otmp = mksobj(ARM_BLASTER, mkobjflags);
 					if(otmp){
+						RESET_OBJ_STATE(otmp);
 						otmp->spe = 0;
 						otmp->ovar1_charges = d(5,10);
 						otmp->recharged = 4;
@@ -7871,14 +7886,16 @@ int mmflags;
 					
 					otmp = mksobj(DISKOS, mkobjflags);
 					if(otmp){
+						RESET_OBJ_STATE(otmp);
 						otmp->spe = rn1(4,4);
 						(void) mpickobj(mtmp, otmp);
 					}
 
 					otmp = mongets(mtmp, PISTOL, mkobjflags);
 					if(otmp){
+						RESET_OBJ_STATE(otmp);
 						otmp->spe = 7;
-						// add_oprop(otmp, OPROP_BLADED);
+						add_omod(otmp, OMOD_BLADED);
 						otmp = mksobj(SILVER_BULLET, mkobjflags);
 						if(otmp){
 							otmp->quan += rn1(100,100);
@@ -7890,6 +7907,7 @@ int mmflags;
 
 					otmp = mksobj(BUCKLER, mkobjflags);
 					if(otmp){
+						RESET_OBJ_STATE(otmp);
 						otmp->spe = rn1(2,2);
 						set_material_gm(otmp, PLASTIC);
 						otmp->obj_color = CLR_GRAY;
@@ -7934,7 +7952,7 @@ int mmflags;
 					if(is_prince(ptr) || (is_lord(ptr) && !rn2(3))){
 						otmp = mongets(mtmp, RIFLE, mkobjflags);
 						if(otmp)
-							add_oprop(otmp, OPROP_BLADED);
+							add_omod(otmp, OMOD_BLADED);
 						(void)mongets(mtmp, DWARVISH_MATTOCK, mkobjflags);
 					}
 					else if (!rn2(4)) {
@@ -7996,6 +8014,7 @@ int mmflags;
 				if (In_mines_quest(&u.uz) && !Is_minetown_level(&u.uz)) {
 				/* MRKR: Dwarves in dark mines have their lamps on. */
 					otmp = mksobj(DWARVISH_HELM, mkobjflags);
+					RESET_OBJ_STATE(otmp);
 					(void) mpickobj(mtmp, otmp);
 					if (!levl[mtmp->mx][mtmp->my].lit) {
 						begin_burn(otmp);
@@ -8591,7 +8610,7 @@ int mmflags;
 					otmp->opoisonchrgs = 3;
 					set_material_gm(otmp, BONE);
 					if(special){
-						add_oprop(otmp, OPROP_ASECW);
+						add_oprop(otmp, OPROP_SECR_ACID);
 						add_oprop(otmp, OPROP_LIVEW);
 					}
 					(void) mpickobj(mtmp, otmp);
@@ -9018,7 +9037,7 @@ int mmflags;
 
 								otmp = mksobj(rn2(10) ? STILETTO : TWO_HANDED_SWORD, mkobjflags|MKOBJ_ARTIF);
 								if(!rn2(10))
-									add_oprop(otmp, rn2(5) ? OPROP_PSECW : rn2(4) ? OPROP_ASECW : OPROP_LIVEW);
+									add_oprop(otmp, rn2(5) ? OPROP_SECR_POSN : rn2(4) ? OPROP_SECR_ACID : OPROP_LIVEW);
 								set_material_gm(otmp, BONE);
 								MAYBE_MERC(otmp)
 								fix_object(otmp);
@@ -9052,7 +9071,7 @@ int mmflags;
 								if(!rn2(20))
 									add_oprop(otmp, OPROP_LIVEW);
 								if(!rn2(10))
-									add_oprop(otmp, OPROP_ASECW);
+									add_oprop(otmp, OPROP_SECR_ACID);
 								if(!rn2(20))
 									add_oprop(otmp, OPROP_GOATW);
 								MAYBE_MERC(otmp)
@@ -9480,7 +9499,7 @@ int mmflags;
 								otmp = mongets(mtmp, KHAKKHARA, mkobjflags);
 								if(otmp){
 									set_material_gm(otmp, OBSIDIAN_MT);
-									add_oprop(otmp, OPROP_BLADED);
+									add_omod(otmp, OMOD_BLADED);
 									otmp->spe = 2+rn2(3);
 									otmp->oerodeproof = TRUE;
 								}
@@ -9526,7 +9545,7 @@ int mmflags;
 					//Pirate
 					case 9:
 						mtmp->mvar_deminymph_role = PM_PIRATE;
-						otmp = mksobj(SCIMITAR, mkobjflags|MKOBJ_ARTIF);
+						otmp = mksobj(CUTLASS, mkobjflags|MKOBJ_ARTIF);
 						otmp->spe = 0+rn2(4);
 						MAYBE_MERC(otmp)
 						(void) mpickobj(mtmp, otmp);
@@ -9958,7 +9977,7 @@ int mmflags;
 								add_oprop(otmp, OPROP_UNHYW);
 						}
 
-						otmp = mongets(mtmp, mtmp->female ? GENTLEMAN_S_SUIT : GENTLEWOMAN_S_DRESS, mkobjflags);
+						otmp = mongets(mtmp, mtmp->female ? GENTLEWOMAN_S_DRESS : GENTLEMAN_S_SUIT, mkobjflags);
 						if(otmp) otmp->spe = rnd(7);
 						otmp = mongets(mtmp, mtmp->female ? STILETTOS : HIGH_BOOTS, mkobjflags);
 						if(otmp) otmp->spe = rnd(7);
@@ -10626,7 +10645,7 @@ int mmflags;
 			(void) mongets(mtmp, SPEAR, mkobjflags);
 			(void) mongets(mtmp, SPEAR, mkobjflags);
 		} else if(mm == PM_SKELETAL_PIRATE){
-				otmp = rn2(2) ? mksobj(SCIMITAR, mkobjflags|MKOBJ_NOINIT) : mksobj(KNIFE, mkobjflags|MKOBJ_NOINIT);
+				otmp = rn2(2) ? mksobj(CUTLASS, mkobjflags|MKOBJ_NOINIT) : mksobj(KNIFE, mkobjflags|MKOBJ_NOINIT);
 				// curse(otmp);
 				if(otmp && is_rustprone(otmp))
 					otmp->oeroded = 1;
@@ -10669,7 +10688,7 @@ int mmflags;
 		if(mm>=PM_FIERNA) return; //Lords handled above, no random cursed stuff!
 		switch (mm) {
 			case PM_DAMNED_PIRATE:
-				otmp = mksobj(SCIMITAR, mkobjflags|MKOBJ_NOINIT);
+				otmp = mksobj(CUTLASS, mkobjflags|MKOBJ_NOINIT);
 				curse(otmp);
 				(void) mpickobj(mtmp, otmp);
 				
@@ -11779,7 +11798,7 @@ boolean greatequip;
 #define RAGE_WALKER_ITEM(otyp)	\
 			otmp = mksobj(otyp, NO_MKOBJ_FLAGS); \
 			otmp->spe = 3; \
-			add_oprop(otmp, OPROP_SPIKED); \
+			add_omod(otmp, OMOD_SPIKED); \
 			set_material_gm(otmp, IRON); \
 			curse(otmp); \
 			(void) mpickobj(mtmp, otmp);
@@ -12609,7 +12628,7 @@ boolean greatequip;
 				} else if(!rn2(6)){
 					otmp = mksobj(QUARTERSTAFF, mkobjflags|MKOBJ_ARTIF);
 					if(!rn2(10)){
-						add_oprop(otmp, OPROP_SPIKED);
+						add_omod(otmp, OMOD_SPIKED);
 					}
 					if(!rn2(10))
 						set_material_gm(otmp, METAL);
@@ -13794,9 +13813,34 @@ boolean randmonst;
 		else if(randmonst && (is_animal(ptr) || mortal_race_data(ptr)) && !(ptr->geno & G_UNIQ) && Role_if(PM_UNDEAD_HUNTER) && quest_status.moon_close && Is_astralevel(&u.uz)){
 			mkmon_template = TONGUE_PUPPET;
 		}
-		/**/
-		else if(check_preservation(PRESERVE_ROT_TRIGGER) && (mindless(ptr) || is_animal(ptr)) && (u.silvergrubs || !rn2(100))){
+		/* rotting zombies in the deep dungeon */
+		else if((check_preservation(PRESERVE_ROT_TRIGGER) || check_rot(ROT_KIN) || (Race_if(PM_SILVERKNIGHT) && In_quest(&u.uz)))
+				&& can_undead(ptr) && level_difficulty() > 13 && !rn2(u.silvergrubs ? 10 : 100)
+		){
+			mkmon_template = ROT_ZOMBIE;
+			if(check_rot(ROT_KIN)){
+				if(!u.silvergrubs && !rn2(4)){
+					set_silvergrubs(TRUE);
+				}
+				else if(u.silvergrubs && !u.silverknight_mire && !rn2(20)){
+					set_silvergrubs(FALSE);
+				}
+			}
+		}
+		/* giant monsters swollen with rot */
+		else if((check_preservation(PRESERVE_ROT_TRIGGER) || check_rot(ROT_KIN) || Race_if(PM_SILVERMAN) || (Race_if(PM_SILVERKNIGHT) && In_quest(&u.uz)))
+				&& (mindless(ptr) || is_animal(ptr)) && !is_elemental(ptr)
+				&& !unsolid(ptr) && (u.silvergrubs || !rn2(100))
+		){
 			mkmon_template = SWOLLEN_TEMPLATE;
+			if(check_rot(ROT_KIN)){
+				if(!u.silvergrubs && !rn2(4)){
+					set_silvergrubs(TRUE);
+				}
+				else if(u.silvergrubs && !u.silverknight_mire && !rn2(20)){
+					set_silvergrubs(FALSE);
+				}
+			}
 		}
 		/* Githzerai Nightmare-followed */
 		else if(Role_if(PM_KENSEI) && Race_if(PM_GITHZERAI) && art_already_exists(ART_AMALGAMATED_SKIES) && (ptr->mlet == S_NYMPH || ptr->mlet == S_PLANT)){
@@ -13832,6 +13876,8 @@ boolean randmonst;
 		){
 			if(In_mines(&u.uz)){
 				if(Race_if(PM_GNOME) && Role_if(PM_RANGER) && rn2(10) <= 5){
+					mkmon_template = ZOMBIFIED;
+				} else if(u.silverknight_mire && !rn2(8)){
 					mkmon_template = ZOMBIFIED;
 				} else if(!rn2(10)){
 					mkmon_template = ZOMBIFIED;
@@ -15587,7 +15633,7 @@ int faction;
 	
 	if (allow_minvent) {
 		if(is_yochlol(mtmp->data)){
-			yochlol_initinv(mtmp, mkobjflags, faction, goodequip, mmflags);
+			yochlol_initinv(mtmp, mkobjflags, faction, goodequip);
 		}
 		else {
 			if(is_armed_mon(mtmp))
@@ -15623,6 +15669,9 @@ int faction;
 
 	if (!in_mklev)
 	    newsym(mtmp->mx,mtmp->my);	/* make sure the mon shows up */
+
+	if (u.silverknight_mire)
+		mtmp->mmired = TRUE;
 
 	return(mtmp);
 }
@@ -17197,6 +17246,9 @@ struct monst *mtmp, *victim;
 			change_uinsight(insight);
 			// change_usanity(u_sanity_gain(victim), FALSE); //Isn't as reasuring as doing it yourself
 		}
+		if(MON_WEP(mtmp) && MON_WEP(mtmp)->oartifact == ART_STORMBRINGER && activeRune(FRUNE_HARVEST)){
+			mtmp->encouraged = max(mtmp->encouraged+1, min(victim->m_lev, mtmp->encouraged+3));
+		}
 		// mtmp killed a mummy and suffers from its curse.
 		if(attacktype_fordmg(victim->data, AT_NONE, AD_MROT)){
 			mummy_curses_x(victim, mtmp);
@@ -17296,6 +17348,12 @@ struct monst *mtmp, *victim;
 				// Now deal with any remainder
 				if (((mtmp->mhpmax+1)*(hds % 8)) / 8 >((mtmp->mhpmax)*(hds % 8)) / 8)
 					max_increase++;
+			}
+			if(mtmp->mhpmax < hp_threshold-hd_size(mtmp->data)){
+				max_increase = max_increase * ((P_SKILL(P_BEAST_MASTERY) >= P_BASIC) ? (P_SKILL(P_BEAST_MASTERY) - P_UNSKILLED + 1) : 1);
+				if(mtmp->mhpmax + max_increase > hp_threshold - hd_size(mtmp->data))
+					max_increase = hp_threshold - hd_size(mtmp->data) - mtmp->mhpmax;
+				if(max_increase < 1) max_increase = 1; //Should be impossible.
 			}
 			cur_increase = max_increase;
 			if(mtmp->mtame){
@@ -17571,6 +17629,16 @@ int mkobjflags;
 		if (is_mplayer(mtmp->data) && is_sword(otmp)) {
 			otmp->spe = (3 + rn2(4));
 		}
+		if (is_dwarf(mtmp->data)) {
+			otmp->oeroded = 0;
+			otmp->oeroded2 = 0;
+			if(mtmp->mtyp == PM_DWARF_SMITH || mtmp->mtyp == PM_DWARF_KING || mtmp->mtyp == PM_DWARF_QUEEN){
+				if(otmp->cursed){
+					otmp->cursed = FALSE;
+					otmp->spe = max(-1*otmp->spe, otmp->spe);
+				}
+			}
+		}
 		fix_object(otmp);
 
 		if (otmp->otyp == CANDELABRUM_OF_INVOCATION) {
@@ -17750,6 +17818,8 @@ peace_minded(struct monst *mon)
 	if(is_undead(mon->data) && mindless_mon(mon) && check_preservation(PRESERVE_DEAD_TRUCE)) return TRUE;
 	
 	if(rot_monster(mon) && check_rot(ROT_TRUCE)) return TRUE;
+
+	if(mon->mtyp == PM_SILVERKNIGHT && Race_if(PM_SILVERKNIGHT) && u.ualign.record > 0) return TRUE;
 	
 	if(Race_if(PM_DROW) && 
 		((ual == A_CHAOTIC && (!Role_if(PM_NOBLEMAN) || flags.initgend)) || (ual == A_NEUTRAL && !flags.initgend)) && /*Males can be neutral or chaotic, but a chaotic male nobleman converted to a different god*/
@@ -17816,6 +17886,10 @@ peace_minded(struct monst *mon)
 	}
 	if (mndx==PM_APOLLYON && u.ualign.record >= 0 && sgn(mal) == sgn(ual)) return TRUE;
 	if (mndx==PM_OONA && u.ualign.record >= 20 && u.ualign.sins < 10 && sgn(mal) == sgn(ual)) return TRUE;
+
+	if ((is_eladrin(mon->data) || mon->mtyp == PM_LILLEND) && u.ualign.record >= 20 && flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE) return TRUE;
+	
+	if (is_alabaster_elf(mon->data) && flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE) return TRUE;
 	
 	//Always hostility, with exception for vampireness and law quest insects
 	if (always_hostile(mon->data) && 
@@ -18158,7 +18232,7 @@ struct permonst *ptr;
 	if(ptr->mtyp == PM_SECRET_WHISPERER || ptr->mtyp == PM_TRUTH_SEER 
 	|| ptr->mtyp == PM_DREAM_EATER || ptr->mtyp == PM_VEIL_RENDER
 	)
-		lev_limit = min(45, u.uinsight);
+		lev_limit = min(45, Insight);
 
 	if (lev_limit_30(ptr)) lev_limit = 30;	/* same as player */
 	else if (lev_limit_45(ptr)) lev_limit = 45;

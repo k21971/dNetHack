@@ -52,3 +52,5 @@ desktop.ini
 .DS_STORE
 dnethackdir
 mat
+*.md
+*.json

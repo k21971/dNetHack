@@ -134,6 +134,12 @@ struct Role {
 #define SA_CHIROPTERAN	0x00000100L
 #define SA_YUKI_ONNA	0x00000200L
 #define SA_GITH			0x00000400L
+#define SA_FORMIAN		0x00000800L
+#define SA_CENTAUR		0x00001000L
+#define SA_DRIDER		0x00002000L
+#define SA_SILVERMAN	0x00004000L
+#define SA_TIEFLING		0x00008000L
+#define SA_AASIMAR		0x00010000L
 	short allow;		/* bit mask of allowed variations */
 #define ROLE_GENDMASK	0xf000		/* allowable genders */
 #define ROLE_MALE	0x1000
@@ -183,7 +189,7 @@ extern struct Role urole;
 #define Role_switch	(urole.malenum)
 /* also used to see if you're allowed to eat cats and dogs */
 #define CANNIBAL_ALLOWED() (Role_if(PM_CAVEMAN) || Race_if(PM_ORC) || \
-		Race_if(PM_VAMPIRE))
+		Race_if(PM_VAMPIRE) || Race_if(PM_SILVERMAN))
 
 
 /* used during initialization for race, gender, and alignment
@@ -218,6 +224,7 @@ struct Race {
 	const char *adj;	/* adjective ("human", "elven") */
 	const char *coll;	/* collective ("humanity", "elvenkind") */
 	const char *filecode;	/* code for filenames */
+	char lettercode;	/* code for the start menues */
 	struct RoleName individual; /* individual as a noun ("man", "elf") */
 
 	/*** Indices of important monsters and objects ***/
@@ -261,6 +268,10 @@ extern struct Race urace;
 #define Race_if(X)	(urace.malenum == (X))
 #define Race_switch	(urace.malenum)
 #define youracedata	(maybe_polyd(youmonst.data, &mons[urace.malenum]))
+/* All drow-derived player races: update this macro when adding a new drow variant */
+#define RACE_IF_DROW	(Race_if(PM_DROW) || Race_if(PM_DRIDER) || Race_if(PM_DARK_FEY_RI) || Race_if(PM_DOKKIMAR))
+/* Drow variants with the drow myrkalfr branch included */
+#define RACE_IF_DROW_MYRKALFR	(Race_if(PM_DROW) || Race_if(PM_MYRKALFR) || Race_if(PM_DRIDER) || Race_if(PM_DARK_FEY_RI) || Race_if(PM_DOKKIMAR))
 #define Humanoid_half_dragon(role)	(Role_if(PM_MADMAN) || (Role_if(PM_NOBLEMAN) && flags.initgend))
 
 /*** Unified structure specifying gender information ***/
@@ -565,6 +576,9 @@ struct you {
 #define MATTK_WHISPER    	30
 #define MATTK_KI    		31
 #define MATTK_UPGRADE    	32
+#define MATTK_MUTATION    	33
+#define MATTK_SILVERMAN_THREADS	34
+#define MATTK_SILVERMAN_GLAIVE	35
 
 	struct attribs	macurr,		/* for monster attribs */
 			mamax;		/* for monster attribs */
@@ -942,6 +956,9 @@ struct you {
 		}\
 	}
 	Bitfield(silvergrubs, 1);
+	Bitfield(silverknight_mire, 1);
+	Bitfield(dash, 1);
+	Bitfield(dash_cooldown, 1);
 
 	uchar 	wimage;		/* to record if you have the image of a Weeping Angel in your mind */
 	int 	umorgul;	/* to record the number of morgul wounds */
@@ -954,6 +971,7 @@ struct you {
 	boolean pethped;
 #ifdef STEED
 	struct monst *usteed;
+	struct monst *urider;
 	long ugallop;
 	int urideturns;
 #endif
@@ -1121,6 +1139,16 @@ struct you {
 	long thoughts;
 #define MAX_GLYPHS (((Role_if(PM_MADMAN) && u.uevent.qcompleted && (Insight >= 20 || u.render_thought)) || Role_if(PM_UNDEAD_HUNTER)) ? 4 : 3)
 	long mutations[MUTATION_LISTSIZE];
+	int next_tiefling_mutation;
+	int next_mutation_level;
+	char seraph_eyes;
+#define SE_SUN 1
+#define SE_INVIS 2
+#define SE_HIDDEN 3
+#define SE_CURSES 4
+#define SE_MAGIC 5
+#define SE_ALL 6
+#define SE_FUTURE 7
 };	/* end of `struct you' */
 
 #define uclockwork ((Race_if(PM_CLOCKWORK_AUTOMATON) && !Upolyd) || (Upolyd && youmonst.data->mtyp == PM_CLOCKWORK_AUTOMATON))

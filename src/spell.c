@@ -32,9 +32,6 @@ STATIC_DCL int FDECL(dospiritmenu, (int, int *, int));
 STATIC_DCL boolean FDECL(dospellmenu, (int,int *));
 STATIC_DCL void FDECL(describe_spell, (int));
 STATIC_DCL int NDECL(throwspell);
-STATIC_DCL void NDECL(cast_protection);
-STATIC_DCL void NDECL(cast_abjuration);
-STATIC_DCL void FDECL(cast_mass_healing, (struct obj *));
 STATIC_DCL boolean FDECL(sightwedge, (int,int, int,int, int,int));
 STATIC_DCL void FDECL(spell_backfire, (int));
 STATIC_DCL int FDECL(spellhunger, (int));
@@ -898,7 +895,8 @@ run_maintained_spells()
 
 		/* We can't use spellname() but need to use OBJ_NAME directly, because
 		   amnesia can delete any trace of spell index... */
-		if (!knows_spell || spellknow(spell_index) <= 0 || Confusion) {
+		update_externally_granted_spells();
+		if (!knows_spell || spellknow(spell_index) <= 0 || spellext(spell_index) || Confusion) {
 			pline("You can no longer maintain %s.",
 				  OBJ_NAME(objects[spell]));
 			spell_unmaintain(spell);
@@ -1717,7 +1715,7 @@ int booktype;
 	return (objects[booktype].oc_skill);
 }
 
-STATIC_OVL void
+void
 cast_protection()
 {
 	int loglev = 0;
@@ -1787,7 +1785,7 @@ cast_protection()
  * If they fail, they are immediately dispelled.
  * If they suceeed, non-permanent summons' durations are halved.
  */
-STATIC_OVL void
+void
 cast_abjuration()
 {
 	struct monst * mtmp;
@@ -1842,9 +1840,8 @@ genericptr_t arg;
 		bhitm(mtmp, (struct obj *)arg);
 }
 
-STATIC_OVL void
-cast_mass_healing(otmp)
-struct obj * otmp;
+void
+cast_mass_healing(struct obj * otmp)
 {
 	int radius = 2 + P_SKILL(P_HEALING_SPELL) + !!Spellboost;
 	do_clear_area(u.ux, u.uy, radius, cast_extra_healing_at, (genericptr_t)otmp);
@@ -2145,6 +2142,9 @@ stargate()
 	} else {
 	if(u.usteed && mon_has_amulet(u.usteed)){
 		dismount_steed(DISMOUNT_VANISHED);
+	}
+	if(u.urider && mon_has_amulet(u.urider)){
+		rider_dismounts_you(DISMOUNT_VANISHED);
 	}
 	if(!Blind) You("are surrounded by a shimmering sphere!");
 	else You_feel("weightless for a moment.");
@@ -4871,6 +4871,7 @@ dothrowspell:
 					int adtype = spell_adtype(pseudo->otyp);
 					if(GoatSpell && !GOAT_BAD){
 						spell_flags |= GOAT_SPELL;
+						dam += d(dice, 4);
 						switch(adtype){
 							case AD_FIRE:
 								adtype = AD_EFIR;
@@ -6209,7 +6210,7 @@ int spell;
 			splcaster -= urole.spelarmr;
 		} The staff is already +4 to all attack spells, a bonus to drain life is probably overkill */
 
-		if (uwep->otyp == SHEPHERD_S_CROOK) {	// a tool for leading and manipulating things
+		if (has_crook(uwep)) {	// a tool for leading and manipulating things
 			cast_bon = 0;
 			if (spell_skilltype(spellid(spell)) == P_ENCHANTMENT_SPELL)
 				cast_bon += 2;
@@ -6365,6 +6366,11 @@ int spell;
 	skill = P_SKILL(spell_skilltype(spellid(spell)));
 	skill = max(skill,P_UNSKILLED) - 1;	/* unskilled => 0 */
 	difficulty= (spellev(spell)-1) * 4 - ((skill * 6) + (u.ulevel/3) + 1);
+	if(check_mutation(TT_EXTRA_FINGERS)){
+		splcaster -= urole.spelarmr;
+		difficulty -= 3;
+	}
+
 
 	if(difficulty > 0) {
 		/* Player is too low level or unskilled. */

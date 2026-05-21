@@ -216,6 +216,8 @@ struct monst {
 	Bitfield(mtecpatlmarked,1); /* the Tecpatl of Huehueteotl can sacrifice low-enough-health monsters */ /*150*/
 	Bitfield(mpunctured,4); /* This monster may take double damage from puncture attacks */ /*154*/
 	Bitfield(mprobed,1); /* monster has been probed by Magicbane et al, will display at end of attack if it lives */ /*155*/
+	Bitfield(mmired,1); /* monster was created in the mire */ /*156*/
+	Bitfield(mnopickup,1); /* pet will leave items on the ground */ /*157*/
 
 	unsigned long long int 	seenmadnesses;	/* monster has seen these madnesses */
 	
@@ -240,7 +242,8 @@ struct monst {
 #define noactions(mon)	((mon)->entangled_oid || imprisoned(mon))
 #define nonthreat(mon)	(imprisoned(mon) || has_template(mon, PLAGUE_TEMPLATE))
 #define helpless(mon) (mon->msleeping || !(mon->mcanmove) || !(mon->mnotlaugh) || noactions(mon))	
-#define helpless_still(mon) (mon->msleeping || !(mon->mcanmove) || noactions(mon))	
+#define helpless_still(mon) (mon->msleeping || !(mon->mcanmove) || noactions(mon))
+#define nonthreat_ful(mon) (mon->mpeaceful || nonthreat(mon))
 	long mstrategy;		/* for monsters with mflag3: current strategy */
 #define STRAT_ARRIVE	0x40000000L	/* just arrived on current level */
 #define STRAT_WAITFORU	0x20000000L
@@ -331,7 +334,8 @@ struct monst {
 #define FLAYED			35	/* flayed undead */
 #define MANITOU			36	/* vampire vine infestation */
 #define GUECUBU			37	/* sleeping murderer */
-#define MAXTEMPLATE	GUECUBU
+#define ROT_ZOMBIE		38	/* rot zombie */
+#define MAXTEMPLATE	ROT_ZOMBIE
 
 //define	HALF_DEMON	FACTION_PADDING+1	/* half-demon  ??? */
 //define	HALF_DEVIL	FACTION_PADDING+2	/* half-devil  ??? */
@@ -390,6 +394,7 @@ struct monst {
 #define	mvar_spellweaver_count	mvar1
 #define	mvar1_tettigon_uncancel	mvar1
 #define	mvar1_afreet_lastsaw	mvar1
+#define mvar1_halo_sec_element	mvar1
 	long mvar2;
 #define	mvar_dracaePregTimer	mvar2
 #define	mvar_spList_2	mvar2

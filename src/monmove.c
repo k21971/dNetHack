@@ -512,14 +512,14 @@ struct monst *mtmp;
 #endif /* OVL2 */
 #ifdef OVL0
 
-/* regenerate lost hit points */
-void
+/* regenerate lost hit points; returns TRUE if mon died */
+boolean
 mon_regen(mon, digest_meal)
 struct monst *mon;
 boolean digest_meal;
 {
 	if(mon->mtrapped && t_at(mon->mx, mon->my) && t_at(mon->mx, mon->my)->ttyp == VIVI_TRAP)
-		return;
+		return FALSE;
 	
 	if(mon->mtame && u.ufirst_life && mon->mhp < mon->mhpmax)
 		mon->mhp++;
@@ -576,7 +576,7 @@ boolean digest_meal;
 					pline("%s is sliced to ribbons in %s struggles!", Monnam(mon), hisherits(mon));
 				mondied(mon);
 				if(DEADMONSTER(mon))
-					return; //Didn't lifesave
+					return TRUE; //Didn't lifesave
 			}
 		}
 		entangle_effects(mon);
@@ -597,14 +597,14 @@ boolean digest_meal;
 			}
 			if(mon->mhp <= 0){
 				monkilled(mon, "gas cloud", AD_DRST);
-				if(mon->mhp <= 0) return;	/* not lifesaved */
+				if(mon->mhp <= 0) return TRUE;	/* not lifesaved */
 			}
 		} else {
 			/* NB: Amphibious includes Breathless */
 			mon->mhp -= rnd(6);
 			if(mon->mhp <= 0){
 				monkilled(mon, "suffocating cloud", AD_DRST);
-				if(mon->mhp <= 0) return;	/* not lifesaved */
+				if(mon->mhp <= 0) return TRUE;	/* not lifesaved */
 			}
 		}
 	}
@@ -618,7 +618,7 @@ boolean digest_meal;
 		if(Half_spel(mon))
 			dmg = (dmg+1) / 2;
 		if(m_losehp(mon, dmg, FALSE, "fevered dreams"))
-			return; //Died.
+			return TRUE; //Died.
 		if(!mon->msleeping && !resists_sleep(mon)){
 			mon->msleeping = 1;
 			slept_monst(mon);
@@ -654,6 +654,7 @@ boolean digest_meal;
 	if(!DEADMONSTER(mon) && Role_if(PM_CONVICT) && quest_status.killed_nemesis){
 		if(has_template(mon, FLAYED)){
 			mondied(mon);
+			degenerating = TRUE;
 		}
 		else if(mon->mtyp == PM_CUBOID || mon->mtyp == PM_RHOMBOHEDROID){
 			m_losehp(mon, 1, FALSE, "hemhorage");
@@ -680,9 +681,33 @@ boolean digest_meal;
 			mon->mubled = FALSE;
 	}
 
+	/*Breaking wheel damages its wielder*/
+	if(!DEADMONSTER(mon)){
+		int wheel_drain = 0;
+		if(MON_WEP(mon) && MON_WEP(mon)->otyp == BREAKING_WHEEL)
+			wheel_drain += MON_WEP(mon)->ovar1_wheelspeed;
+		if(MON_SWEP(mon) && MON_SWEP(mon)->otyp == BREAKING_WHEEL)
+			wheel_drain += MON_SWEP(mon)->ovar1_wheelspeed;
+		if(wheel_drain > 0){
+			int halvings = 0;
+			if(Magic_res(mon) || resist(mon, WEAPON_CLASS, 0, NOTELL))
+				halvings++;
+			if(hates_holy_mon(mon) && !hates_unholy_mon(mon))
+				halvings++;
+			wheel_drain = wheel_drain * max(0, 2 - halvings) / 2;
+			if(hates_unholy_mon(mon) && !hates_holy_mon(mon))
+				wheel_drain = wheel_drain * 3 / 2;
+			if(wheel_drain > 0){
+				if(m_losehp(mon, wheel_drain, FALSE, "the breaking wheel"))
+					return TRUE;
+				degenerating = TRUE;
+			}
+		}
+	}
+
 	/*Early return to block regen*/
 	if(degenerating)
-		return;
+		return DEADMONSTER(mon);
 
 
 	//Normal healing cases
@@ -759,7 +784,7 @@ boolean digest_meal;
 			mon->mhp += 1;
 	}
 	mon->mhp = min(mon->mhpmax, mon->mhp);
-	
+	return FALSE;
 }
 
 /*
@@ -903,7 +928,7 @@ int *inrange, *nearby, *scared;
 	
 	if(mtmp->mtyp == PM_DAUGHTER_OF_BEDLAM && !rn2(20)) *scared = TRUE;
 	else if(mtmp->mtyp == PM_CARCOSAN_COURTIER && *nearby && !mtmp->mflee && (Insight < 25 || mtmp->m_id%2)) *scared = TRUE;
-	else if(*nearby && !mtmp->mflee && fleetflee(mtmp->data) && (mtmp->data->mmove > youracedata->mmove || noattacks(mtmp->data))) *scared = TRUE;
+	else if(*nearby && !mtmp->mflee && fleetflee(mtmp->data) && !mtmp->mtame && (mtmp->data->mmove > youracedata->mmove || noattacks(mtmp->data))) *scared = TRUE;
 	
 	if(*scared) {
 		if (rn2(7))
@@ -1115,7 +1140,7 @@ register struct monst *mtmp;
 				familliar->mvar_witchID = (long)mtmp->m_id;
 				familliar->mpeaceful = mtmp->mpeaceful;
 				if(mtmp->mtame){
-					familliar = tamedog_core(familliar, (struct obj *)0, TRUE);
+					familliar = tamedog_core(familliar, (struct obj *)0, TD_ENHANCED);
 				}
 				//Stop running
 				if(mtmp->mflee && mtmp->mhp > mtmp->mhpmax/2){
@@ -1511,6 +1536,7 @@ register struct monst *mtmp;
 		&& !(noactions(mtmp))
 		&& !(mtmp->mpeaceful && !mtmp->mtame) /*Don't telespam the player if peaceful*/
 		&& !(mtmp == u.usteed) /*Steeds can't use tactics*/
+		&& !(mtmp == u.urider)
 	) (void) tactics(mtmp);
 	
 	if(mdat->mtyp == PM_GREAT_CTHULHU && !rn2(20)){
@@ -1837,16 +1863,13 @@ register struct monst *mtmp;
 							if((!armor || !arm_blocks_upper_body(armor->otyp)) && (!under || !arm_blocks_upper_body(under->otyp)) && helpless_still(tmon)){
 								pline("%s extracts the fang from %s heart!", Monnam(mtmp), s_suffix(mon_nam(tmon)));
 								set_template(tmon, 0);
-								struct monst *newmon = tamedog_core(tmon, (struct obj *)0, TRUE);
+								struct monst *newmon = tamedog_core(tmon, (struct obj *)0, TD_ENHANCED|TD_LOYAL);
 								if(newmon){
 									tmon = newmon;
 									newsym(tmon->mx, tmon->my);
 									tmon->mpeaceful = mtmp->mpeaceful;
 									if(mtmp->mtame){
 										pline("%s comes to %s senses, and is incredibly grateful for the aid!", Monnam(tmon), mhis(tmon));
-										if(get_mx(tmon, MX_EDOG)){
-											EDOG(tmon)->loyal = 1;
-										}
 									}
 								}
 							}
@@ -3220,7 +3243,7 @@ postmov:
 		    struct rm *here = &levl[mtmp->mx][mtmp->my];
 		    boolean btrapped = (here->doormask & D_TRAPPED);
 
-		    if(here->doormask & (D_LOCKED|D_CLOSED) && amorphous(ptr)) {
+		    if(here->doormask & (D_LOCKED|D_CLOSED) && amorphous_mon(mtmp)) {
 			if (flags.verbose && canseemon(mtmp))
 			    pline("%s %s under the door.", Monnam(mtmp),
 				  (ptr->mtyp == PM_FOG_CLOUD ||
@@ -3285,7 +3308,7 @@ postmov:
 			    add_damage(mtmp->mx, mtmp->my, 0L);
 		    }
 		} else if (levl[mtmp->mx][mtmp->my].typ == IRONBARS && !Is_illregrd(&u.uz)) {
-		    if ( (dmgtype(ptr,AD_RUST) && ptr->mtyp != PM_NAIAD) || dmgtype(ptr,AD_CORR)) {
+		    if ( (dmgtype(ptr,AD_RUST) && ptr->mtyp != PM_NAIAD) || dmgtype(ptr,AD_CORR) || ptr->mtyp == PM_GELATINOUS_CUBE) {
 				if (canseemon(mtmp)) {
 					pline("%s eats through the iron bars.", 
 					Monnam(mtmp)); 
@@ -3549,7 +3572,7 @@ struct monst *mtmp;
 {
 	struct obj *chain, *obj;
 
-	if (!amorphous(mtmp->data)) return FALSE;
+	if (!amorphous_mon(mtmp)) return FALSE;
 	if (mtmp == &youmonst) {
 #ifndef GOLDOBJ
 		if (u.ugold > 100L) return FALSE;

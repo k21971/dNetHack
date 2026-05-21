@@ -274,7 +274,7 @@ boolean talk;
 		if (!haseyes(youracedata)) {
 		    strange_feeling((struct obj *)0, (char *)0);
 		} else if (Blindfolded) {
-		    Strcpy(buf, body_part(EYE));
+		    Strcpy(buf, body_part(EYE_BP));
 		    eyecnt = eyecount(youracedata);
 		    Your(eyemsg, (eyecnt == 1) ? buf : makeplural(buf),
 			 (eyecnt == 1) ? "itches" : "itch");
@@ -300,7 +300,7 @@ boolean talk;
 		if (!haseyes(youracedata)) {
 		    strange_feeling((struct obj *)0, (char *)0);
 		} else if (Blindfolded) {
-		    Strcpy(buf, body_part(EYE));
+		    Strcpy(buf, body_part(EYE_BP));
 		    eyecnt = eyecount(youracedata);
 		    Your(eyemsg, (eyecnt == 1) ? buf : makeplural(buf),
 			 (eyecnt == 1) ? "twitches" : "twitch");
@@ -352,7 +352,7 @@ long mask;	/* nonzero if resistance status should change by mask */
 		    char buf[BUFSZ];
 		    int eyecnt = eyecount(youracedata);
 
-		    Strcpy(buf, body_part(EYE));
+		    Strcpy(buf, body_part(EYE_BP));
 		    Your(eyemsg, (eyecnt == 1) ? buf : makeplural(buf),
 			 (eyecnt == 1) ? "itches" : "itch");
 		} else {	/* Grayswandir */
@@ -417,7 +417,7 @@ dodrink()
 		return MOVE_INSTANT;
 	}
 
-	if (Strangled && !separate_respiration(youracedata)) {
+	if (Strangled && !Separate_Respiration) {
 		if(youmonst.mgmld_throat < 400){
 			pline("If you can't breathe air, how can you drink liquid?");
 			return MOVE_INSTANT;
@@ -425,12 +425,23 @@ dodrink()
 		booze_only = TRUE;
 	}
 	
-	if (uarmh && FacelessHelm(uarmh) && ((uarmh->cursed && !Weldproof) || !freehand())){
+	if (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd){
+		if(uarmg && ((uarmg->cursed && !Weldproof) || !freehand())){
+			if(Insight < 21){
+				You("can't drink while wearing gloves.");
+			} else {
+				pline("The mouths on your palms are covered by your gloves.");
+			}
+			display_nhwindow(WIN_MESSAGE, TRUE);    /* --More-- */
+			return MOVE_CANCELLED;
+		}
+	}
+	else if (uarmh && FacelessHelm(uarmh) && ((uarmh->cursed && !Weldproof) || !freehand())){
 		pline("The %s covers your whole face.", xname(uarmh));
 		display_nhwindow(WIN_MESSAGE, TRUE);    /* --More-- */
 		return MOVE_INSTANT;
 	}
-	if (uarmc && FacelessCloak(uarmc) && ((uarmc->cursed && !Weldproof) || !freehand())){
+	else if (uarmc && FacelessCloak(uarmc) && ((uarmc->cursed && !Weldproof) || !freehand())){
 		pline("The %s covers your whole face.", xname(uarmc));
 		display_nhwindow(WIN_MESSAGE, TRUE);    /* --More-- */
 		return MOVE_INSTANT;
@@ -643,7 +654,7 @@ boolean force;
 		if(otmp->cursed){
 			if(u.usanity > 0)
 				change_usanity(-1, TRUE);
-			if(u.uinsight > 0)
+			if(Insight > 0)
 				change_uinsight(-1);
 			exercise(A_WIS, FALSE);
 			exercise(A_INT, FALSE);
@@ -794,7 +805,7 @@ boolean force;
 	break;
 	case POT_BOOZE:
 		unkn++;
-		if(Strangled && !separate_respiration(youracedata)){
+		if(Strangled && !Separate_Respiration){
 			pline("The liquid almost pours out of your mouth, but you feel the obstruction in your throat suddenly ease!");
 		}
 		if(uclockwork){ /* Note: Does not include Androids */
@@ -840,7 +851,7 @@ boolean force;
 		}
 		//Booze kills gray mold
 		if(youmonst.mgmld_throat){
-			if(!separate_respiration(youracedata)){
+			if(!Separate_Respiration){
 				//Direct exposure kills all mold spores
 				youmonst.mgmld_throat = 0;
 			}
@@ -1170,7 +1181,7 @@ boolean force;
 			   otmp->blessed, !otmp->cursed);
 		exercise(A_CON, TRUE);
 		//Healing makes mold worse
-		if(!separate_respiration(youracedata) && youmonst.mgmld_throat){
+		if(!Separate_Respiration && youmonst.mgmld_throat){
 			You("feel the obstruction in your throat grow larger.");
 			youmonst.mgmld_throat += 10;
 		}
@@ -1189,7 +1200,7 @@ as_extra_healing:
 		exercise(A_CON, TRUE);
 		exercise(A_STR, TRUE);
 		//Healing makes mold worse
-		if(!separate_respiration(youracedata) && youmonst.mgmld_throat){
+		if(!Separate_Respiration && youmonst.mgmld_throat){
 			You("feel the obstruction in your throat grow much larger.");
 			youmonst.mgmld_throat += 100;
 		}
@@ -1229,7 +1240,7 @@ as_extra_healing:
 		exercise(A_STR, TRUE);
 		exercise(A_CON, TRUE);
 		//Healing makes mold worse
-		if(!separate_respiration(youracedata) && youmonst.mgmld_throat){
+		if(!Separate_Respiration && youmonst.mgmld_throat){
 			You("feel the obstruction in your throat grow alarmingly large.");
 			youmonst.mgmld_throat += 200;
 		}
@@ -2167,7 +2178,7 @@ register struct obj *obj;
 		    else if (haseyes(youracedata)) {
 			int numeyes = eyecount(youracedata);
 			Your("%s sting%s!",
-			     (numeyes == 1) ? body_part(EYE) : makeplural(body_part(EYE)),
+			     (numeyes == 1) ? body_part(EYE_BP) : makeplural(body_part(EYE_BP)),
 			     (numeyes == 1) ? "s" : "");
 		    }
 		    break;

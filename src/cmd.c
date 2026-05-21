@@ -37,6 +37,8 @@ extern int NDECL(dojump); /**/
 extern int NDECL(docome); /**/
 extern int NDECL(dodropall); /**/
 extern int NDECL(dopassive); /**/
+extern int NDECL(dodash); /**/
+extern int NDECL(dopets); /**/
 extern int NDECL(doextlist); /**/
 extern int NDECL(doattack); /**/
 extern int NDECL(dodrop); /**/
@@ -570,7 +572,7 @@ boolean you_abilities;
 			add_ability('a', "Use your armor's breath weapon", MATTK_DSCALE);
 		}
 	}
-	if (mon_abilities && (is_were(youracedata) || gates_in_help(youracedata))){
+	if (mon_abilities && (is_were(youracedata) || gates_in_help(youracedata) || check_mutation(TT_WANDERING_SHADOW))){
 		/* shared letter; assumes a polyform will only be one or the other */
 		add_ability('A', "Summon aid", MATTK_SUMM);
 	}
@@ -595,8 +597,11 @@ boolean you_abilities;
 	if (you_abilities && hasfightingforms() > 0) {	/* I can't wait until fighting forms are mainstream */
 		add_ability('F', "Pick a fighting form", MATTK_U_STYLE);
 	}
-	if (mon_abilities && (attacktype(youracedata, AT_GAZE) || (!Upolyd && check_vampire(VAMPIRE_GAZE)))){
+	if (mon_abilities && (attacktype(youracedata, AT_GAZE) || (!Upolyd && check_vampire(VAMPIRE_GAZE)) || (!Upolyd && TIEFLING_GAZE))) {
 		add_ability('g', "Gaze at something", MATTK_GAZE);
+	}
+	if (mon_abilities && (!Upolyd && MISC_TIEFLING_ABILITY)){
+		add_ability('G', "Tiefling abilities", MATTK_MUTATION);
 	}
 	if (mon_abilities && is_hider(youracedata)){
 		add_ability('h', "Hide", MATTK_HIDE);
@@ -628,7 +633,7 @@ boolean you_abilities;
 	if (mon_abilities && u.umonnum == PM_GREMLIN){
 		add_ability('R', "Replicate yourself", MATTK_REPL);
 	}
-	if (mon_abilities && attacktype(youracedata, AT_SPIT)){
+	if (mon_abilities && (attacktype(youracedata, AT_SPIT) || check_mutation(TT_BLINDING_VENOM))){
 		add_ability('s', "Spit", MATTK_SPIT);
 	}
 	if (mon_abilities && (youracedata->msound == MS_SHRIEK || youracedata->msound == MS_SHOG)){ //player can't speak elder thing.
@@ -652,7 +657,7 @@ boolean you_abilities;
 	if (mon_abilities && is_vampire(youracedata) && u.ulevel > 1){
 		add_ability('V', "Raise a vampiric minion", MATTK_VAMP);
 	}
-	if (mon_abilities && webmaker(youracedata)){
+	if (mon_abilities && (webmaker(youracedata) || check_mutation(TT_WEBS))){
 		add_ability('w', "Spin a web", MATTK_WEBS);
 	}
 	if (Role_if(PM_MADMAN) && u.whisperturn < moves && !Catapsi && !DimensionalLock){
@@ -663,6 +668,12 @@ boolean you_abilities;
 	}
 	if (you_abilities && spellid(0) != NO_SPELL) {
 		add_ability('z', "Cast spells", MATTK_U_SPELLS);
+	}
+	if (mon_abilities && youracedata->mtyp == PM_SILVERMAN && u.uen >= 19 && uwep && uwep->otyp == PEST_GLAIVE) {
+		add_ability('P', "Launch pest threads", MATTK_SILVERMAN_THREADS);
+	}
+	if (mon_abilities && Race_if(PM_SILVERMAN) && !Upolyd && u.ulevel >= 14 && !carrying(PEST_GLAIVE) && u.uhunger >= 600) {
+		add_ability('P', "Create a pest glaive", MATTK_SILVERMAN_GLAIVE);
 	}
 	if (mon_abilities && attacktype(youracedata, AT_MAGC)){
 		add_ability('Z', "Cast a monster spell", MATTK_MAGIC);
@@ -728,15 +739,16 @@ boolean you_abilities;
 //	                   &youracedata->mattk[attackindex(youracedata, 
 //			                         AT_MAGC,AD_ANY)]);
 	case MATTK_REMV: return doremove();
-	case MATTK_GAZE: return dogaze();
+	case MATTK_GAZE: return dogaze(NULL);
 	case MATTK_TNKR: return dotinker();
-	case MATTK_SUMM: return (is_were(youracedata) ? dosummon() : dodemonpet());
+	case MATTK_SUMM: return (check_mutation(TT_WANDERING_SHADOW) ? dosummonshade() : is_were(youracedata) ? dosummon() : dodemonpet());
 	case MATTK_VAMP: return dovampminion();
 	case MATTK_WEBS: return dospinweb();
 	case MATTK_HIDE: return dohide();
 	case MATTK_MIND: return domindblast();
 	case MATTK_CLOCK: return doclockspeed();
 	case MATTK_DROID: return doandroid();
+	case MATTK_MUTATION: return domutation();
 	case MATTK_DARK: return dodarken();
 	case MATTK_REPL: {
 	    if(IS_FOUNTAIN(levl[u.ux][u.uy].typ)) {
@@ -835,6 +847,53 @@ boolean you_abilities;
 	}
 	break;
 	case MATTK_REACH: return use_reach_attack();
+	break;
+	case MATTK_SILVERMAN_THREADS: {
+		struct attack fake_attk;
+		struct monst *mtmp;
+		coord cc;
+
+		if (u.uen < 19) {
+			pline("You don't have enough energy.");
+			return MOVE_CANCELLED;
+		}
+		cc.x = u.ux; cc.y = u.uy;
+		pline("Where do you want to strike?");
+		if (getpos(&cc, TRUE, "the target") < 0)
+			return MOVE_CANCELLED;
+		mtmp = m_at(cc.x, cc.y);
+		if (!mtmp) {
+			pline("Sticky threads whizz through empty %s.", Underwater ? "water" : "air");
+			return MOVE_STANDARD;
+		}
+		u.uen -= 19;
+		morehungry(19*2);
+		flags.botl = 1;
+		memset(&fake_attk, 0, sizeof(fake_attk));
+		fake_attk.aatyp = AT_MMGC;
+		fake_attk.adtyp = AD_CLRC;
+		u.lastcast = monstermoves + 3;
+		u.bladesong = monstermoves + 3;
+		cast_spell(&youmonst, mtmp, &fake_attk, PEST_THREADS, cc.x, cc.y);
+		return MOVE_CASTSPELL;
+	}
+	break;
+	case MATTK_SILVERMAN_GLAIVE: {
+		struct obj *otmp;
+
+		pline("You employ the secret arts of your kind, creating an uncanny shell glaive.");
+		losexp("drawing a pest glaive", FALSE, TRUE, TRUE);
+		morehungry(500);
+		flags.botl = 1;
+		otmp = mksobj(PEST_GLAIVE, NO_MKOBJ_FLAGS);
+		otmp->cursed = FALSE;
+		otmp->blessed = FALSE;
+		otmp->spe = 0;
+		fix_object(otmp);
+		otmp = hold_another_object(otmp, "The glaive falls to the %s!",
+		    surface(u.ux, u.uy), (const char *)0);
+		return MOVE_STANDARD;
+	}
 	break;
 	}
 	return MOVE_CANCELLED;
@@ -1173,9 +1232,10 @@ doEldritchKniForm()
 		}
 	}
 
+	update_externally_granted_spells();
 	for (i = 1; spell_list[i] && !remotely_competent; i++)
 		for (j = 0; j < MAXSPELL; j++)
-			if (spellid(j) == spell_list[i] && spellknow(j) > 0){
+			if (spellid(j) == spell_list[i] && (spellknow(j) > 0 || spellext(j))){
 				remotely_competent = TRUE;
 				break;
 			}
@@ -1197,7 +1257,7 @@ doEldritchKniForm()
 			if (spellid(spell_id) == spell_list[i])
 				break;
 
-		if (spell_id >= MAXSPELL || spellknow(spell_id) <= 0)
+		if (spell_id >= MAXSPELL || (spellknow(spell_id) <= 0 && !spellext(spell_id)))
 			continue;
 
 		success_odds = percent_success(spell_id);
@@ -1344,7 +1404,7 @@ doKnightForm()
 	if(n <= 0){
 		return MOVE_CANCELLED;
 	} else if ((selected[0].item.a_int == FFORM_HALF_SWORD || activeFightingForm(FFORM_HALF_SWORD)) &&
-				(!freehand() || (uwep && uwep->otyp == LONG_SWORD && welded(uwep)))){
+				(!freehand() || (uwep && is_knight_sword(uwep) && welded(uwep)))){
 		free(selected);
 		pline("You need a free hand to adjust your grip!");
 		return MOVE_CANCELLED;
@@ -1504,6 +1564,52 @@ doBorealFace()
 }
 
 int
+doStormRune()
+{
+	winid tmpwin;
+	int n, how, i;
+	char buf[BUFSZ];
+	char incntlet = 'a';
+	menu_item *selected;
+	anything any;
+
+	tmpwin = create_nhwindow(NHW_MENU);
+	start_menu(tmpwin);
+	any.a_void = 0;		/* zero out all bits */
+
+	Sprintf(buf, "Runes");
+	add_menu(tmpwin, NO_GLYPH, &any, 0, 0, ATR_BOLD, buf, MENU_UNSELECTED);
+
+	for (i = 0; i < 3; i++) {
+		boolean active = (artinstance[ART_STORMBRINGER].StormRune & (1 << i)) != 0;
+
+		Strcpy(buf, nameOfStormRune(i));
+
+		if (active)
+			Strcat(buf, " (active)");
+
+		any.a_int = i;
+		add_menu(tmpwin, NO_GLYPH, &any,
+			incntlet, 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
+		incntlet = (incntlet != 'z') ? (incntlet+1) : 'A';
+	}
+	end_menu(tmpwin, "Choose storm rune:");
+
+	how = PICK_ONE;
+	n = select_menu(tmpwin, how, &selected);
+	destroy_nhwindow(tmpwin);
+
+	if (n <= 0) {
+		return MOVE_CANCELLED;
+	} else {
+		artinstance[ART_STORMBRINGER].StormRune = (1 << selected[0].item.a_int);
+		free(selected);
+		return MOVE_INSTANT;
+	}
+}
+
+int
 doEtechForm()
 {
 	winid tmpwin;
@@ -1601,6 +1707,7 @@ doEtechForm()
 #define AUTO_ATTKS			0x0800L
 #define BOREAL_FORMS		0x1000L
 #define AVOID_URPASSIVES	0x2000L
+#define STORM_FORMS			0x4000L
 
 int
 hasfightingforms(){
@@ -1625,6 +1732,8 @@ hasfightingforms(){
 		|| uring_art(ART_STAR_EMPEROR_S_RING)
 		|| check_rot(ROT_CENT)
 		|| check_rot(ROT_STING)
+		|| (!Upolyd && (TIEFLING_AUTOATTACKS || storm_aasimar(flags.aasimar_subtype) || Race_if(PM_DOKKIMAR)))
+		//Tiefling and aasimar
 	)
 		formmask |= AUTO_ATTKS;
 
@@ -1696,7 +1805,7 @@ hasfightingforms(){
 			!is_null_attk(attk);
 			attk = getattk(&youmonst, (struct monst *) 0, res, &indexnum, &prev_attk2, FALSE, subout, &tohitmod)
 		){
-			if(attk->adtyp == AD_SEDU || attk->adtyp == AD_SITM || attk->adtyp == AD_SSEX) formmask |= AVOID_THEFT;
+			if(attk->adtyp == AD_SEDU || attk->adtyp == AD_SITM || attk->adtyp == AD_SSEX || check_mutation(TT_THIEVING_TAIL) || check_mutation(AAT_PRIMINAL_TAIL)) formmask |= AVOID_THEFT;
 		}
 	}
 	if (u.uavoid_grabattk || sticks(&youmonst))
@@ -1738,6 +1847,10 @@ hasfightingforms(){
 
 	if(uwep && uwep->oartifact == ART_BOREAL_SCEPTER){
 		formmask |= BOREAL_FORMS;
+	}
+
+	if(uwep && uwep->oartifact == ART_STORMBRINGER){
+		formmask |= STORM_FORMS;
 	}
 
 	/* next, forms trained are shown, even if inapplicable at the moment*/
@@ -1786,6 +1899,7 @@ dofightingform()
 #define	NO_AUTO		12
 #define	BOREAL_FORM	13
 #define	AVOD_PASV	14
+#define	STORM_FORM	15
 
 	if (formmask & MONK_FORMS) {
 		any.a_int = MONK_FORM;
@@ -1802,6 +1916,10 @@ dofightingform()
 	if (formmask & BOREAL_FORMS) {
 		any.a_int = BOREAL_FORM;
 		add_menu(tmpwin, NO_GLYPH, &any, 'b', 0, ATR_NONE, "Select Boreal Scepter Face", MENU_UNSELECTED);
+	}
+	if (formmask & STORM_FORMS) {
+		any.a_int = STORM_FORM;
+		add_menu(tmpwin, NO_GLYPH, &any, 'n', 0, ATR_NONE, "Select Stormbringer Rune", MENU_UNSELECTED);
 	}
 	if (formmask & ETECH_FORMS) {
 		any.a_int = ETCH_FORM;
@@ -1917,6 +2035,8 @@ dofightingform()
 			return MOVE_INSTANT;
 		case BOREAL_FORM:
 			return doBorealFace();
+		case STORM_FORM:
+			return doStormRune();
 		default:
 			impossible("unknown fighting form set %d", n);
 			return MOVE_CANCELLED;
@@ -1936,6 +2056,7 @@ dofightingform()
 #undef	ETCH_FORM
 #undef	AVOD_THFT
 #undef	AVOD_PASV
+#undef	STORM_FORM
 
 #undef MONK_FORMS
 #undef LIGHTSABER_FORMS
@@ -2095,6 +2216,8 @@ wiz_mutate()
 				MENU_UNSELECTED);
 			if(inclet == 'z')
 				inclet = 'A';
+			else if(inclet == 'Z')
+				inclet = 'a';
 			else
 				inclet++;
 		}
@@ -2985,6 +3108,7 @@ struct ext_func_tab extcmdlist[] = {
 	{"annotate", "annotate current dungeon level", donamelevel, IFBURIED, AUTOCOMPLETE},
 	{"attack", "order pets to battle foes", doattack, IFBURIED, AUTOCOMPLETE},
 	{"chat", "talk to someone", dotalk, IFBURIED, AUTOCOMPLETE},	/* converse? */
+	{"dash", "toggle dash", dodash, IFBURIED, AUTOCOMPLETE},
 	{"combo", "use an android combo based on your weapon", android_combo, !IFBURIED},
 	{"come", "order pets to come", docome, !IFBURIED, AUTOCOMPLETE},
 	{"conduct", "list which challenges you have adhered to", doconduct, IFBURIED, AUTOCOMPLETE},
@@ -3002,6 +3126,7 @@ struct ext_func_tab extcmdlist[] = {
 	{"name", "name an item or type of object", do_naming_ddocall, IFBURIED, AUTOCOMPLETE},
 	{"nameold", "name an item or type of object (vanilla)", ddocall, IFBURIED},
 	{"passive", "order pets to never attack foes", dopassive, IFBURIED, AUTOCOMPLETE},
+	{"pets", "manage pet behaviors via menu", dopets, IFBURIED, AUTOCOMPLETE},
 	{"offer", "offer a sacrifice to the gods", dosacrifice, !IFBURIED, AUTOCOMPLETE},
 	{"overview", "give an overview of dungeon", dooverview, !IFBURIED, AUTOCOMPLETE},
 	{"pray", "pray to the gods for help", dopray, IFBURIED, AUTOCOMPLETE},
@@ -3197,6 +3322,7 @@ init_bind_list(void)
 	bind_key(M('m'), "monster" );
 	bind_key('N',    "name" );
 	/*       'n' prefixes a count if number_pad is on */
+	bind_key(C('n'), "dash" );
 	bind_key(M('n'), "name" );
 	bind_key(M('N'), "name" ); /* if number_pad is on */
 	bind_key('o',    "open" );
@@ -4068,6 +4194,22 @@ register char *cmd;
 			u.dy = 0;
 			flags.forcefight = 1;
 			do_walk = TRUE;
+		} else if(cmd[1] == '<'
+			&& ((uwep && uwep->otyp == BREAKING_WHEEL && uwep->ovar1_wheelspeed > 0)
+				|| (uswapwep && u.twoweap && uswapwep->otyp == BREAKING_WHEEL && uswapwep->ovar1_wheelspeed > 0)
+				|| (uquiver && uquiver->otyp == BREAKING_WHEEL && uquiver->ovar1_wheelspeed > 0)
+			)
+		){
+			struct obj *wheel = (uwep && uwep->otyp == BREAKING_WHEEL && uwep->ovar1_wheelspeed > 0) ? uwep : 
+				(uswapwep && u.twoweap && uswapwep->otyp == BREAKING_WHEEL && uswapwep->ovar1_wheelspeed > 0) ? uswapwep : 
+				uquiver;
+			int speed = wheel->ovar1_wheelspeed;
+			(void) stop_timer(SLOW_WHEEL, wheel->timed);
+			wheel->ovar1_wheelspeed = 0;
+			update_inventory();
+			explode_full_nocenter(u.ux, u.uy, AD_DARK, 0, d(speed, 6)+wheel->spe, EXPL_MAGENTA, 1, 0, TRUE, (struct permonst *)0, 0L);
+			flags.move = MOVE_STANDARD;
+			return;
 	    } else
 		prefix_seen = TRUE;
 	} else if (*cmd == DONOPICKUP) {

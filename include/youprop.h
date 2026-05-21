@@ -116,7 +116,7 @@
 #define EStrangled		u.uprops[STRANGLED].extrinsic
 #define Strangled		(HStrangled || EStrangled)
 
-#define Strangled_cant_speak	(HStrangled || (EStrangled && !separate_respiration(youracedata)))
+#define Strangled_cant_speak	(HStrangled || (EStrangled && !Separate_Respiration))
 
 #define Drowning		(Underwater && !Breathless && !amphibious(youracedata))
 
@@ -237,8 +237,8 @@
 #define EBlind_res		u.uprops[BLIND_RES].extrinsic
 #define Blind_res		(HBlind_res || EBlind_res)
 #define Blindfolded		((ublindf && is_opaque_worn_tool(ublindf)) ||\
-						(uarmh && uarmh->otyp == PLASTEEL_HELM && uarmh->obj_material != objects[uarmh->otyp].oc_material && is_opaque(uarmh)) ||\
-						(uarmh && (uarmh->otyp == CRYSTAL_HELM || uarmh->otyp == FACELESS_HOOD) && is_opaque(uarmh)))
+						(uarmh && (uarmh->otyp == PLASTEEL_HELM || uarmh->otyp == FACELESS_HOOD) && uarmh->obj_material != objects[uarmh->otyp].oc_material && is_opaque(uarmh)) ||\
+						(uarmh && (uarmh->otyp == CRYSTAL_HELM) && is_opaque(uarmh)))
 		/* ...means blind because of a cover */
 #define NoLightBlind	(((Blinded || Blindfolded || !haseyes(youracedata)) && \
 		 !(u.sealsActive&SEAL_DANTALION && !((uarm && arm_blocks_upper_body(uarm->otyp) && is_opaque(uarm)) || (uarmu && is_opaque(uarmu)))) && \
@@ -317,6 +317,9 @@
 #define HBabble			u.uprops[BABBLING].intrinsic
 #define EBabble			u.uprops[BABBLING].extrinsic
 #define Babble			((HBabble || EBabble) && !BlockableClearThoughts)
+
+#define Mumbling_Mouths (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd)
+#define Separate_Respiration (separate_respiration(youracedata) || (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd))
 
 #define HScreaming			u.uprops[SCREAMING].intrinsic
 #define EScreaming			u.uprops[SCREAMING].extrinsic
@@ -664,6 +667,10 @@
 #define HWithering_stake	u.uprops[WITHERING_STAKE].intrinsic
 #define EWithering_stake	u.uprops[WITHERING_STAKE].extrinsic
 #define Withering_stake	(HWithering_stake || EWithering_stake)
+
+#define HDragon_trainer	u.uprops[DRAGON_TRAINER].intrinsic
+#define EDragon_trainer	u.uprops[DRAGON_TRAINER].extrinsic
+#define Dragon_trainer	(HDragon_trainer || EDragon_trainer)
 
 #define HSterile	u.uprops[STERILE].intrinsic
 #define ESterile	u.uprops[STERILE].extrinsic

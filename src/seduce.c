@@ -31,7 +31,8 @@ struct attack *mattk;
 	boolean youagr = &youmonst == magr;
 	boolean youdef = &youmonst == mdef;
 	xchar genagr, gendef;
-	
+	boolean tiefling = (youagr && (check_mutation(TT_ATTRACTIVE_1) || check_mutation(TT_ATTRACTIVE_2)));
+	boolean tiefling_nymph = (youagr && check_mutation(TT_ATTRACTIVE_1));
 	if(youdef || youagr){
 		if(Chastity) return 0;
 		
@@ -74,11 +75,13 @@ struct attack *mattk;
 		return 1;
 	
 	if(pagr->mlet == S_NYMPH || pagr->mtyp == PM_INCUBUS || pagr->mtyp == PM_SUCCUBUS
-			|| pagr->mtyp == PM_CARMILLA || pagr->mtyp == PM_VLAD_THE_IMPALER || pagr->mtyp == PM_LEVISTUS){
+			|| pagr->mtyp == PM_CARMILLA || pagr->mtyp == PM_VLAD_THE_IMPALER || pagr->mtyp == PM_LEVISTUS
+			|| tiefling
+	){
 		if(genagr == 1 - gendef)
 			return 1;
 		else
-			return (pagr->mlet == S_NYMPH || pagr->mtyp == PM_LEVISTUS) ? 2 : 0;
+			return (tiefling_nymph || pagr->mlet == S_NYMPH || pagr->mtyp == PM_LEVISTUS) ? 2 : 0;
 	}
 	else if(pagr->mtyp == PM_MOTHER_LILITH || pagr->mtyp == PM_BELIAL){
 		if(genagr == 1 - gendef) return 1;
@@ -185,6 +188,10 @@ struct monst * mon;
 		for (int i = 0; i < quantity; i++) {
 			sedu_minion(mon);
 		}
+		if(mon->mtyp == PM_SUCCUBUS || mon->mtyp == PM_INCUBUS)
+			mon->mspec_used = rnd(100);
+		else
+			mon->mspec_used = rnd(10);
 	}
 
 	/* possibly exit early, skipping teleport and continuing to make attacks! */
@@ -835,7 +842,7 @@ boolean helpless;
 	if (helpless || its_cha >= ACURR(A_CHA)) {
 		if(!obj->oartifact || !rn2(10)){
 			if(obj == uwep || obj == uswapwep){
-				Your("%s to dust in your %s!", aobjnam(obj, "turn"), bimanual(obj, youracedata) ? makeplural(body_part(HAND)) : body_part(HAND));
+				Your("%s to dust in your %s!", aobjnam(obj, "turn"), bimanual_mon(obj, &youmonst) ? makeplural(body_part(HAND)) : body_part(HAND));
 				if(obj == uwep) uwepgone();
 				else if(obj == uswapwep) uswapwepgone();
 				useup(obj);
@@ -920,7 +927,7 @@ sedu_undress(mon)
 struct monst * mon;
 {
 	/* check no-clothes case */
-	if (!uarm && !uarmc && !uarmf && !uarmg && !uarms && !uarmh
+	if (!uarm && !uarmc && !uarmf && !uarmg && !uarms && !uarmh && !uwep && !uswapwep
 #ifdef TOURIST
 		&& !uarmu
 #endif
@@ -1154,11 +1161,7 @@ struct monst * mon;
  */
 
 boolean
-msteal_m(magr, mdef, attk, result)
-struct monst *magr;
-struct monst *mdef;
-struct attack *attk;
-int *result;
+msteal_m(struct monst *magr, struct monst *mdef, struct attack *attk, int *result)
 {
 	const long equipmentmask = ~(W_WEP|W_SWAPWEP);
 	boolean seduct_type;
@@ -1168,6 +1171,13 @@ int *result;
 	boolean goatspawn = (magr->data->mtyp == PM_SMALL_GOAT_SPAWN || magr->data->mtyp == PM_GOAT_SPAWN || magr->data->mtyp == PM_GIANT_GOAT_SPAWN || magr->data->mtyp == PM_BLESSED);
 	boolean noflee = (magr->isshk && magr->mpeaceful);
 	boolean mi_only = is_chuul(magr->data);
+
+	if(magr == mdef){
+		/* can't steal from yourself*/
+		*result |= MM_MISS;
+		return TRUE;
+	}
+
 	if(attk->adtyp == AD_SITM){
 		/* select item from defender's inventory */
 		for (otmp = mdef->minvent; otmp; otmp = otmp->nobj)
@@ -1210,9 +1220,10 @@ int *result;
 			possibly_unwield(mdef, FALSE);
 			mdef->mstrategy &= ~STRAT_WAITFORU;
 			mselftouch(mdef, (const char *)0, FALSE);
-			if (mdef->mhp <= 0)
+			if (mdef->mhp <= 0){
 				*result |= (MM_HIT | MM_DEF_DIED | ((grow_up(magr, mdef)) ? 0 : MM_AGR_DIED));
 				return TRUE;
+			}
 			if(goatspawn)
 				*result |= MM_AGR_STOP;
 			else if (magr->data->mlet == S_NYMPH && !noflee &&
@@ -1352,9 +1363,10 @@ int *result;
 				mdef->mequipping = max(mdef->mequipping, delay);
 			}
 			m_dowear(magr, FALSE);
-			if (mdef->mhp <= 0)
+			if (mdef->mhp <= 0){
 				*result |= (MM_HIT | MM_DEF_DIED | ((grow_up(magr, mdef)) ? 0 : MM_AGR_DIED));
 				return TRUE;
+			}
 			if(goatspawn)
 				*result |= MM_AGR_STOP;
 			else if (magr->data->mlet == S_NYMPH && !noflee &&

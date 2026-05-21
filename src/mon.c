@@ -23,7 +23,7 @@ extern int monstr[];
 STATIC_DCL boolean FDECL(restrap,(struct monst *));
 STATIC_DCL int FDECL(scent_callback,(genericptr_t, int, int));
 STATIC_DCL void FDECL(dead_familiar,(long));
-STATIC_DCL void FDECL(clothes_bite_mon,(struct monst *));
+STATIC_DCL boolean FDECL(clothes_bite_mon,(struct monst *));
 STATIC_DCL void FDECL(emit_healing, (struct monst *));
 int scentgoalx, scentgoaly;
 
@@ -164,6 +164,13 @@ int mndx;
 	case PM_GIANT_MUMMY:	mndx = PM_GIANT;  break;
 	// case PM_ETTIN_ZOMBIE:
 	case PM_ETTIN_MUMMY:	mndx = PM_ETTIN;  break;
+	case PM_CENTAUR_MUMMY:	mndx = PM_CENTAUR;  break;
+	case PM_FORMIAN_MUMMY:	mndx = PM_FORMIAN;  break;
+	case PM_DRIDER_MUMMY:	mndx = PM_DRIDER;  break;
+	case PM_TIEFLING_MUMMY:	mndx = PM_TIEFLING;  break;
+	case PM_AASIMAR_MUMMY:	mndx = PM_AASIMAR;  break;
+	case PM_DARK_FEY_RI_MUMMY:	mndx = PM_DARK_FEY_RI;  break;
+	case PM_DOKKIMAR_MUMMY:		mndx = PM_DOKKIMAR;  break;
 	case PM_ALABASTER_MUMMY: mndx = PM_ALABASTER_ELF_ELDER;  break;
 	default:  break;
 	}
@@ -575,6 +582,13 @@ register struct monst *mtmp;
 	    case PM_HALF_DRAGON_MUMMY:
 	    case PM_GIANT_MUMMY:
 	    case PM_ETTIN_MUMMY:
+	    case PM_CENTAUR_MUMMY:
+	    case PM_FORMIAN_MUMMY:
+	    case PM_DRIDER_MUMMY:
+	    case PM_TIEFLING_MUMMY:
+	    case PM_AASIMAR_MUMMY:
+	    case PM_DARK_FEY_RI_MUMMY:
+	    case PM_DOKKIMAR_MUMMY:
 	    // case PM_KOBOLD_ZOMBIE:
 	    // case PM_DWARF_ZOMBIE:
 	    // case PM_GNOME_ZOMBIE:
@@ -1480,6 +1494,8 @@ register struct monst *mtmp;
 	/* (but not water-walking or swimming) */
 	if (mtmp == u.usteed && (Flying || Levitation) && !is_3dwater(mtmp->mx,mtmp->my))
 		return (0);
+	if (mtmp == u.urider && !is_3dwater(mtmp->mx,mtmp->my))
+		return (0);
 #endif
 
 	/* Frost Treads freeze water and lava */
@@ -1634,7 +1650,8 @@ struct monst *mon;
 		else if(uwep->osinging == OSING_LETHARGY && !mon->mtame)
 			mmove -= 2;
 	}
-	
+	if(mon->data->mlet == S_DRAGON && mon->mtame && Dragon_trainer)
+		mmove += 4;
 	if(mon->mtyp == PM_CHOKHMAH_SEPHIRAH)
 		mmove += u.chokhmah;
 	if(mon->mtyp == PM_BANDERSNATCH && mon->mflee)
@@ -1717,20 +1734,35 @@ mcalcdistress()
 	}
 	
 	/* regenerate hit points */
-	mon_regen(mtmp, FALSE);
-	clothes_bite_mon(mtmp);
-	if(mtmp->mscorpions){
-		phantom_scorpions_sting(mtmp);
-	}
-	if(mtmp->mcaterpillars){
-		rot_caterpillars_bite(mtmp);
+	if(mon_regen(mtmp, FALSE)) continue;
+	if(clothes_bite_mon(mtmp)) continue;
+	if(mtmp->mscorpions && phantom_scorpions_sting(mtmp)) continue;
+	if(mtmp->mcaterpillars && rot_caterpillars_bite(mtmp)) continue;
+	if(mtmp->momud){
+		if(orc_mud_stabs(mtmp)) continue;
+		if(!rn2(20)){
+			struct obj *daggers = mksobj(ORCISH_DAGGER, NO_MKOBJ_FLAGS);
+			if(canseemon(mtmp)) pline_The("writhing mud covering %s has died.", mon_nam(mtmp));
+			curse(daggers);
+			daggers->opoisoned = OPOISON_ACID;
+			daggers->quan = d(3,8);
+			set_obj_size(daggers, MZ_TINY);
+			set_material_gm(daggers, BONE);
+			place_object(daggers, mtmp->mx, mtmp->my);
+			mtmp->momud = FALSE;
+		}
 	}
 	if(mtmp->mvermin){
 		int damage = d(10,10);
 		damage -= avg_mdr(mtmp);
 		damage = reduce_dmg(mtmp, damage, TRUE, FALSE);
-		if(damage > 0)
-			m_losehp(mtmp, damage, FALSE, "swarming vermin");
+		if(damage > 0 && m_losehp(mtmp, damage, FALSE, "swarming vermin"))
+			continue;
+	}
+	if(acidic(mtmp->data) || !is_organic_monst(mtmp->data)){
+		// I think checking it wastes just as much time as blindly setting it.
+		mtmp->mgmld_skin = 0;
+		mtmp->mgmld_throat = 0;
 	}
 	if(mtmp->mgmld_skin || mtmp->mgmld_throat){
 		const char *throatpart = mbodypart(mtmp, WINDPIPE);
@@ -1758,7 +1790,8 @@ mcalcdistress()
 		if(throat_dmg > 0){
 			mtmp->mgmld_throat += rn2(throat_dmg+1);
 		}
-		m_losehp(mtmp, skin_dmg + throat_dmg, FALSE, "mold infection");
+		if(m_losehp(mtmp, skin_dmg + throat_dmg, FALSE, "mold infection"))
+			continue;
 	}
 
 	timeout_problems(mtmp);
@@ -2218,10 +2251,7 @@ movemon()
 		else if(mtmp->mpeaceful && !mtmp->mtame){
 			if(canspotmon(mtmp))
 				pline("%s looks friendly...", Amonnam(mtmp));
-			mtmp = tamedog_core(mtmp, (struct obj *)0, TRUE);
-			if(mtmp && get_mx(mtmp, MX_EDOG)){
-				EDOG(mtmp)->loyal = TRUE;
-			}
+			mtmp = tamedog_core(mtmp, (struct obj *)0, TD_ENHANCED|TD_LOYAL);
 		}
 	}
 	if(mtmp->mtyp == PM_DREAD_SERAPH && 
@@ -2886,7 +2916,8 @@ register struct monst *mtmp;
 	struct obj *bodyarmor;
 	struct obj *underarmor;	
 	struct obj *boots;	
-	struct obj *belt;	
+	struct obj *belt;
+	struct obj *weapon;
 	// long carcap = 25L*(acurrstr((int)(mtmp->mstr)) + mtmp->mcon) + 50L;
 	long carcap;
 	gloves = which_armor(mtmp, W_ARMG);
@@ -2895,6 +2926,7 @@ register struct monst *mtmp;
 	underarmor = which_armor(mtmp, W_ARMU);
 	boots = which_armor(mtmp, W_ARMF);
 	belt = which_armor(mtmp, W_BELT);
+	weapon = MON_WEP(mtmp);
 	
 	if(gloves && (gloves->otyp == GAUNTLETS_OF_POWER || (gloves->otyp == IMPERIAL_ELVEN_GAUNTLETS && check_imp_mod(gloves, IEA_GOPOWER)))){
 		carcap = 25L*(25L + 11L) + 50L;
@@ -2937,6 +2969,7 @@ register struct monst *mtmp;
 	if (boots && boots->otyp == hboots) carcap += boots->cursed ? 0 : maxload/10;
 	if (boots && check_oprop(boots, OPROP_RBRD) && is_lawful_mon(mtmp)) 
 		carcap += boots->cursed ? 0 : max(200, maxload/5);
+	if (weapon && weapon->otyp == PEST_GLAIVE && mtmp->mtyp == PM_SILVERMAN) carcap += maxload/5;
 	
 
 	if(animaloid(mdat) || naoid(mdat)){
@@ -3334,6 +3367,7 @@ struct obj *otmp;
 #ifdef STEED
 	/* Steeds don't pick up stuff (to avoid shop abuse) */
 	if (mtmp == u.usteed) return (FALSE);
+	if (mtmp == u.urider) return (FALSE);
 #endif
 	if (mtmp->isshk) return(TRUE); /* no limit */
 	if ((mtmp->mpeaceful && mtmp->mtyp != PM_MAID && !(Infuture && mtmp->mfaction == QUEST_FACTION)) && !mtmp->mtame) return(FALSE);
@@ -3477,7 +3511,7 @@ nexttry:
 			if (artifact_door(nx, ny) ?
 				(levl[nx][ny].doormask & D_CLOSED && !(flag & OPENDOOR))
 				  || levl[nx][ny].doormask & D_LOCKED :
-				!amorphous(mdat) &&
+				!amorphous_mon(mon) &&
 			   ((levl[nx][ny].doormask & D_CLOSED && !(flag & OPENDOOR)) ||
 			(levl[nx][ny].doormask & D_LOCKED && !(flag & UNLOCKDOOR))) &&
 			   !thrudoor) continue;
@@ -3610,7 +3644,7 @@ nexttry:
 		}
 		if (nx != x && ny != y && bad_rock(mon, x, ny)
 			    && bad_rock(mon, nx, y)
-			    && ((bigmonst(mdat) && !amorphous(mdat)) || (curr_mon_load(mon) > 600)))
+			    && ((bigmonst(mdat) && !amorphous_mon(mon)) || (curr_mon_load(mon) > 600)))
 			continue;
 		/* The monster avoids a particular type of trap if it's familiar
 		 * with the trap type.  Pets get ALLOW_TRAPS and checking is
@@ -3641,13 +3675,13 @@ nexttry:
 				    !resists_sleep(mon))
 				&& (ttmp->ttyp != BEAR_TRAP ||
 				    (mdat->msize > MZ_SMALL &&
-				     !amorphous(mdat) && !mon_resistance(mon,FLYING)))
+				     !amorphous_mon(mon) && !mon_resistance(mon,FLYING)))
 				&& (ttmp->ttyp != FLESH_HOOK ||
-				    !amorphous(mdat))
+				    !amorphous_mon(mon))
 				&& (ttmp->ttyp != FIRE_TRAP ||
 				    !resists_fire(mon) || (!no_upos(mon) && distmin(mon->mx, mon->my, mon->mux, mon->muy) > 2)) /*Cuts down on plane of fire message spam*/
 				&& (ttmp->ttyp != SQKY_BOARD || !mon_resistance(mon,FLYING))
-				&& (ttmp->ttyp != WEB || (!amorphous(mdat) &&
+				&& (ttmp->ttyp != WEB || (!amorphous_mon(mon) &&
 				    !(webmaker(mdat) || (Is_lolth_level(&u.uz) && !mon->mpeaceful)) && !(
 						species_tears_webs(mdat) ||
 						(mon->wormno && count_wsegs(mon) > 5)
@@ -3788,7 +3822,7 @@ boolean actual;			/* actual attack or faction check? */
 		return 0L;
 	}
 	// Don't focus-down steeds
-	if (actual && mdef == u.usteed) {
+	if (actual && (mdef == u.usteed || mdef == u.urider)) {
 		return 0L;
 	}
 	// Berserked creatures are effectively always conflicted, and aren't careful about anything unnecessary
@@ -3899,7 +3933,7 @@ boolean actual;			/* actual attack or faction check? */
 	if (magr->mtame && !mdef->mpeaceful && (!actual || magr->mhp > magr->mhpmax/2 || banish_kill_mon(magr)) && !magr->mflee)
 	    return ALLOW_M|ALLOW_TM;
 	// and vice versa, with some limitations that will help your pet survive
-	if (mdef->mtame && !magr->mpeaceful && (!actual || mdef->mhp > mdef->mhpmax/2 || banish_kill_mon(mdef)) && !mdef->meating && mdef != u.usteed && !mdef->mflee)
+	if (mdef->mtame && !magr->mpeaceful && (!actual || mdef->mhp > mdef->mhpmax/2 || banish_kill_mon(mdef)) && !mdef->meating && mdef != u.usteed && mdef != u.urider && !mdef->mflee)
 	    return ALLOW_M|ALLOW_TM;
 #endif /* ATTACK_PETS */
 
@@ -4285,6 +4319,7 @@ register struct monst *mtmp, *mtmp2;
     /* finish adding its replacement */
 #ifdef STEED
     if (mtmp == u.usteed) ; else	/* don't place steed onto the map */
+	if (mtmp == u.urider) ; else
 #endif
     place_monster(mtmp2, mtmp2->mx, mtmp2->my);
     if (mtmp2->wormno)	    /* update level.monsters[wseg->wx][wseg->wy] */
@@ -4300,6 +4335,7 @@ register struct monst *mtmp, *mtmp2;
     if (u.ustuck == mtmp) u.ustuck = mtmp2;
 #ifdef STEED
     if (u.usteed == mtmp) u.usteed = mtmp2;
+	if (u.urider == mtmp) u.urider = mtmp2;
 #endif
     if (mtmp2->isshk) replshk(mtmp2);
 
@@ -5117,6 +5153,8 @@ register struct monst *mtmp;
 	/* Player is thrown from his steed when it dies */
 	if (mtmp == u.usteed)
 		dismount_steed(DISMOUNT_GENERIC);
+	if (mtmp == u.urider)
+		rider_dismounts_you(DISMOUNT_GENERIC);
 #endif
 
 	mptr = mtmp->data;		/* save this for m_detach() */
@@ -6003,6 +6041,8 @@ register struct monst *mdef;
 	/* Player is thrown from his steed when it disappears */
 	if (mdef == u.usteed)
 		dismount_steed(DISMOUNT_GENERIC);
+	if (mdef == u.urider)
+		rider_dismounts_you(DISMOUNT_GENERIC);
 #endif
 	/* cease occupation if the monster was associated */
 	if(mdef->moccupation) stop_occupation();
@@ -6032,6 +6072,8 @@ register struct monst *mdef;
 	/* Player is thrown from his steed when it disappears */
 	if (mdef == u.usteed)
 		dismount_steed(DISMOUNT_GENERIC);
+	if (mdef == u.urider)
+		rider_dismounts_you(DISMOUNT_GENERIC);
 #endif
 
 	/* cease occupation if the monster was associated */
@@ -6667,6 +6709,9 @@ xkilled(mtmp, dest)
 		}
 	}
 
+	if(uwep && uwep->oartifact == ART_STORMBRINGER && activeRune(FRUNE_HARVEST)){
+		u.uencouraged = max(u.uencouraged+1, min(mtmp->m_lev, u.uencouraged+3));
+	}
 	// You killed a mummy and suffer from its curse.
 	if(!mtmp->mcan && attacktype_fordmg(mtmp->data, AT_NONE, AD_MROT)){
 		mummy_curses_x(mtmp, &youmonst);
@@ -6755,7 +6800,7 @@ xkilled(mtmp, dest)
 			out_of = 3;
 		else if(active_glyph(LUMEN))
 			out_of = 4;
-		if (!rn2(out_of) && !(mvitals[mndx].mvflags & G_NOCORPSE)
+		if (!(mvitals[mndx].mvflags & G_NOCORPSE)
 					&& mdat->mlet != S_KETER
 					&& mdat->mlet != S_PLANT
 					&& !(get_mx(mtmp, MX_ESUM))
@@ -6769,14 +6814,27 @@ xkilled(mtmp, dest)
 					&& !(has_template(mtmp, CORDYCEPS))
 					&& !(is_auton(mtmp->data))
 		) {
-			int n = 1;
+			int n = 0;
+			if(!rn2(out_of)) n += 1;
 			if(check_rot(ROT_FORAGE) && !rn2(out_of)) n += 1;
 			/*Death Drop*/
-			for(; n > 0; n--){
-				otmp = mk_death_drop_obj(mtmp);
-				if(otmp){
-					place_object(otmp, x, y);
-					redisp = TRUE;
+			if(n > 0) {
+				for(; n > 0; n--){
+					otmp = mk_death_drop_obj(mtmp);
+					if(otmp){
+						place_object(otmp, x, y);
+						redisp = TRUE;
+					}
+				}
+			}
+			else if(flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && mtmp->data->cwt/10 >= 50){
+				out_of *= 3;
+				if(!rn2(out_of)){
+					otmp = mkobj(SPBOOK_CLASS, NO_MKOBJ_FLAGS);
+					if(otmp){
+						place_object(otmp, x, y);
+						redisp = TRUE;
+					}
 				}
 			}
 		}
@@ -6979,6 +7037,12 @@ mnexto(mtmp)	/* Make monster mtmp next to you (if possible) */
 		mtmp->my = u.uy;
 		return;
 	}
+	if (mtmp == u.urider) {
+		/* Keep your rider in sync with you instead */
+		mtmp->mx = u.ux;
+		mtmp->my = u.uy;
+		return;
+	}
 #endif
 
 	if(!enexto(&mm, u.ux, u.uy, mtmp->data)) return;
@@ -6995,6 +7059,12 @@ monline(mtmp)	/* Make monster mtmp next to you (if possible) */
 #ifdef STEED
 	if (mtmp == u.usteed) {
 		/* Keep your steed in sync with you instead */
+		mtmp->mx = u.ux;
+		mtmp->my = u.uy;
+		return;
+	}
+	if (mtmp == u.urider) {
+		/* Keep your rider in sync with you instead */
 		mtmp->mx = u.ux;
 		mtmp->my = u.uy;
 		return;
@@ -7019,6 +7089,12 @@ mofflin(mtmp)	/* Make monster mtmp near to you (if possible) */
 		mtmp->my = u.uy;
 		return;
 	}
+	if (mtmp == u.urider) {
+		/* Keep your rider in sync with you instead */
+		mtmp->mx = u.ux;
+		mtmp->my = u.uy;
+		return;
+	}
 #endif
 
 	if(!eofflin(&mm, u.ux, u.uy, mtmp->data)) return;
@@ -7035,6 +7111,12 @@ mofflin_close(mtmp)	/* Make monster mtmp near to you (if possible) */
 #ifdef STEED
 	if (mtmp == u.usteed) {
 		/* Keep your steed in sync with you instead */
+		mtmp->mx = u.ux;
+		mtmp->my = u.uy;
+		return;
+	}
+	if (mtmp == u.urider) {
+		/* Keep your rider in sync with you instead */
 		mtmp->mx = u.ux;
 		mtmp->my = u.uy;
 		return;
@@ -7908,7 +7990,7 @@ boolean msg;		/* "The oldmon turns into a newmon!" */
 		if(u.uswallow) {
 			if(!attacktype(mdat,AT_ENGL)) {
 				/* Does mdat care? */
-				if (!noncorporeal(mdat) && !amorphous(mdat) &&
+				if (!noncorporeal(mdat) && !amorphous_mon(mtmp) &&
 				    !is_whirly(mdat) &&
 				    (mdat->mtyp != PM_YELLOW_LIGHT)) {
 					You("break out of %s%s!", mon_nam(mtmp),
@@ -8880,6 +8962,7 @@ struct obj *obj;
 			}
 		}
 	}
+	if(mdef != &youmonst && DEADMONSTER(mdef)) return;
 	if((obj->obyak || check_oprop(obj, OPROP_BYAK)) && (mdef == &youmonst || !yellow_monster(mdef))){
 		nd = max(1, (objects[obj->otyp].oc_size + obj->objsize - MZ_MEDIUM));
 		nd *= check_oprop(obj, OPROP_BYAK) ? 3 : obj->obyak;
@@ -10489,15 +10572,18 @@ struct monst *mtmp;
 	}
 }
 
-STATIC_OVL void
-clothes_bite_mon(mon)
-struct monst *mon;
+STATIC_OVL boolean
+clothes_bite_mon(struct monst *mon)
 {
-	struct obj *otmp;
-	for(otmp = mon->minvent; otmp && !DEADMONSTER(mon); otmp = otmp->nobj){
+	struct obj *otmp, *next;
+	if(DEADMONSTER(mon))
+		return FALSE;
+	for(otmp = mon->minvent; otmp && !DEADMONSTER(mon); otmp = next){
+		next = otmp->nobj;
 		if((otmp->olarva || otmp->obyak || check_oprop(otmp, OPROP_BYAK)) && otmp->owornmask)
 			held_item_bites(mon, otmp);
 	}
+	return DEADMONSTER(mon);
 }
 
 STATIC_OVL void
@@ -10572,9 +10658,8 @@ struct monst *mon;
 	}
 }
 
-void
-phantom_scorpions_sting(mdef)
-struct monst *mdef;
+boolean
+phantom_scorpions_sting(struct monst *mdef)
 {
 	long slotvar = 0;
 	long depthvar = 0;
@@ -10631,13 +10716,15 @@ struct monst *mdef;
 				damage += 80;
 			else damage += rn1(10,6);
 		}
-		if(m_losehp(mdef, damage, FALSE, "swarm of scorpions")); //died
+		if(m_losehp(mdef, damage, FALSE, "swarm of scorpions"))
+			return TRUE;
 		else if (canseemon(mdef))
 			pline("%s is stung by phantom scorpions.", Monnam(mdef));
 	}
+	return FALSE;
 }
 
-void
+boolean
 rot_caterpillars_bite(struct monst *mdef)
 {
 	int damage = 0;
@@ -10680,15 +10767,16 @@ rot_caterpillars_bite(struct monst *mdef)
 			mdef->mhp = min(mdef->mhpmax, mdef->mhp);
 		}
 		if(m_losehp(mdef, damage, FALSE, "swarm of parasitic caterpillars")){
-			//died
 			silverman_exhultation(20);
+			return TRUE;
 		}
 		else if (canseemon(mdef))
 			pline("%s is bitten by parasitic caterpillars.", Monnam(mdef));
 	}
+	return FALSE;
 }
 
-void
+boolean
 orc_mud_stabs(struct monst *mdef)
 {
 	int damage = 0;
@@ -10708,12 +10796,15 @@ orc_mud_stabs(struct monst *mdef)
 	if(mdef == &youmonst){
 		You("are stabbed by the writhing tarry mud!");
 		losehp(damage, "inchoate orcs", KILLED_BY);
+		return FALSE;
 	}
 	else {
-		if(m_losehp(mdef, damage, FALSE, "inchoate orcs")); //died
+		if(m_losehp(mdef, damage, FALSE, "inchoate orcs"))
+			return TRUE;
 		else if (canseemon(mdef))
 			pline("%s is stabbed by the writhing tarry mud.", Monnam(mdef));
 	}
+	return FALSE;
 }
 
 void

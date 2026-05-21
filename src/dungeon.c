@@ -1326,6 +1326,10 @@ int x, y;
 #ifdef STEED
 	/* ridden steed always shares hero's location */
 	if (u.usteed) u.usteed->mx = u.ux, u.usteed->my = u.uy;
+	if (u.urider) {
+	    u.urider->mx = u.ux;
+	    u.urider->my = u.uy;
+	}
 #endif
 }
 
@@ -1922,7 +1926,7 @@ level_difficulty()
 	
 	if(flags.descendant && !(
 		(Role_if(PM_CONVICT)
-		|| (Role_if(PM_HEALER) && Race_if(PM_DROW))
+		|| (urole.neminum == PM_BLIBDOOLPOOLP__GRAVEN_INTO_FLESH)
 		|| Role_if(PM_MADMAN))
 		&& u.ulevel < 14)
 	)
