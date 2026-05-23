@@ -698,6 +698,20 @@ qt_montype(int x, int y)
 			return (&mons[qpm]);
 		//Should be impossible:
 		return (mkclass(S_YETI, G_NOHELL));
+	} else if(Role_if(PM_KENSEI)){
+		int qpm;
+		if(rn2(5)){
+			qpm = urole.enemy1num;
+			if (qpm != NON_PM && rn2(5) && !(mvitals[qpm].mvflags & G_GONE && !In_quest(&u.uz)))
+				return (&mons[qpm]);
+			return (mkclass(urole.enemy1sym, G_NOHELL|G_HELL));
+		}
+		qpm = urole.enemy2num;
+		if (qpm != NON_PM && rn2(5) && !(mvitals[qpm].mvflags & G_GONE && !In_quest(&u.uz)))
+			return (&mons[qpm]);
+		if (urole.enemy2sym == S_NYMPH && rn2(5))
+			return &mons[PM_KITSUNE];
+		return (mkclass(urole.enemy2sym, G_NOHELL|G_HELL));
 	} else if(urole.neminum == PM_BLIBDOOLPOOLP__GRAVEN_INTO_FLESH){
 		int qpm;
 		int duergar[] = {PM_DUERGAR, PM_DUERGAR_STONEGUARD, PM_DUERGAR_DEBILITATOR};

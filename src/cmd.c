@@ -657,7 +657,7 @@ boolean you_abilities;
 	if (mon_abilities && is_vampire(youracedata) && u.ulevel > 1){
 		add_ability('V', "Raise a vampiric minion", MATTK_VAMP);
 	}
-	if (mon_abilities && (webmaker(youracedata) || check_mutation(TT_WEBS))){
+	if (mon_abilities && (webmaker(youracedata) || check_mutation(TT_SPIDER_SPINNERS))){
 		add_ability('w', "Spin a web", MATTK_WEBS);
 	}
 	if (Role_if(PM_MADMAN) && u.whisperturn < moves && !Catapsi && !DimensionalLock){

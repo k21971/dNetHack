@@ -4806,6 +4806,106 @@ boolean goodequip;
 }
 
 STATIC_OVL void
+snake_initweap(struct monst *mtmp, int mkobjflags, int faction, boolean goodequip)
+{
+	int mm = mtmp->mtyp;
+	int chance;
+	struct permonst *ptr = mtmp->data;
+	struct obj *otmp;
+	
+	switch(mm){
+		case PM_SERPENT_MAN_OF_YOTH:
+			otmp = mongets(mtmp, QUARTERSTAFF, mkobjflags);
+			if(otmp){
+				add_omod(otmp, OMOD_SPIKED);
+				otmp->opoisoned = OPOISON_BASIC;
+			}
+		break;
+		case PM_FEATHERY_SERPENT_PRIESTESS:
+			otmp = mongets(mtmp, MACE, mkobjflags);
+			if(otmp){
+				set_material_gm(otmp, SILVER);
+				otmp->spe = 7;
+			}
+		break;
+		case PM_SERPENT_PRIEST:
+			otmp = mongets(mtmp, GREAT_MACE, mkobjflags);
+			if(otmp){
+				set_material_gm(otmp, GEMSTONE);
+				set_submat(otmp, JASPER);
+				otmp->spe = 9;
+			}
+		break;
+		case PM_MAN_SERPENT_SOLDIER:
+			(void) mongets(mtmp, SCIMITAR, mkobjflags);
+			(void) mongets(mtmp, ROUNDSHIELD, mkobjflags);
+		break;
+		case PM_MAN_SERPENT_MAGE:
+			//Bleed longswords
+		break;
+		case PM_MAN_SERPENT_SUMMONER:
+			// ???
+		break;
+		case PM_MAN_SERPENT_GIANT:
+			(void) mongets(mtmp, BATTLE_AXE, mkobjflags);
+		break;
+		case PM_HALF_STONE_DRAGON:
+			// ???
+		break;
+	}
+}
+
+STATIC_OVL void
+snake_initinv(struct monst *mtmp, int mkobjflags, int faction, boolean goodequip)
+{
+	int mm = mtmp->mtyp;
+	int chance;
+	struct permonst *ptr = mtmp->data;
+	struct obj *otmp;
+
+	switch(mm){
+		case PM_SERPENT_MAN_OF_YOTH:
+			otmp = mongets(mtmp, ROBE, mkobjflags);
+			if(otmp){
+				otmp->obj_color = CLR_RED;
+				if(goodequip || !rn2(20)){
+					add_oprop(otmp, OPROP_BRIL);
+					otmp->spe += rnd(3);
+				}
+			}
+		break;
+		case PM_FEATHERY_SERPENT_PRIESTESS:
+			otmp = mongets(mtmp, ROBE, mkobjflags);
+			if(otmp){
+				otmp->obj_color = CLR_WHITE;
+				add_oprop(otmp, OPROP_LIFE);
+				otmp->spe = 7;
+			}
+		break;
+		case PM_SERPENT_PRIEST:
+			otmp = mongets(mtmp, ROBE, mkobjflags);
+			if(otmp){
+				set_material_gm(otmp, DRAGON_HIDE);
+				otmp->obj_color = CLR_BLACK;
+				otmp->spe = 9;
+			}
+		break;
+		case PM_MAN_SERPENT_SOLDIER:
+		break;
+		case PM_MAN_SERPENT_MAGE:
+		break;
+		case PM_MAN_SERPENT_SUMMONER:
+		break;
+		case PM_MAN_SERPENT_GIANT:
+		break;
+		case PM_HALF_STONE_DRAGON:
+		break;
+		case PM_PISACA:
+		break;
+	}
+}
+
+STATIC_OVL void
 umber_initweap(mtmp, mkobjflags, faction, goodequip)
 register struct monst *mtmp;
 int mkobjflags;
@@ -4969,6 +5069,11 @@ int mmflags;
 		break;
 	    case S_HUMAN:
 			human_initweap(mtmp, mkobjflags, faction, goodequip, greatequip);
+		break;
+		// case S_SPIDER:
+		// break;
+		case S_SNAKE:
+			snake_initweap(mtmp, mkobjflags, faction, goodequip);
 		break;
 		case S_ANT:
 			ant_initweap(mtmp, mkobjflags, faction, goodequip);
@@ -11695,6 +11800,9 @@ boolean greatequip;
 					}
 				}
 			}
+		break;
+		case S_SNAKE:
+			snake_initinv(mtmp, mkobjflags, faction, goodequip);
 		break;
 		case S_UNICORN:
 			//Escaped warhorse
