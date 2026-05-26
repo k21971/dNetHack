@@ -3674,9 +3674,11 @@ karemade:
 		
 		if(u.ustdy > 0) u.ustdy -= 1;
 		if(u.ustdy < 0) u.ustdy += 1;
-		// Wizegaze attacks
-		if(check_mutation(TT_MANY_ODD_EYES) || (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd))
-			perform_wizegaze_attacks();
+		// Widegaze attacks
+		if(check_mutation(TT_MANY_ODD_EYES))
+			perform_widegaze_attacks();
+		if(flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd)
+			perform_cloudface_widegaze();
 		if(!Upolyd && TIEFLING_AURAS)
 			mutation_auras();
 		// Decrease your pucture counter
@@ -7870,7 +7872,7 @@ struct monst *magr;
 		cast_spell(magr, mdef, &attkbuff, spellnum, x(mdef), y(mdef));
 	}
 
-	if(!magr->mpeaceful && mon_can_see_you(magr)
+	if(!youagr && !magr->mpeaceful && mon_can_see_you(magr)
 		&& distmin(x(magr), y(magr), u.ux, u.uy) <= range
 		&& !onscary(u.ux, u.uy, magr)
 		&& !(!rn2(4) || (frequency_decrease && mlev(magr) < 30 && rn2(31-mlev(magr))))

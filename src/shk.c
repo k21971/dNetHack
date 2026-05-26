@@ -6379,6 +6379,15 @@ smith_resizeArmor(struct monst *smith, struct obj *otmp)
 		otmp->objsize = ptr->msize;
 		if(ptr->mtyp == PM_BLIBDOOLPOOLP_S_MINDGRAVEN_CHAMPION && is_boots(otmp))
 			otmp->objsize++;
+		if(!(u.dx || u.dy || u.dz)){
+			if (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd
+				&& ptr == youracedata
+				&& arm_blocks_upper_body(otmp->otyp)
+				&& !check_omod(otmp, OMOD_SHOULDER_BARING)
+			){
+				add_omod(otmp, OMOD_SHOULDER_BARING);
+			}
+		}
 	}
 	else {
 		// verbalize("How big shall I make it?");

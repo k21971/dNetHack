@@ -2280,6 +2280,7 @@ default_case:
 					add_to_container(otmp, stuff);
 
 					stuff = mksobj(EYE, NO_MKOBJ_FLAGS);
+					stuff->quan = 1;
 					fully_identify_obj(stuff);
 					stuff->ovar1_your_eye = TRUE;
 					set_material_gm(stuff, GEMSTONE);

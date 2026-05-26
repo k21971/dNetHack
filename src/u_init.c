@@ -4263,6 +4263,7 @@ scatter_eyes()
 		obj = mksobj(EYE, NO_MKOBJ_FLAGS);
 		fully_identify_obj(obj);
 		obj->ovar1_your_eye = TRUE;
+		obj->quan = 1;
 		set_material_gm(obj, GEMSTONE);
 		set_submat(obj, DIAMOND);
 		add_to_migration(obj);

@@ -5474,17 +5474,19 @@ struct obj *otmp;
 			setmnotwielded(mdef, mwep);
 			IMPURITY_UP(u.uimp_theft)
 			switch (rn2(proficient + 1)) {
+			case 3:
+				if(!u.uavoid_theft){
+					You("snatch %s %s!", s_suffix(mon_nam(mdef)), onambuf);
+					mwep = hold_another_object(mwep, "You drop %s!",
+						doname(mwep), (const char *)0);
+					break;
+				}
 			case 2:
 				You("yank %s %s to the %s!",
 				    s_suffix(mon_nam(mdef)), onambuf,
 				    surface(u.ux, u.uy));
 				place_object(mwep, u.ux, u.uy);
 				stackobj(mwep);
-				break;
-			case 3:
-				You("snatch %s %s!", s_suffix(mon_nam(mdef)), onambuf);
-				mwep = hold_another_object(mwep, "You drop %s!",
-				    doname(mwep), (const char *)0);
 				break;
 			default:
 				You("yank %s from %s %s!",

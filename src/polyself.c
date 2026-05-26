@@ -1499,21 +1499,6 @@ dogaze(struct monst *mtmp)
 					result |= MM_HIT;
 				}
 			}
-			if(flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd){
-				if(!((nonliving(mtmp->data) && !is_android(mtmp->data)) 
-				  || has_template(mtmp, TOMB_HERD) /*not a statue-piloting thingy */
-				  || is_primordial(mtmp->data)
-				  || is_alienist(mtmp->data)
-				  || is_great_old_one(mtmp->data)
-				  || mtmp->encouraged < -1*Insight/7
-				  || (uarmh && FacelessHelm(uarmh))
-				  || (uarmc && FacelessCloak(uarmc))
-				 )
-				){
-					mtmp->encouraged--;
-					result |= MM_HIT;
-				}
-			}
 
 			if (!pre_targeted && !result) {
 				pline("%s seemed not to notice.", Monnam(mtmp));
@@ -1536,7 +1521,7 @@ dogaze(struct monst *mtmp)
 						: -200, "frozen by a monster's gaze");
 					return MOVE_STANDARD;
 				}
-				else
+				else if(!pre_targeted)
 					You("stiffen momentarily under %s gaze.",
 					s_suffix(mon_nam(mtmp)));
 			}
@@ -1545,7 +1530,7 @@ dogaze(struct monst *mtmp)
 			* works on the monster's turn, but for it to *not* have an
 			* effect would be too weird.
 			*/
-			if (!DEADMONSTER(mtmp) &&
+			if (!DEADMONSTER(mtmp) && !Stone_resistance &&
 				(mtmp->mtyp == PM_MEDUSA) && !mtmp->mcan) {
 				pline(
 					"Gazing at the awake %s is not a very good idea.",

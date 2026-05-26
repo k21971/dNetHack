@@ -2573,7 +2573,7 @@ arm_dr_bonus(struct obj * otmp, int slot)
 	if (otmp->otyp == find_cboots()) def += 1;
 	// bares the shoulders
 	if (slot && slot == UPPER_TORSO_DR && check_omod(otmp, OMOD_SHOULDER_BARING)){
-		def = (def+3)/4;
+		def = (def+1)*3/4;
 	}
 
 

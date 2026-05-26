@@ -2574,7 +2574,7 @@ dofire()
 		}
 		if (uwep && (!uquiver || (is_ammo(uquiver) && !ammo_and_launcher(uquiver, uwep))) && check_oprop(uwep, OPROP_AAMOW) && !Is_spire(&u.uz)){
 			struct obj *arrow = mksobj(SILVER_ARROW, MKOBJ_NOINIT);
-			arrow->spe = min(7, uwep->spe);
+			arrow->spe = max(7, uwep->spe);
 			arrow->blessed = uwep->blessed;
 			arrow->cursed = uwep->cursed;
 			arrow->quan = 30;		/* Make more than enough so that we are always able to manually destroy the excess */

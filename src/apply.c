@@ -7093,53 +7093,33 @@ struct obj *obj;
 			/*stealing is impure*/
 			IMPURITY_UP(u.uimp_theft)
 			switch (rn2(proficient + 1)) {
+			case 3:
+				if(!u.uavoid_theft){
+					/* right into your inventory */
+					You("snatch %s %s!", s_suffix(mon_nam(mtmp)), onambuf);
+					if (otmp->otyp == CORPSE &&
+						touch_petrifies(&mons[otmp->corpsenm]) &&
+						!uarmg && !Stone_resistance &&
+						!(poly_when_stoned(youracedata) &&
+						polymon(PM_STONE_GOLEM))) {
+					char kbuf[BUFSZ];
+
+					Sprintf(kbuf, "%s corpse",
+						an(mons[otmp->corpsenm].mname));
+					pline("Snatching %s is a fatal mistake.", kbuf);
+					instapetrify(kbuf);
+					}
+					otmp = hold_another_object(otmp, "You drop %s!",
+								doname(otmp), (const char *)0);
+					break;
+				}
+				//else fall through
 			case 2:
 				/* to floor near you */
 				You("yank %s %s to the %s!", s_suffix(mon_nam(mtmp)),
 				onambuf, surface(u.ux, u.uy));
 				place_object(otmp, u.ux, u.uy);
 				stackobj(otmp);
-				break;
-			case 3:
-				/* right to you */
-#if 0
-				if (!rn2(25)) {
-				/* proficient with whip, but maybe not
-				   so proficient at catching weapons */
-				int hitu, hitvalu;
-				int dieroll;
-				hitvalu = tohitval((struct monst *)0, &youmonst, (struct attack *)0, otmp, (void *)0, HMON_PROJECTILE, 8, (int *) 0);
-				if(hitvalu > (dieroll = rnd(20)) || (dieroll == 1 && hitvalu > -10)) {
-					boolean wepgone = FALSE;
-					pline_The("%s hits you as you try to snatch it!" the(onambuf));
-					hmon_general((struct monst *)0, &youmonst, (struct attack *)0, &otmp, (void *)0, HMON_PROJECTILE,
-						0, 0, FALSE, dieroll, FALSE, -1);
-				}
-				else {
-					if(Blind || !flags.verbose) pline("It misses.");
-					else You("are almost hit by %s.", the(onambuf));
-				}
-				place_object(otmp, u.ux, u.uy);
-				stackobj(otmp);
-				break;
-				}
-#endif /* 0 */
-				/* right into your inventory */
-				You("snatch %s %s!", s_suffix(mon_nam(mtmp)), onambuf);
-				if (otmp->otyp == CORPSE &&
-					touch_petrifies(&mons[otmp->corpsenm]) &&
-					!uarmg && !Stone_resistance &&
-					!(poly_when_stoned(youracedata) &&
-					polymon(PM_STONE_GOLEM))) {
-				char kbuf[BUFSZ];
-
-				Sprintf(kbuf, "%s corpse",
-					an(mons[otmp->corpsenm].mname));
-				pline("Snatching %s is a fatal mistake.", kbuf);
-				instapetrify(kbuf);
-				}
-				otmp = hold_another_object(otmp, "You drop %s!",
-							   doname(otmp), (const char *)0);
 				break;
 			default:
 				/* to floor beneath mon */
@@ -7287,40 +7267,43 @@ struct obj *obj;
 				/*stealing is impure*/
 				IMPURITY_UP(u.uimp_theft)
 				switch (rn2(proficient + 1)) {
+					case 3:
+						/* right to you */
+						/* right into your inventory */
+						if(!u.uavoid_theft){
+							You("snatch %s %s!", s_suffix(mon_nam(mtmp)), onambuf);
+							if (otmp->otyp == CORPSE &&
+								touch_petrifies(&mons[otmp->corpsenm]) &&
+								!uarmg && !Stone_resistance &&
+								!(poly_when_stoned(youracedata) &&
+								polymon(PM_STONE_GOLEM))
+							){
+								char kbuf[BUFSZ];
+
+								Sprintf(kbuf, "%s corpse",
+									an(mons[otmp->corpsenm].mname));
+								pline("Snatching %s is a fatal mistake.", kbuf);
+								instapetrify(kbuf);
+							}
+							otmp = hold_another_object(otmp, "You drop %s!",
+										doname(otmp), (const char *)0);
+						break;
+						}
+						//else fall through
 					case 2:
 						/* to floor near you */
 						You("yank %s %s to the %s!", s_suffix(mon_nam(mtmp)),
 						onambuf, surface(u.ux, u.uy));
 						place_object(otmp, u.ux, u.uy);
 						stackobj(otmp);
-						break;
-					case 3:
-						/* right to you */
-						/* right into your inventory */
-						You("snatch %s %s!", s_suffix(mon_nam(mtmp)), onambuf);
-						if (otmp->otyp == CORPSE &&
-							touch_petrifies(&mons[otmp->corpsenm]) &&
-							!uarmg && !Stone_resistance &&
-							!(poly_when_stoned(youracedata) &&
-							polymon(PM_STONE_GOLEM))
-						){
-							char kbuf[BUFSZ];
-
-							Sprintf(kbuf, "%s corpse",
-								an(mons[otmp->corpsenm].mname));
-							pline("Snatching %s is a fatal mistake.", kbuf);
-							instapetrify(kbuf);
-						}
-						otmp = hold_another_object(otmp, "You drop %s!",
-									   doname(otmp), (const char *)0);
 					break;
-				default:
-					/* to floor beneath mon */
-					You("yank %s from %s %s!", the(onambuf),
-					s_suffix(mon_nam(mtmp)), mon_hand);
-					obj_no_longer_held(otmp);
-					place_object(otmp, mtmp->mx, mtmp->my);
-					stackobj(otmp);
+					default:
+						/* to floor beneath mon */
+						You("yank %s from %s %s!", the(onambuf),
+						s_suffix(mon_nam(mtmp)), mon_hand);
+						obj_no_longer_held(otmp);
+						place_object(otmp, mtmp->mx, mtmp->my);
+						stackobj(otmp);
 					break;
 				}
 			} else {
@@ -11409,6 +11392,7 @@ resizeArmor()
 
 	if (flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE && !Upolyd
 		&& ptr == youracedata
+		&& !(u.dx || u.dy || u.dz)
 		&& arm_blocks_upper_body(otmp->otyp)
 		&& !check_omod(otmp, OMOD_SHOULDER_BARING)
 	){

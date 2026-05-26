@@ -1795,6 +1795,10 @@ hasfightingforms(){
 	if (u.uavoid_theft)
 		formmask |= AVOID_THEFT;
 	else {
+		if(check_mutation(TT_THIEVING_TAIL) || check_mutation(AAT_PRIMINAL_TAIL)
+			|| (uwep && is_stealing_weapon(uwep))
+		)
+			formmask |= AVOID_THEFT;
 		indexnum = tohitmod = 0;
 		zero_subout(subout);
 		res[0] = MM_MISS;
@@ -1802,10 +1806,11 @@ hasfightingforms(){
 		res[2] = MM_MISS;
 		res[3] = MM_MISS;
 		for(attk = getattk(&youmonst, (struct monst *) 0, res, &indexnum, &prev_attk2, FALSE, subout, &tohitmod);
-			!is_null_attk(attk);
+			!is_null_attk(attk) && !(formmask & AVOID_THEFT);
 			attk = getattk(&youmonst, (struct monst *) 0, res, &indexnum, &prev_attk2, FALSE, subout, &tohitmod)
 		){
-			if(attk->adtyp == AD_SEDU || attk->adtyp == AD_SITM || attk->adtyp == AD_SSEX || check_mutation(TT_THIEVING_TAIL) || check_mutation(AAT_PRIMINAL_TAIL)) formmask |= AVOID_THEFT;
+			if(attk->adtyp == AD_SEDU || attk->adtyp == AD_SITM || attk->adtyp == AD_SSEX)
+				formmask |= AVOID_THEFT;
 		}
 	}
 	if (u.uavoid_grabattk || sticks(&youmonst))
@@ -1821,7 +1826,7 @@ hasfightingforms(){
 		res[2] = MM_MISS;
 		res[3] = MM_MISS;
 		for(attk = getattk(&youmonst, (struct monst *) 0, res, &indexnum, &prev_attk2, FALSE, subout, &tohitmod);
-			!is_null_attk(attk);
+			!is_null_attk(attk) && !(formmask & AVOID_ENGLATTK);
 			attk = getattk(&youmonst, (struct monst *) 0, res, &indexnum, &prev_attk2, FALSE, subout, &tohitmod)
 		){
 			if(attk->aatyp == AT_ENGL) formmask |= AVOID_ENGLATTK;
