@@ -2921,6 +2921,7 @@ find_ac()
 	
 	uac = base_uac();
 	uac -= (u.uuur+1)/2;
+	if(u.urider && mon_knight_riding(u.urider)) uac -= def_mountedCombat();
 	if (uarm)	uac -= arm_ac_bonus(uarm);
 	if (uarmc)	uac -= arm_ac_bonus(uarmc);
 	if (uarmh)	uac -= arm_ac_bonus(uarmh);

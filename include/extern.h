@@ -1037,9 +1037,10 @@ E int NDECL(doattributes);
 E int NDECL(doconduct);
 E int NDECL(doenlightenment);
 E void NDECL(udr_enlightenment);
-E void NDECL(signs_mirror);
+E void FDECL(signs_appearance, (boolean, boolean));
 E void FDECL(show_enlightenment, (int, boolean));
 E void FDECL(show_conduct, (int, boolean));
+E void NDECL(dump_appearance);
 
 /* ### exper.c ### */
 
@@ -1340,9 +1341,12 @@ E void FDECL(prinv, (const char *,struct obj *,long));
 E char *FDECL(xprname, (struct obj *,const char *,CHAR_P,BOOLEAN_P,long,long));
 E int NDECL(ddoinv);
 E void FDECL(describe_item, (struct obj *, int, int, winid *));
+E const char *FDECL(etrait_description, (long, long, boolean));
 E char FDECL(display_inventory, (const char *,BOOLEAN_P));
 #ifdef DUMP_LOG
 E char FDECL(dump_inventory, (const char *,BOOLEAN_P,BOOLEAN_P));
+E void FDECL(dump_pestglaive_props, (struct obj *));
+E void FDECL(dump_iea_upgrades, (struct obj *));
 #endif
 E int FDECL(display_binventory, (int,int,BOOLEAN_P));
 E struct obj *FDECL(display_cinventory,(struct obj *));
@@ -3705,6 +3709,7 @@ E boolean FDECL(safe_attack, (struct monst *, struct monst *, struct attack *, s
 E int FDECL(beastmastery, (struct monst *));
 E int NDECL(narya);
 E int NDECL(mountedCombat);
+E int NDECL(def_mountedCombat);
 E boolean FDECL(obj_silver_searing, (struct obj *));
 E boolean FDECL(obj_jade_searing, (struct obj *));
 E int FDECL(hatesobjdmg, (struct monst *, struct obj *, struct monst *));

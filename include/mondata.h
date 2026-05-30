@@ -468,7 +468,7 @@
 							 (ptr)->mtyp == PM_VEGEPYGMY ||\
 							 (ptr)->mtyp == PM_VEGEPYGMY_SHAMAN ||\
 							 (ptr)->mtyp == PM_GRAY_FUNGAL_TOWER)
-#define your_race(ptr)		((((ptr)->mflagsa & urace.selfmask) != 0L) || (ptr)->mtyp == urace.malenum || (ptr)->mtyp == urace.femalenum)
+#define your_race(ptr)		((((ptr)->mflagsa & urace.selfmask) != 0L) || (ptr)->mtyp == urace.malenum || (ptr)->mtyp == urace.femalenum || ((ptr)->mtyp == PM_SILVERGRUB && urace.malenum == PM_SILVERMAN))
 #define is_andromaliable(ptr)	(is_elf(ptr) || is_drow(ptr) || is_dwarf(ptr) || is_gnome(ptr) || is_orc(ptr) || is_human(ptr) || (ptr)->mtyp == PM_HOBBIT || \
 								 (ptr)->mtyp == PM_MONKEY || (ptr)->mtyp == PM_APE || (ptr)->mtyp == PM_YETI || \
 								 (ptr)->mtyp == PM_CARNIVOROUS_APE || (ptr)->mtyp == PM_SASQUATCH\
@@ -1343,6 +1343,7 @@
 							 ((mon)->mtyp == PM_HOD_SEPHIRAH && Role_if(PM_HEALER)) || \
 							 ((mon)->mtyp == PM_DEMINYMPH && (mon)->mvar_deminymph_role == PM_HEALER))
 #define mon_undead_hunter(mon)	((mon)->mtyp == PM_UNDEAD_HUNTER || ((mon)->mtyp == PM_DEMINYMPH && (mon)->mvar_deminymph_role == PM_UNDEAD_HUNTER))
+#define mon_knight_riding(mon)	(mon_knight(mon) || mon_dark_knight(mon) || (mon)->mtyp == PM_OONA || (mon)->mtyp == PM_ALRUNES)
 #define mon_knight(mon)	((mon)->mtyp == PM_KNIGHT || (mon)->mtyp == PM_KING_ARTHUR || \
 						 (mon)->mtyp == PM_SILVERKNIGHT || (mon)->mtyp == PM_CELEBORN || \
 						 ((mon)->mtyp == PM_HOD_SEPHIRAH && Role_if(PM_KNIGHT)) || \

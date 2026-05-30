@@ -11,11 +11,12 @@ STATIC_DCL void FDECL(put_or_dump, (const char *, boolean));
 STATIC_DCL char *FDECL(enlght_combatinc, (const char *,int,int,char *));
 STATIC_DCL int NDECL(minimal_enlightenment);
 STATIC_DCL void NDECL(resistances_enlightenment);
-STATIC_DCL void NDECL(signs_enlightenment);
-STATIC_DCL void NDECL(spirits_enlightenment);
-STATIC_DCL void NDECL(mutations_enlightenment);
+STATIC_DCL void FDECL(spirits_enlightenment, (boolean));
+STATIC_DCL void FDECL(aasimar_enlightenment_subroutine, (boolean));
+STATIC_DCL void FDECL(mutations_enlightenment, (boolean));
 STATIC_DCL void NDECL(genocide_enlightenment);
 STATIC_DCL void NDECL(research_enlightenment);
+STATIC_DCL void NDECL(research_dump);
 
 #define DOATTRIB_RESISTS	1
 #define DOATTRIB_ARMOR		2
@@ -144,13 +145,13 @@ doattributes()
 			doenlightenment();
 			break;
 		case DOATTRIB_BINDINGS:
-			signs_enlightenment();
+			signs_appearance(FALSE, FALSE);
 			break;
 		case DOATTRIB_SPIRITS:
-			spirits_enlightenment();
+			spirits_enlightenment(FALSE);
 			break;
 		case DOATTRIB_MUTATIONS:
-			mutations_enlightenment();
+			mutations_enlightenment(FALSE);
 			break;
 		case DOATTRIB_GENOCIDE:
 			genocide_enlightenment();
@@ -358,7 +359,6 @@ minimal_enlightenment()
 		add_menu(tmpwin, NO_GLYPH, &any,
 			'd', 0, ATR_NONE, buf,
 			MENU_UNSELECTED);
-		//signs_enlightenment();
 	}
 	if (u.sealsKnown || u.specialSealsKnown || u.sealsActive || u.specialSealsActive) {
 		Sprintf(buf, "Show your bound spirits.");
@@ -375,7 +375,13 @@ minimal_enlightenment()
 		add_menu(tmpwin, NO_GLYPH, &any,
 			'f', 0, ATR_NONE, buf,
 			MENU_UNSELECTED);
-		//spirits_enlightenment();
+	}
+	else if(flags.aasimar_type && (u.ulevel >= 7 || flags.aasimar_type == AASIMAR_TYPE_CLOUDFACE)) {
+		Sprintf(buf, "Show your celestial traits.");
+		any.a_int = DOATTRIB_MUTATIONS;
+		add_menu(tmpwin, NO_GLYPH, &any,
+			'f', 0, ATR_NONE, buf,
+			MENU_UNSELECTED);
 	}
 
 	if (num_genocides() != 0 || num_extinct() != 0) {
@@ -1882,14 +1888,15 @@ udr_enlightenment()
 }
 
 STATIC_OVL void
-spirits_enlightenment()
+spirits_enlightenment(boolean dumping)
 {
 	char buf[BUFSZ];
 	int i;
-	en_win = create_nhwindow(NHW_MENU);
+	if (!dumping)
+		en_win = create_nhwindow(NHW_MENU);
 
-	putstr(en_win, 0, "Currently bound spirits:");
-	putstr(en_win, 0, "");
+	put_or_dump("Currently bound spirits:", dumping);
+	put_or_dump("", dumping);
 
 #define addseal(id) do {\
 	if(u.sealTimeout[decode_sealID(u.spirit[(id)]) - (FIRST_SEAL)] > moves){\
@@ -1902,43 +1909,43 @@ spirits_enlightenment()
 		Sprintf(buf, "  %-23s (duration:%ld)", sealNames[decode_sealID(u.spirit[(id)]) - (FIRST_SEAL)], u.spiritT[id]-moves);\
 	else\
 		Sprintf(buf, "  %-23s", sealNames[decode_sealID(u.spirit[(id)]) - (FIRST_SEAL)]); \
-	putstr(en_win, 0, buf); } while (0)
+	put_or_dump(buf, dumping); } while (0)
 #define addpen(seal) do {\
 	Sprintf(buf, "  %-23s (timeout:%ld)", sealNames[decode_sealID(seal) - (FIRST_SEAL)], \
 		u.sealTimeout[decode_sealID(seal) - (FIRST_SEAL)] - moves); \
-	putstr(en_win, 0, buf); } while (0)
-#define addempty() do {Sprintf(buf,"  (empty)"); putstr(en_win, 0, buf);} while(0)
+	put_or_dump(buf, dumping); } while (0)
+#define addempty() do {Sprintf(buf,"  (empty)"); put_or_dump(buf, dumping);} while(0)
 
 	/* only show gnosis premonition when it is being used */
 	if (u.spirit[GPREM_SPIRIT] != 0L) {
-		putstr(en_win, 0, "Gnosis Premonition");
+		put_or_dump("Gnosis Premonition", dumping);
 		addseal(GPREM_SPIRIT);
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* only show near void spirits if you know any seals */
 	if (u.sealsKnown) {
-		putstr(en_win, 0, "Spirits of the Near Void");
+		put_or_dump("Spirits of the Near Void", dumping);
 		for (i = 0; i < u.sealCounts; i++) {
 			addseal(i);
 		}
 		for (; i < binder_nearvoid_slots(); i++) {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* only show quest spirits if you know either seal */
 	if ((u.specialSealsKnown & (SEAL_ACERERAK | SEAL_DAHLVER_NAR | SEAL_BLACK_WEB))
 		/* needs special case for myrkalfyr who don't know the seal, but are bound anyways */
 		|| (u.specialSealsActive&SEAL_BLACK_WEB)
 	) {
-		putstr(en_win, 0, "Quest Spirit");
+		put_or_dump("Quest Spirit", dumping);
 		if (u.spirit[QUEST_SPIRIT] != 0L) {
 			addseal(QUEST_SPIRIT);
 		}
 		else {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* only show alignment spirits if you know any */
 	if (u.specialSealsKnown & (
@@ -1951,58 +1958,56 @@ spirits_enlightenment()
 			SEAL_YOG_SOTHOTH |
 			SEAL_UNKNOWN_GOD
 			)) {
-		putstr(en_win, 0, "Alignment Spirit");
+		put_or_dump("Alignment Spirit", dumping);
 		if (u.spirit[ALIGN_SPIRIT] != 0L) {
 			addseal(ALIGN_SPIRIT);
 		}
 		else {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* the Embassy of Elements's spirit */
 	if (u.specialSealsActive & SEAL_COUNCIL)
 	{
-		putstr(en_win, 0, "Embassy of Elements");
+		put_or_dump("Embassy of Elements", dumping);
 		if (u.spirit[CROWN_SPIRIT] != 0L) {
 			addseal(CROWN_SPIRIT);
 		}
 		else {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* Yog Sothoth's spirit */
 	if (u.specialSealsActive & SEAL_YOG_SOTHOTH)
 	{
-		putstr(en_win, 0, "Other God");
+		put_or_dump("Other God", dumping);
 		if (u.spirit[OTHER_SPIRIT] != 0L) {
 			addseal(OTHER_SPIRIT);
 		}
 		else {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 	/* Show the Numina for Binders once they have hit XL 30 */
 	if (Role_if(PM_EXILE) && (u.ulevelmax >= 30))
 	{
-		putstr(en_win, 0, "Outer Spirit");
+		put_or_dump("Outer Spirit", dumping);
 		if (u.spirit[OUTER_SPIRIT] != 0L) {
 			addseal(OUTER_SPIRIT);
 		}
 		else {
 			addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
 
 	/* Show spirits bound into the Pen of the Void */
 	if (!undiscovered_artifact(ART_PEN_OF_THE_VOID)) {
-		if (u.voidChime)
-			putstr(en_win, 0, "Bound to you and the Pen of the Void");
-		else
-			putstr(en_win, 0, "Bound to the Pen of the Void");
+		put_or_dump(u.voidChime ? "Bound to you and the Pen of the Void"
+		                        : "Bound to the Pen of the Void", dumping);
 
 		/* All get the first slot */
 		if (u.spiritTineA)
@@ -2016,385 +2021,68 @@ spirits_enlightenment()
 			else
 				addempty();
 		}
-		putstr(en_win, 0, "");
+		put_or_dump("", dumping);
 	}
-	display_nhwindow(en_win, TRUE);
-	destroy_nhwindow(en_win);
+	if (!dumping) {
+		display_nhwindow(en_win, TRUE);
+		destroy_nhwindow(en_win);
+	}
 	return;
 
 #undef addseal
+#undef addpen
 #undef addempty
 }
 
-STATIC_OVL void
-signs_enlightenment()
-{
-	boolean message = FALSE;
-
-	en_win = create_nhwindow(NHW_MENU);
-	putstr(en_win, 0, "Current Appearance:");
-	putstr(en_win, 0, "");
-
-	if(Invis){
-		putstr(en_win, 0, "You are invisible.");
-		message = TRUE;
-	}
-	
-	// if(u.sealsActive&SEAL_AHAZU && !(ublindf && ublindf->otyp==MASK));
-	if(u.sealsActive&SEAL_AMON && !Invis){
-//		if(!(uarmh && is_metallic(uarmh))){
-		putstr(en_win, 0, "You have a pair of large ram's horns.");
-//		} else putstr(en_win, 0, "Your ram's horns have fused with your helm, taking on a metallic hue.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_ANDREALPHUS && !Invis && !(levl[u.ux][u.uy].lit == 0 && !(viz_array[u.uy][u.ux]&TEMP_LIT1 && !(viz_array[u.uy][u.ux]&TEMP_DRK3)))){
-		putstr(en_win, 0, "Up close, it is plain your shadow aspires to depth as well as width and height.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_ANDROMALIUS && !NoBInvis){
-			putstr(en_win, 0, "Your features have taken on the rigidity of a cheap disguise.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_ASTAROTH && !Invis){
-		if(!ublindf || ublindf->otyp == LENSES || ublindf->otyp == SUNGLASSES || ublindf->otyp == LIVING_MASK)
-			putstr(en_win, 0, "A black liquid leaks from around your eyes.");
-		else if(ublindf && (ublindf->otyp == MASK || ublindf->otyp == R_LYEHIAN_FACEPLATE))
-			putstr(en_win, 0, "The black liquid leaking from your eyes is hidden by your mask.");
-		else
-			putstr(en_win, 0, "The black liquid leaking from your eyes is soaked up by your blindfold.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_BALAM && !Invis){
-		if(uarmc || (uarm && arm_blocks_upper_body(uarm->otyp)))
-			putstr(en_win, 0, "Freezing water leaks from a gash in you neck, but is hidden by your clothes.");
-		else
-			putstr(en_win, 0, "Freezing water leaks from a deep gash in you neck.");
-		if(!uarmg)
-			putstr(en_win, 0, "Freezing water leaks from deep holes in your wrists.");
-		if(!uarmf)
-			putstr(en_win, 0, "Freezing water leaks from deep holes in your ankles.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_BERITH && !Invis){
-		if(u.usteed)
-			putstr(en_win, 0, "Your steed is drenched in gore.");
-		if(!(uarm && is_metallic(uarm) && uarmg && uarmf && uarmh))
-			putstr(en_win, 0, "You are drenched in gore.");
-		else
-			putstr(en_win, 0, "Your armor is faced with crimson enamel.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_BUER && !Invis){
-		if(!uarmf)
-			putstr(en_win, 0, "Your legs bifurcate into twin pairs of cloven-hoved feet.");
-		else
-			putstr(en_win, 0, "Your strange feet are hidden in your shoes.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_CHUPOCLOPS){
-		putstr(en_win, 0, "You feel something in your cheeks.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_DANTALION && !NoBInvis){
-		if(!(uarmc || ((uarm && !is_opaque(uarm)) || uarmu))){
-			switch(u.ulevel/10+1){
-				case 1:
-				putstr(en_win, 0, "There is an extra face growing on your chest.");
-				break;
-				case 2:
-				putstr(en_win, 0, "There is a pair of faces growing on your chest.");
-				break;
-				case 3:
-				putstr(en_win, 0, "Many extra faces grow on your chest.");
-				break;
-				case 4:
-				putstr(en_win, 0, "There are legions of faces growing on your chest.");
-				break;
-			}
-		}
-		else{
-			if(u.ulevel/10){
-				putstr(en_win, 0, "Your extra faces are covered by your clothes.");
-			} else
-				putstr(en_win, 0, "Your extra face is covered by your clothes.");
-		}
-		message = TRUE;
-	}
-	// if(u.sealsActive&SEAL_SHIRO);
-	if(u.sealsActive&SEAL_ECHIDNA && !Invis){
-		if(!(uarmf && (uarmc || (uarm && arm_blocks_upper_body(uarm->otyp)))))
-			putstr(en_win, 0, "Your hips give rise to twin serpent's tails instead of legs.");
-		else
-			putstr(en_win, 0, "Your serpentine legs are disguised by your clothes.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_EDEN){
-		putstr(en_win, 0, "There is something rigid in the crown of your skull.");
-		message = TRUE;
-	} 
-	if(u.sealsActive&SEAL_ENKI && !Invis){
-		if(!((uarm && arm_blocks_upper_body(uarm->otyp)) || uarmc))
-			putstr(en_win, 0, "Water runs off your body in steady rivulets.");
-		else
-			putstr(en_win, 0, "Your body's runoff is caught by your clothes.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_EURYNOME && !Invis){
-		if(levl[u.ux][u.uy].lit != 0){
-			putstr(en_win, 0, "Your shadow is that of a dancing nymph.");
-			message = TRUE;
-		} else if(viz_array[u.uy][u.ux]&TEMP_LIT1 && !(viz_array[u.uy][u.ux]&TEMP_DRK3)){
-			putstr(en_win, 0, "It's a bit hard to see, but your shadow is a dancing nymph.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_EVE && !NoBInvis){
-		if(!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc){
-			putstr(en_win, 0, "There is a blood-caked wound on your stomach.");
-			message = TRUE;
-		}
-		if(!uarmf){
-			putstr(en_win, 0, "Your feet are torn by thorns and stones.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_HUGINN_MUNINN){
-		putstr(en_win, 0, "There is something rustling around in your ear.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_IRIS && !NoBInvis){
-		if(moves <= u.irisAttack+1){
-			putstr(en_win, 0, "Waving, iridescent tentacles sprout from your forearms.");
-			message = TRUE;
-		} else if(!uarmc && moves <= u.irisAttack+5){
-			putstr(en_win, 0, "There are iridescent tentacles wrapped around your forearms.");
-			message = TRUE;
-		} else if(!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc){
-			putstr(en_win, 0, "There are iridescent veins just under the skin of your forearms.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_JACK){
-		putstr(en_win, 0, "There is something on your back.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_MAEGERA && !NoBInvis){ 
-		if(!(uleft || uarmg)){
-			putstr(en_win, 0, "There is a star-shaped hole burned to the gilded bone of your left ring-finger.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_MALPHAS){
-		putstr(en_win, 0, "You feel things pecking the inside of your mouth.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_MARIONETTE && !NoBInvis){
-		if(!((uarm && arm_blocks_upper_body(uarm->otyp)) && is_metallic(uarm)))
-			putstr(en_win, 0, "Metal wires protrude from your elbows, knees, and back.");
-		else
-			putstr(en_win, 0, "The metal wires protruding from your body have merged with your armor.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_MOTHER && !NoBInvis){
-		if(!uarmg)
-			putstr(en_win, 0, "The eyes on your fingers and palms stare back at you.");
-		else
-			putstr(en_win, 0, "The eyes on your fingers and palms are covered up.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_NABERIUS){
-		putstr(en_win, 0, "Your tongue feels odd.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_ORTHOS && !NoBInvis){
-		if(uarmc && is_mummy_wrap(uarmc)){
-			putstr(en_win, 0, "Your cloak blows in a nonexistent wind.");
-			message = TRUE;
-		}
-	}
-	// // if(u.sealsActive&SEAL_OSE && !BClairvoyant && !(uarmh && is_metallic(uarmh) && uarmh->otyp != HELM_OF_TELEPATHY)) count++;
-	if(u.sealsActive&SEAL_OTIAX && !Invis){
-		if(moves <= u.otiaxAttack+5){
-			putstr(en_win, 0, "The mist around you is formed into writhing tendrils.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_PAIMON && !Invis){
-		putstr(en_win, 0, "There is a crown floating over your head.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_SIMURGH && !Invis){
-		if(!uarmg)
-			putstr(en_win, 0, "You have iron claws.");
-		else
-			putstr(en_win, 0, "Your iron claws seem to be part of your gloves.");
-		putstr(en_win, 0, "There are prismatic feathers around your head.");
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_TENEBROUS && !Invis){
-		if(!(levl[u.ux][u.uy].lit == 0 && !(viz_array[u.uy][u.ux]&TEMP_LIT1 && !(viz_array[u.uy][u.ux]&TEMP_DRK3)))){
-			putstr(en_win, 0, "Your shadow is deep black and pools unnaturally close to you.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_YMIR && !Invis){
-		if(moves>5000 && moves <= 10000){
-			if(!((uarm && arm_blocks_upper_body(uarm->otyp)) || uarmc))
-				putstr(en_win, 0, "Your skin color is a bit off.");
-			else
-				putstr(en_win, 0, "Your skin is hidden under your clothes.");
-			message = TRUE;
-		} else if(moves>10000 && moves <= 20000){
-			if(!(uarmc))
-				putstr(en_win, 0, "Maggots burrow through your skin.");
-			else
-				putstr(en_win, 0, "Your rotting is hidden under your clothes.");
-			message = TRUE;
-		} else if(moves>20000 && moves <= 50000){
-			if(!(uarmc && uarmg && uarmf))
-				putstr(en_win, 0, "Your skin is rotting off.");
-			else
-				putstr(en_win, 0, "Your rotting is hidden under your clothes.");
-			message = TRUE;
-		} else if(moves>50000 && moves <= 100000){
-			if(!(uarmc && uarmg && uarmf && (uarm && arm_blocks_upper_body(uarm->otyp)) && uarmh))
-				putstr(en_win, 0, "Your rotted body bristles with fungal sporangia and burrowing vermin.");
-			else
-				putstr(en_win, 0, "Your rotted form is hidden under your clothes.");
-			message = TRUE;
-		} else if(moves>100000){
-			if(!(uarmc && uarmg && uarmf && (uarm && arm_blocks_upper_body(uarm->otyp)) && uarmh && ublindf && ublindf->otyp==MASK))
-				putstr(en_win, 0, "Your putrid body is a riot of fungal forms and saprophagous insects.");
-			else
-				putstr(en_win, 0, "Your putrid form is hidden under your clothes.");
-			message = TRUE;
-		}
-	}
-	if(u.specialSealsActive&SEAL_DAHLVER_NAR && !NoBInvis){
-		if(dahlverNarVis())
-			putstr(en_win, 0, "Your wounds are full of sharp teeth!");
-		else
-			putstr(en_win, 0, "You feel teeth beneath your skin.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_ACERERAK){
-		putstr(en_win, 0, "Your eyes feel odd.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_BLACK_WEB){
-		putstr(en_win, 0, "Your shadow is wrapped in the black web.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_COSMOS){
-		putstr(en_win, 0, "You feel like something is behind you, but you can't see anything.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_LIVING_CRYSTAL){
-		putstr(en_win, 0, "You feel like something is behind you, but you can't see anything.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_TWO_TREES){
-		putstr(en_win, 0, "Glorious dappled light dances on your body.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_MISKA && u.ulevel >= 10){
-		char mbuf[BUFSZ] = {'\0'};
-		if(u.ulevel >= 26){
-			int howManyArms = (youracedata->mtyp == PM_VALAVI) ? 6 : 
-						  (youracedata->mtyp == PM_MAN_SERPENT_MAGE) ? 6 : 
-						  (youracedata->mtyp == PM_PHALANX) ? 6 : 
-						  (youracedata->mtyp == PM_MARILITH) ? 8 : 
-						  (youracedata->mtyp == PM_KARY__THE_FIEND_OF_FIRE) ? 8 : 
-						  (youracedata->mtyp == PM_CATHEZAR) ? 8 : 
-						  (youracedata->mtyp == PM_SHAKTARI) ? 8 : 
-						  4;
-			Sprintf(mbuf, "You have %d arms, and a wolf head grows from each hip.", howManyArms);
-			putstr(en_win, 0, mbuf);
-		} else if(u.ulevel >= 18) {
-			putstr(en_win, 0, "You have a wolf head growing from each hip.");
-		} else {
-			putstr(en_win, 0, "You have a wolf head growing from your lower stomach.");
-		}
-		message = TRUE;
-	}
-	// if(u.specialSealsActive&SEAL_NUDZIRATH){
-		// putstr(en_win, 0, "Your eyes feel odd.");
-		// message = TRUE;
-	// }
-	if(u.specialSealsActive&SEAL_ALIGNMENT_THING){
-		putstr(en_win, 0, "You feel like someone is staring at the back of your head.");
-		putstr(en_win, 0, "You hear an argument raging in the distance.");
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_YOG_SOTHOTH){
-		if(!uarm && !(uarmu && arm_blocks_lower_body(uarmu->otyp))){
-			putstr(en_win, 0, "You have a belt of writhing leeches.");
-		}
-		else if(u.specialSealsActive&SEAL_YOG_SOTHOTH && !Invis && moves <= u.yogAttack+5){
-			putstr(en_win, 0, "Your waist-tentacles wave around in search of further prey.");
-		}
-		else{
-			putstr(en_win, 0, "Your blood-sucking tentacles are hidden by your clothes.");
-		}
-		if(!uarmf){
-			putstr(en_win, 0, "Your feet are circular and ridgy-veined.");
-		}
-		else {
-			putstr(en_win, 0, "Your circular feet are hidden by your boots.");
-		}
-		message = TRUE;
-	}
-	if(u.specialSealsActive&SEAL_NUMINA){
-		putstr(en_win, 0, "You are surrounded by whispers.");
-		message = TRUE;
-	}
-	
-	if(!message){
-		putstr(en_win, 0, "You think you look pretty normal.");
-	}
-	
-	display_nhwindow(en_win, TRUE);
-	destroy_nhwindow(en_win);
-	return;
-}
-
 void
-signs_mirror()
+signs_appearance(boolean dumping, boolean mirror)
 {
 	boolean message = FALSE;
+	/* show_visual: TRUE in mirror or dump mode (show visual descriptions).
+	 * !mirror: TRUE in self-inspect or dump mode (show tactile/auditory descriptions). */
+	boolean show_visual = mirror || dumping;
+	boolean show_light = (dimness(u.ux, u.uy) <= 0) || dumping;
+	boolean NoBInvis_dumping = !dumping && NoBInvis;
+	boolean Invis_dumping = !dumping && Invis;
 	int count;
 	const char *comma;
 	char msgbuf[BUFSZ];
 
-	en_win = create_nhwindow(NHW_MENU);
-	putstr(en_win, 0, "Current Appearance:");
-	putstr(en_win, 0, "");
+	if (!dumping)
+		en_win = create_nhwindow(NHW_MENU);
+	if(!dumping){
+		put_or_dump("Current Appearance:", dumping);
+		put_or_dump("", dumping);
+	}
 
 	if(Invis){
-		putstr(en_win, 0, "You are invisible.");
+		put_or_dump(dumping ? "You were invisible." : "You are invisible.", dumping);
 		message = TRUE;
 	}
-	
+
 #define PUNCTUTATION	if(count > 0){if(count == 1) Sprintf(eos(msgbuf), "%s and ", comma); else Sprintf(eos(msgbuf), "%s ", comma);}
 	//Words
-	if(u.ufirst_light || u.ufirst_sky || u.ufirst_life || u.ufirst_know){
+#define pt(s,t) put_or_dump(dumping ? (t) : (s), dumping)
+#define p(s)    put_or_dump((s), dumping)
+
+	if(show_visual && (u.ufirst_light || u.ufirst_sky || u.ufirst_life || u.ufirst_know)){
 		count = 0;
 		if(u.ufirst_light) count++;
 		if(u.ufirst_sky) count++;
 		if(u.ufirst_life) count++;
 		if(u.ufirst_know) count++;
-		
+
 		if(count == 1){
 			if(u.ufirst_light)
-				putstr(en_win, 0, "There is a blinding glyph on your brow.");
+				pt("There is a blinding glyph on your brow.", "There was a blinding glyph on your brow.");
 			else if(u.ufirst_sky)
-				putstr(en_win, 0, "There is a cerulean glyph on your brow.");
+				pt("There is a cerulean glyph on your brow.", "There was a cerulean glyph on your brow.");
 			else if(u.ufirst_life)
-				putstr(en_win, 0, "There is a verdant glyph on your brow.");
+				pt("There is a verdant glyph on your brow.", "There was a verdant glyph on your brow.");
 			else if(u.ufirst_know)
-				putstr(en_win, 0, "There is a crimson glyph on your brow.");
+				pt("There is a crimson glyph on your brow.", "There was a crimson glyph on your brow.");
 		} else {
-			Sprintf(msgbuf, "There is ");
+			Sprintf(msgbuf, dumping ? "There was " : "There is ");
 			if(count == 2) comma = "";
 			else comma = ",";
 			if(u.ufirst_light){
@@ -2418,14 +2106,14 @@ signs_mirror()
 				PUNCTUTATION
 			}
 			Sprintf(eos(msgbuf), " on your brow.");
-			putstr(en_win, 0, msgbuf);
+			p(msgbuf);
 		}
 	}
 #undef PUNCTUTATION
-	
+
 #define PUNCTUTATION	if(count > 0){if(count == 1) Sprintf(eos(msgbuf), "%s and a ", comma); else Sprintf(eos(msgbuf), "%s a ", comma);}
 	//Active syllables
-	if(u.uaesh_duration || u.ukrau_duration || u.uhoon_duration || u.uuur_duration || u.unaen_duration || u.uvaul_duration){
+	if(show_visual && (u.uaesh_duration || u.ukrau_duration || u.uhoon_duration || u.uuur_duration || u.unaen_duration || u.uvaul_duration)){
 		count = 0;
 		if(u.uaesh_duration) count++;
 		if(u.ukrau_duration) count++;
@@ -2435,533 +2123,629 @@ signs_mirror()
 		if(u.uvaul_duration) count++;
 		if(count == 1){
 			if(u.uaesh_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.uaesh_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.uaesh_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]), dumping ? "floated" : "floats");
 			else if(u.ukrau_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.ukrau_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.ukrau_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]), dumping ? "floated" : "floats");
 			else if(u.uhoon_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.uhoon_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.uhoon_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]), dumping ? "floated" : "floats");
 			else if(u.uuur_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.uuur_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.uuur_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]), dumping ? "floated" : "floats");
 			else if(u.unaen_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.unaen_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.unaen_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]), dumping ? "floated" : "floats");
 			else if(u.uvaul_duration)
-				Sprintf(msgbuf, "A %sglowing %s floats above your brow.",  u.uvaul_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
-			putstr(en_win, 0, msgbuf);
+				Sprintf(msgbuf, "A %sglowing %s %s above your brow.", u.uvaul_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]), dumping ? "floated" : "floats");
+			p(msgbuf);
 		} else {
 			if(count == 2) comma = "";
 			else comma = ",";
 			Sprintf(msgbuf, "A ");
 			if(u.uaesh_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.uaesh_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.uaesh_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
 				count--;
 				PUNCTUTATION
 			}
 			if(u.ukrau_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.ukrau_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.ukrau_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
 				count--;
 				PUNCTUTATION
 			}
 			if(u.uhoon_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.uhoon_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.uhoon_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
 				count--;
 				PUNCTUTATION
 			}
 			if(u.uuur_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.uuur_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.uuur_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
 				count--;
 				PUNCTUTATION
 			}
 			if(u.unaen_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.unaen_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.unaen_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
 				count--;
 				PUNCTUTATION
 			}
 			if(u.uvaul_duration){
-				Sprintf(eos(msgbuf), "%sglowing %s",  u.uvaul_duration > 10 ?  "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
+				Sprintf(eos(msgbuf), "%sglowing %s", u.uvaul_duration > 10 ? "brilliantly " : "", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
 				count--;
 				PUNCTUTATION
 			}
-			Sprintf(eos(msgbuf), " float in a column above your brow.");
-			putstr(en_win, 0, msgbuf);
+			Sprintf(eos(msgbuf), dumping ? " floated in a column above your brow." : " float in a column above your brow.");
+			p(msgbuf);
 		}
 	}
 #undef PUNCTUTATION
-	
+
 	//Inactive syllables
+	if(show_visual){
 #define STRIPGLYPH		;
 //define STRIPGLYPH		if ((bp = strstri(msgbuf, " glyph")) != 0) *bp = '\0';
 #define PUNCTUTATION	if(count > 0){if(count == 1) Sprintf(eos(msgbuf), "%s and ", comma); else Sprintf(eos(msgbuf), "%s ", comma);}
-	count = 0;
-	if(u.uaesh && u.uaesh - !!u.uaesh_duration){
-		count++;
-	}
-	if(u.ukrau && u.ukrau - !!u.ukrau_duration){
-		count++;
-	}
-	if(u.uhoon && u.uhoon - !!u.uhoon_duration){
-		count++;
-	}
-	if(u.uuur && u.uuur - !!u.uuur_duration){
-		count++;
-	}
-	if(u.unaen && u.unaen - !!u.unaen_duration){
-		count++;
-	}
-	if(u.uvaul && u.uvaul - !!u.uvaul_duration){
-		count++;
-	}
-	if(count){
-		int num;
-		int total = 0;
-		char *bp;
-		if(count > 2) comma = ",";
-		else comma = "";
-		
-		msgbuf[0] = 0;
-		if(u.uaesh && u.uaesh - !!u.uaesh_duration){
-			num = u.uaesh - !!u.uaesh_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
+		count = 0;
+		if(u.uaesh && u.uaesh - !!u.uaesh_duration) count++;
+		if(u.ukrau && u.ukrau - !!u.ukrau_duration) count++;
+		if(u.uhoon && u.uhoon - !!u.uhoon_duration) count++;
+		if(u.uuur && u.uuur - !!u.uuur_duration) count++;
+		if(u.unaen && u.unaen - !!u.unaen_duration) count++;
+		if(u.uvaul && u.uvaul - !!u.uvaul_duration) count++;
+		if(count){
+			int num;
+			int total = 0;
+			char *bp;
+			if(count > 2) comma = ",";
+			else comma = "";
+
+			msgbuf[0] = 0;
+			if(u.uaesh && u.uaesh - !!u.uaesh_duration){
+				num = u.uaesh - !!u.uaesh_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_STRENGTH__AESH]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			if(u.ukrau && u.ukrau - !!u.ukrau_duration){
+				num = u.ukrau - !!u.ukrau_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			if(u.uhoon && u.uhoon - !!u.uhoon_duration){
+				num = u.uhoon - !!u.uhoon_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			if(u.uuur && u.uuur - !!u.uuur_duration){
+				num = u.uuur - !!u.uuur_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			if(u.unaen && u.unaen - !!u.unaen_duration){
+				num = u.unaen - !!u.unaen_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			if(u.uvaul && u.uvaul - !!u.uvaul_duration){
+				num = u.uvaul - !!u.uvaul_duration;
+				total += num;
+				if(num == 1) Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
+				else         Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
+				count--; STRIPGLYPH PUNCTUTATION
+			}
+			Sprintf(eos(msgbuf), dumping ? (total == 1 ? " drifted around your head." : " drifted around your head.")
+										: (total == 1 ? " drifts around your head." : " drift around your head."));
+			msgbuf[0] = highc(msgbuf[0]);
+			if(msgbuf[0]) p(msgbuf);
 		}
-		if(u.ukrau && u.ukrau - !!u.ukrau_duration){
-			num = u.ukrau - !!u.ukrau_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_POWER__KRAU]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
-		}
-		if(u.uhoon && u.uhoon - !!u.uhoon_duration){
-			num = u.uhoon - !!u.uhoon_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_LIFE__HOON]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
-		}
-		if(u.uuur && u.uuur - !!u.uuur_duration){
-			num = u.uuur - !!u.uuur_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_GRACE__UUR]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
-		}
-		if(u.unaen && u.unaen - !!u.unaen_duration){
-			num = u.unaen - !!u.unaen_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_THOUGHT__NAEN]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
-		}
-		if(u.uvaul && u.uvaul - !!u.uvaul_duration){
-			num = u.uvaul - !!u.uvaul_duration;
-			total += num;
-			if(num == 1)
-				Sprintf(eos(msgbuf), "a %s", OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
-			else
-				Sprintf(eos(msgbuf), "%d %ss", num, OBJ_DESCR(objects[SYLLABLE_OF_SPIRIT__VAUL]));
-			count--;
-			STRIPGLYPH
-			PUNCTUTATION
-		}
-		// Sprintf(eos(msgbuf), " glyph%s %s around your head.", total == 1 ? "" : "s", total == 1 ? "drifts" : "drift");
-		Sprintf(eos(msgbuf), " %s around your head.", total == 1 ? "drifts" : "drift");
-		msgbuf[0] = highc(msgbuf[0]);
-		if(msgbuf[0]) putstr(en_win, 0, msgbuf);
 	}
 #undef STRIPGLYPH
 #undef PUNCTUTATION
-	
-	if(u.sealsActive&SEAL_AHAZU && !NoBInvis){
-		if(!(ublindf && (ublindf->otyp==MASK || ublindf->otyp == R_LYEHIAN_FACEPLATE))){
-			putstr(en_win, 0, "There is a starry void in your throat.");
+
+	if(u.sealsActive&SEAL_AHAZU && !NoBInvis_dumping){
+		if(dumping || (mirror && !(ublindf && (ublindf->otyp==MASK || ublindf->otyp == R_LYEHIAN_FACEPLATE)))){
+			pt("There is a starry void in your throat.", "There was a starry void in your throat.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_AMON && !Invis){
-		if(!(uarmh && is_metallic(uarmh))){
-			putstr(en_win, 0, "You have a pair of large ram's horns.");
-		} else putstr(en_win, 0, "Your ram's horns have fused with your helm, taking on a metallic hue.");
+	if(u.sealsActive&SEAL_AMON && !Invis_dumping){
+		if(!(mirror || dumping) || !(uarmh && is_metallic(uarmh)))
+			pt("You have a pair of large ram's horns.", "You had a pair of large ram's horns.");
+		else
+			pt("Your ram's horns have fused with your helm, taking on a metallic hue.",
+			   "Your ram's horns had fused with your helm, taking on a metallic hue.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_ANDREALPHUS && !Invis && (dimness(u.ux, u.uy) <= 0)) {
-		putstr(en_win, 0, "Your shadow has a strange depth.");
+	if(u.sealsActive&SEAL_ANDREALPHUS && !Invis_dumping && show_light){
+		if(mirror || dumping)
+			pt("Your shadow has a strange depth.", "Your shadow had a strange depth.");
+		else
+			p("Up close, it is plain your shadow aspires to depth as well as width and height.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_ANDROMALIUS && !NoBInvis){
-		if(dimness(u.ux, u.uy) <= 0)
-			putstr(en_win, 0, "Your rigid features can't be seen in the dark.");
-		else if((ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE)) //face-covering mask
-			 || (uarmh && (uarmh->otyp==PLASTEEL_HELM || uarmh->otyp==PONTIFF_S_CROWN || uarmh->otyp==FACELESS_HELM || uarmh->otyp==FACELESS_HOOD || uarmh->otyp==IMPERIAL_ELVEN_HELM)) //opaque face-covering helm
-			 || (uarmc && (uarmc->otyp==WHITE_FACELESS_ROBE || uarmc->otyp==BLACK_FACELESS_ROBE || uarmc->otyp==SMOKY_VIOLET_FACELESS_ROBE))//face-covering robe
-		) putstr(en_win, 0, "Your rigid features can't be seen through your disguise.");
-		else putstr(en_win, 0, "Your features have taken on the rigidity of a cheap disguise.");
+	if(u.sealsActive&SEAL_ANDROMALIUS && !NoBInvis_dumping){
+		if(!dumping && mirror && dimness(u.ux, u.uy) <= 0)
+			p("Your rigid features can't be seen in the dark.");
+		else if(mirror && (
+			    (ublindf && ((ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE)))
+			 || (uarmh && FacelessHelm(uarmh) && is_opaque(uarmh))
+			 || (uarmc && FacelessCloak(uarmc) && is_opaque(uarmc))
+		))
+			pt("Your rigid features can't be seen through your disguise.",
+			   "Your rigid features couldn't be seen through your disguise.");
+		else
+			pt("Your features have taken on the rigidity of a cheap disguise.",
+			   "Your features had taken on the rigidity of a cheap disguise.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_ASTAROTH && !Invis){
+	if(u.sealsActive&SEAL_ASTAROTH && !Invis_dumping){
 		if(!ublindf || ublindf->otyp == LENSES || ublindf->otyp == SUNGLASSES || ublindf->otyp == LIVING_MASK)
-			putstr(en_win, 0, "A black liquid leaks from around your eyes.");
+			pt("A black liquid leaks from around your eyes.", "A black liquid leaked from around your eyes.");
 		else if(ublindf && (ublindf->otyp == MASK || ublindf->otyp == R_LYEHIAN_FACEPLATE))
-			putstr(en_win, 0, "The black liquid leaking from your eyes is hidden by your mask.");
+			pt("The black liquid leaking from your eyes is hidden by your mask.",
+			   "The black liquid leaking from your eyes was hidden by your mask.");
 		else {
-			Sprintf(msgbuf, "The black liquid leaking from your eyes is soaked up by your %s.", xname(ublindf));
-			putstr(en_win, 0, msgbuf);
+			Sprintf(msgbuf, dumping ? "The black liquid leaking from your eyes was soaked up by your %s."
+			                        : "The black liquid leaking from your eyes is soaked up by your %s.", xname(ublindf));
+			p(msgbuf);
 		}
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_BALAM && !Invis){
+	if(u.sealsActive&SEAL_BALAM && !Invis_dumping){
 		if(uarmc || (uarm && arm_blocks_upper_body(uarm->otyp)))
-			putstr(en_win, 0, "Freezing water leaks from a gash in your neck, but is hidden by your clothes.");
+			pt("Freezing water leaks from a gash in your neck, but is hidden by your clothes.",
+			   "Freezing water leaked from a gash in your neck, but was hidden by your clothes.");
 		else
-			putstr(en_win, 0, "Freezing water leaks from a deep gash in your neck.");
+			pt("Freezing water leaks from a deep gash in your neck.",
+			   "Freezing water leaked from a deep gash in your neck.");
 		if(!uarmg)
-			putstr(en_win, 0, "Freezing water leaks from deep holes in your wrists.");
+			pt("Freezing water leaks from deep holes in your wrists.",
+			   "Freezing water leaked from deep holes in your wrists.");
 		if(!uarmf)
-			putstr(en_win, 0, "Freezing water leaks from deep holes in your ankles.");
+			pt("Freezing water leaks from deep holes in your ankles.",
+			   "Freezing water leaked from deep holes in your ankles.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_BERITH && !Invis){
+	if(u.sealsActive&SEAL_BERITH && !Invis_dumping){
+		if(u.usteed)
+			pt("Your steed is drenched in gore.", "Your steed was drenched in gore.");
 		if(!(uarm && arm_blocks_upper_body(uarm->otyp) && is_metallic(uarm) && uarmg && uarmf && uarmh))
-			putstr(en_win, 0, "You are drenched in gore.");
+			pt("You are drenched in gore.", "You were drenched in gore.");
 		else
-			putstr(en_win, 0, "Your armor is faced with crimson enamel.");
+			pt("Your armor is faced with crimson enamel.", "Your armor was faced with crimson enamel.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_BUER && !Invis){
+	if(u.sealsActive&SEAL_BUER && !Invis_dumping){
 		if(!uarmf)
-			putstr(en_win, 0, "Your legs bifurcate into twin pairs of cloven-hoved feet.");
+			pt("Your legs bifurcate into twin pairs of cloven-hoved feet.",
+			   "Your legs bifurcated into twin pairs of cloven-hoved feet.");
 		else
-			putstr(en_win, 0, "Your strange feet are hidden in your shoes.");
+			pt("Your strange feet are hidden in your shoes.", "Your strange feet were hidden in your shoes.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_CHUPOCLOPS && !NoBInvis){
-		if(!(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
-			putstr(en_win, 0, "You see a pair of chelicerae in your mouth!");
+	if(u.sealsActive&SEAL_CHUPOCLOPS){
+		if(show_visual && !NoBInvis_dumping && !(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
+			pt("You see a pair of chelicerae in your mouth!", "You had a pair of chelicerae in your mouth.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("You feel something in your cheeks.", "You felt something in your cheeks.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_DANTALION && !NoBInvis){
-		if(!(uarmc || ((uarm && !is_opaque(uarm)) || uarmu))){
+	if(u.sealsActive&SEAL_DANTALION && !NoBInvis_dumping){
+		if(!(uarmc || ((uarm && arm_blocks_upper_body(uarm->otyp) && is_opaque(uarm)) || uarmu))){
 			switch(u.ulevel/10+1){
 				case 1:
-				putstr(en_win, 0, "There is an extra face growing on your chest.");
+				pt("There is an extra face growing on your chest.", "There was an extra face growing on your chest.");
 				break;
 				case 2:
-				putstr(en_win, 0, "There is a pair of faces growing on your chest.");
+				pt("There is a pair of faces growing on your chest.", "There was a pair of faces growing on your chest.");
 				break;
 				case 3:
-				putstr(en_win, 0, "Many extra faces grow on your chest.");
+				pt("Many extra faces grow on your chest.", "Many extra faces grew on your chest.");
 				break;
 				case 4:
-				putstr(en_win, 0, "There are legions of faces growing on your chest.");
+				pt("There are legions of faces growing on your chest.", "There were legions of faces growing on your chest.");
 				break;
 			}
-		}
-		else{
-			if(u.ulevel/10){
-				putstr(en_win, 0, "Your extra faces are covered by your clothes.");
-			} else
-				putstr(en_win, 0, "Your extra face is covered by your clothes.");
+		} else {
+			if(u.ulevel/10)
+				pt("Your extra faces are covered by your clothes.", "Your extra faces were covered by your clothes.");
+			else
+				pt("Your extra face is covered by your clothes.", "Your extra face was covered by your clothes.");
 		}
 		message = TRUE;
 	}
 	// if(u.sealsActive&SEAL_SHIRO);
-	if(u.sealsActive&SEAL_ECHIDNA && !Invis){
+	if(u.sealsActive&SEAL_ECHIDNA && !Invis_dumping){
 		if(!(uarmf && (uarmc || (uarm && arm_blocks_upper_body(uarm->otyp)))))
-			putstr(en_win, 0, "Your hips give rise to twin serpent's tails instead of legs.");
+			pt("Your hips give rise to twin serpent's tails instead of legs.",
+			   "Your hips gave rise to twin serpent's tails instead of legs.");
 		else
-			putstr(en_win, 0, "Your serpentine legs are disguised by your clothes.");
+			pt("Your serpentine legs are disguised by your clothes.",
+			   "Your serpentine legs were disguised by your clothes.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_EDEN && !NoBInvis && !uarmh){
-		putstr(en_win, 0, "You see a garden through the dome of cerulean crystal embedded in your head!");
-		message = TRUE;
+	if(u.sealsActive&SEAL_EDEN){
+		if(show_visual && !NoBInvis_dumping && !uarmh){
+			pt("You see a garden through the dome of cerulean crystal embedded in your head!",
+			   "You could see a garden through the dome of cerulean crystal embedded in your head.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("There is something rigid in the crown of your skull.",
+			   "There was something rigid in the crown of your skull.");
+			message = TRUE;
+		}
 	}
-	if(u.sealsActive&SEAL_ENKI && !Invis){
+	if(u.sealsActive&SEAL_ENKI && !Invis_dumping){
 		if(!((uarm && arm_blocks_upper_body(uarm->otyp)) || uarmc))
-			putstr(en_win, 0, "Water runs off your body in steady rivulets.");
+			pt("Water runs off your body in steady rivulets.", "Water ran off your body in steady rivulets.");
 		else
-			putstr(en_win, 0, "Your body's runoff is caught by your clothes.");
+			pt("Your body's runoff is caught by your clothes.", "Your body's runoff was caught by your clothes.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_EVE && !NoBInvis){
-		if(!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc){
-			putstr(en_win, 0, "There is a blood-caked wound on your stomach.");
+	if(u.sealsActive&SEAL_EURYNOME && !Invis_dumping){
+		if(dumping || levl[u.ux][u.uy].lit){
+			pt("Your shadow is that of a dancing nymph.", "Your shadow was that of a dancing nymph.");
 			message = TRUE;
-		}
-		if(!uarmf){
-			putstr(en_win, 0, "Your feet are torn by thorns and stones.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_HUGINN_MUNINN && !NoBInvis){
-		if(!uarmh){
-			putstr(en_win, 0, "You find a raven nesting in each ear!");
+		} else if(dimness(u.ux, u.uy) <= 0){
+			p("It's a bit hard to see, but your shadow is a dancing nymph.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_IRIS && !NoBInvis){
+	if(u.sealsActive&SEAL_EVE && !NoBInvis_dumping){
+		boolean stomach_wound = !(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc;
+		boolean feet_wound = !uarmf;
+		if(dumping && !(stomach_wound && feet_wound)){
+			if(!stomach_wound && !feet_wound){
+				p("Your stomach and foot wounds were hidden by your clothes.");
+				message = TRUE;
+			}
+			else if(!stomach_wound){
+				p("Your feet were torn by thorns and stones, and there was a bloody wound on your stomach hidden by your clothes.");
+				message = TRUE;
+			}
+			else {
+				p("There was a blood-caked wound on your stomach, wounds on your feet hidden by your shoes.");
+				message = TRUE;
+			}
+		}
+		else {
+			if(stomach_wound){
+				pt("There is a blood-caked wound on your stomach.", "There was a blood-caked wound on your stomach.");
+				message = TRUE;
+			}
+			if(feet_wound){
+				pt("Your feet are torn by thorns and stones.", "Your feet were torn by thorns and stones.");
+				message = TRUE;
+			}
+		}
+	}
+	if(u.sealsActive&SEAL_HUGINN_MUNINN){
+		if(show_visual && !NoBInvis_dumping && !uarmh){
+			pt("You find a raven nesting in each ear!", "You had a raven nesting in each ear.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("There is something rustling around in your ear.", "There was something rustling around in your ear.");
+			message = TRUE;
+		}
+	}
+	if(u.sealsActive&SEAL_IRIS && !NoBInvis_dumping){
 		if(moves <= u.irisAttack+1){
-			putstr(en_win, 0, "Waving, iridescent tentacles sprout from your forearms.");
+			pt("Waving, iridescent tentacles sprout from your forearms.",
+			   "Waving, iridescent tentacles sprouted from your forearms.");
 			message = TRUE;
 		} else if(!uarmc && moves <= u.irisAttack+5){
-			putstr(en_win, 0, "There are iridescent tentacles wrapped around your forearms.");
+			pt("There are iridescent tentacles wrapped around your forearms.",
+			   "There were iridescent tentacles wrapped around your forearms.");
 			message = TRUE;
-		} else if(!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc){
-			putstr(en_win, 0, "There are iridescent veins just under the skin of your forearms.");
-			message = TRUE;
-		}
-	}
-	if(u.sealsActive&SEAL_JACK && !NoBInvis){
-		if(!uarmc){
-			putstr(en_win, 0, "You see an old, old man on your back!");
-		} else {
-			putstr(en_win, 0, "You see a bump under your cloak on your back.");
-		}
-		message = TRUE;
-	}
-	if(u.sealsActive&SEAL_MAEGERA && !NoBInvis){ 
-		if(!(uleft || uarmg)){
-			putstr(en_win, 0, "There is a star-shaped hole burned to the gilded bone of your left ring-finger.");
+		} else if(dumping || (!(uarm && arm_blocks_upper_body(uarm->otyp)) && !uarmc)){
+			pt("There are iridescent veins just under the skin of your forearms.",
+			   "There were iridescent veins just under the skin of your forearms.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_MALPHAS && !NoBInvis){
-		if(!(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
-			putstr(en_win, 0, "There is a whole flock's worth of crows peeking out of your throat!");
+	if(u.sealsActive&SEAL_JACK){
+		if(show_visual && !NoBInvis_dumping){
+			if(!uarmc)
+				pt("You see an old, old man on your back!", "There was an old, old man on your back.");
+			else
+				pt("You see a bump under your cloak on your back.", "There was a bump under your cloak on your back.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("There is something on your back.", "There was something on your back.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_MARIONETTE && !NoBInvis){
-		if(!((uarm && arm_blocks_upper_body(uarm->otyp))&& is_metallic(uarm)))
-			putstr(en_win, 0, "Metal wires protrude from your elbows, knees, and back.");
+	if(u.sealsActive&SEAL_MAEGERA && !NoBInvis_dumping){
+		if(!(uleft || uarmg) || dumping){
+			pt("There is a star-shaped hole burned to the gilded bone of your left ring-finger.",
+			   "There was a star-shaped hole burned to the gilded bone of your left ring-finger.");
+			message = TRUE;
+		}
+	}
+	if(u.sealsActive&SEAL_MALPHAS){
+		if(show_visual && !NoBInvis_dumping && !(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
+			pt("There is a whole flock's worth of crows peeking out of your throat!",
+			   "There was a whole flock's worth of crows peeking out of your throat.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("You feel things pecking the inside of your mouth.", "You felt things pecking the inside of your mouth.");
+			message = TRUE;
+		}
+	}
+	if(u.sealsActive&SEAL_MARIONETTE && !NoBInvis_dumping){
+		if(!((uarm && arm_blocks_upper_body(uarm->otyp)) && is_metallic(uarm)))
+			pt("Metal wires protrude from your elbows, knees, and back.",
+			   "Metal wires protruded from your elbows, knees, and back.");
 		else
-			putstr(en_win, 0, "The metal wires protruding from your body have merged with your armor.");
+			pt("The metal wires protruding from your body have merged with your armor.",
+			   "The metal wires protruding from your body had merged with your armor.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_MOTHER && !NoBInvis){
+	if(u.sealsActive&SEAL_MOTHER && !NoBInvis_dumping){
 		if(!uarmg && !(uarmc && is_mummy_wrap(uarmc)))
-			putstr(en_win, 0, "The eyes on your fingers and palms stare back at you.");
+			pt("The eyes on your fingers and palms stare back at you.",
+			   "The eyes on your fingers and palms stared back at you.");
 		else
-			putstr(en_win, 0, "The eyes on your fingers and palms are covered up.");
+			pt("The eyes on your fingers and palms are covered up.",
+			   "The eyes on your fingers and palms were covered up.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_NABERIUS && !NoBInvis){
-		if(!(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
-			putstr(en_win, 0, "Your tongue is forked!");
+	if(u.sealsActive&SEAL_NABERIUS){
+		if(show_visual && !NoBInvis_dumping && !(ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE))){
+			pt("Your tongue is forked!", "Your tongue was forked.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("Your tongue feels odd.", "Your tongue felt odd.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_ORTHOS && !NoBInvis){
+	if(u.sealsActive&SEAL_ORTHOS && !NoBInvis_dumping){
 		if(uarmc && !is_mummy_wrap(uarmc)){
-			putstr(en_win, 0, "Your cloak blows in a nonexistent wind.");
+			pt("Your cloak blows in a nonexistent wind.", "Your cloak blew in a nonexistent wind.");
+			message = TRUE;
+		}
+		else if(dumping){
+			p("You are lost in the howling void.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_OSE && !Blind && !BClairvoyant && !(uarmh && is_metallic(uarmh) && uarmh->otyp != HELM_OF_TELEPATHY)){
-			putstr(en_win, 0, "You feel your gaze as a tangible force.");
-			message = TRUE;
+	if(u.sealsActive&SEAL_OSE && (dumping || (mirror && !Blind && !BClairvoyant && !(uarmh && is_metallic(uarmh) && uarmh->otyp != HELM_OF_TELEPATHY)))){
+		pt("You feel your gaze as a tangible force.", "Your gaze could be felt as a tangible force.");
+		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_OTIAX && !Invis){
+	if(u.sealsActive&SEAL_OTIAX && !Invis_dumping){
 		if(moves <= u.otiaxAttack+5){
-			putstr(en_win, 0, "The mist around you is formed into writhing tendrils.");
+			pt("The mist around you is formed into writhing tendrils.",
+			   "The mist around you was formed into writhing tendrils.");
+			message = TRUE;
+		}
+		else if(dumping){
+			p("You were protected by writhing mist.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_PAIMON && !Invis){ 
-		if(!uarmh)
-			putstr(en_win, 0, "There is a crown floating over your head.");
-		else
-			putstr(en_win, 0, "There is a crown sitting on your helm.");
-		message = TRUE;
+	if(u.sealsActive&SEAL_PAIMON && !Invis_dumping){
+		if(!uarmh){
+			pt("There is a crown floating over your head.", "There was a crown floating over your head.");
+			message = TRUE;
+		} else if(show_visual){
+			pt("There is a crown sitting on your helm.", "There was a crown sitting on your helm.");
+			message = TRUE;
+		}
 	}
-	if(u.sealsActive&SEAL_SIMURGH && !Invis){
+	if(u.sealsActive&SEAL_SIMURGH && !Invis_dumping){
 		if(!uarmg)
-			putstr(en_win, 0, "You have iron claws.");
+			pt("You have iron claws.", "You had iron claws.");
 		else
-			putstr(en_win, 0, "Your iron claws seem to be part of your gloves.");
+			pt("Your iron claws seem to be part of your gloves.", "Your iron claws seemed to be part of your gloves.");
 		if(!uarmh)
-			putstr(en_win, 0, "There is a pair of prismatic wings reaching around your head.");
-		else
-			putstr(en_win, 0, "Your helm has a crest of prismatic feathers.");
+			pt("There is a pair of prismatic wings reaching around your head.",
+			"There was a pair of prismatic wings reaching around your head.");
+		else if(show_visual)
+			pt("Your helm has a crest of prismatic feathers.", "Your helm had a crest of prismatic feathers.");
 		message = TRUE;
 	}
-	if(u.sealsActive&SEAL_TENEBROUS && !Invis){
-		if(dimness(u.ux,u.uy) <= 0) {
-			putstr(en_win, 0, "Your shadow is unnaturally dark and pools close to you.");
+	if(u.sealsActive&SEAL_TENEBROUS && !Invis_dumping){
+		if(show_light){
+			pt("Your shadow is unnaturally dark and pools close to you.",
+			   "Your shadow was unnaturally dark and pooled close to you.");
 			message = TRUE;
 		}
 	}
-	if(u.sealsActive&SEAL_YMIR && !Invis){
+	if(u.sealsActive&SEAL_YMIR && !Invis_dumping){
 		if(moves>5000 && moves <= 10000){
 			if(!((uarm && arm_blocks_upper_body(uarm->otyp)) || uarmc))
-				putstr(en_win, 0, "Your skin color is a bit off.");
+				pt("Your skin color is a bit off.", "Your skin color was a bit off.");
 			else
-				putstr(en_win, 0, "Your skin is hidden under your clothes.");
+				pt("Your skin is hidden under your clothes.", "Your skin was hidden under your clothes.");
 			message = TRUE;
 		} else if(moves>10000 && moves <= 20000){
 			if(!(uarmc))
-				putstr(en_win, 0, "Maggots burrow through your skin.");
+				pt("Maggots burrow through your skin.", "Maggots burrowed through your skin.");
 			else
-				putstr(en_win, 0, "Your rot is hidden under your clothes.");
+				pt("Your rot is hidden under your clothes.", "Your rot was hidden under your clothes.");
 			message = TRUE;
 		} else if(moves>20000 && moves <= 50000){
 			if(!(uarmc && uarmg && uarmf))
-				putstr(en_win, 0, "Your skin is rotting off.");
+				pt("Your skin is rotting off.", "Your skin was rotting off.");
 			else
-				putstr(en_win, 0, "Your rot is hidden under your clothes.");
+				pt("Your rot is hidden under your clothes.", "Your rot was hidden under your clothes.");
 			message = TRUE;
 		} else if(moves>50000 && moves <= 100000){
 			if(!(uarmc && uarmg && uarmf && (uarm && arm_blocks_upper_body(uarm->otyp)) && uarmh))
-				putstr(en_win, 0, "Your rotted body bristles with fungal sporangia and burrowing vermin.");
+				pt("Your rotted body bristles with fungal sporangia and burrowing vermin.",
+				   "Your rotted body bristled with fungal sporangia and burrowing vermin.");
 			else
-				putstr(en_win, 0, "Your rotted form is hidden under your clothes.");
+				pt("Your rotted form is hidden under your clothes.", "Your rotted form was hidden under your clothes.");
 			message = TRUE;
 		} else if(moves>100000){
 			if(!(uarmc && uarmg && uarmf && (uarm && arm_blocks_upper_body(uarm->otyp)) && uarmh && ublindf && (ublindf->otyp==MASK || ublindf->otyp==R_LYEHIAN_FACEPLATE)))
-				putstr(en_win, 0, "Your putrid body is a riot of fungal forms and saprophagous insects.");
+				pt("Your putrid body is a riot of fungal forms and saprophagous insects.",
+				   "Your putrid body was a riot of fungal forms and saprophagous insects.");
 			else
-				putstr(en_win, 0, "Your putrid form is hidden under your clothes.");
+				pt("Your putrid form is hidden under your clothes.", "Your putrid form was hidden under your clothes.");
 			message = TRUE;
 		}
 	}
-	if(u.specialSealsActive&SEAL_DAHLVER_NAR && !NoBInvis){
+	if(u.specialSealsActive&SEAL_DAHLVER_NAR && !NoBInvis_dumping){
 		if(dahlverNarVis()){
-			putstr(en_win, 0, "Your wounds are full of sharp teeth!");
+			pt("Your wounds are full of sharp teeth!", "Your wounds were full of sharp teeth.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("You feel teeth beneath your skin.", "You felt teeth beneath your skin.");
 			message = TRUE;
 		}
 	}
-	if(u.specialSealsActive&SEAL_ACERERAK && !NoBInvis && !(ublindf && ublindf->otyp != LENSES && ublindf->otyp != LIVING_MASK)){
-		putstr(en_win, 0, "You have gemstones for eyes!");
-		message = TRUE;
+	if(u.specialSealsActive&SEAL_ACERERAK){
+		if(show_visual && !NoBInvis_dumping && !(ublindf && ublindf->otyp != LENSES && ublindf->otyp != LIVING_MASK)){
+			pt("You have gemstones for eyes!", "You had gemstones for eyes.");
+			message = TRUE;
+		} else if(!mirror){
+			pt("Your eyes feel odd.", "Your eyes felt odd.");
+			message = TRUE;
+		}
 	}
-	if(u.specialSealsActive&SEAL_COUNCIL && !NoBInvis){
+	if(u.specialSealsActive&SEAL_COUNCIL && !NoBInvis_dumping && show_visual){
 		if(!ublindf || ublindf->otyp == LENSES || ublindf->otyp == LIVING_MASK)
-			putstr(en_win, 0, "Your eyes shine like stars.");
+			pt("Your eyes shine like stars.", "Your eyes shone like stars.");
 		else if(ublindf && (ublindf->otyp == MASK))
-			putstr(en_win, 0, "Your star-like eyes shine through your mask.");
+			pt("Your star-like eyes shine through your mask.", "Your star-like eyes shone through your mask.");
 		else if(ublindf && (ublindf->otyp == R_LYEHIAN_FACEPLATE))
-			putstr(en_win, 0, "Your star-like eyes are covered by your opaque mask.");
+			pt("Your star-like eyes are covered by your opaque mask.", "Your star-like eyes were covered by your opaque mask.");
 		else if(ublindf && (ublindf->otyp == SUNGLASSES))
-			putstr(en_win, 0, "Your star-like eyes are covered by your mirrored lenses.");
+			pt("Your star-like eyes are covered by your mirrored lenses.", "Your star-like eyes were covered by your mirrored lenses.");
 		else {
-			Sprintf(msgbuf, "Your star-like eyes are covered by your %s.", xname(ublindf));
-			putstr(en_win, 0, msgbuf);
+			Sprintf(msgbuf, dumping ? "Your star-like eyes were covered by your %s."
+			                        : "Your star-like eyes are covered by your %s.", xname(ublindf));
+			p(msgbuf);
 		}
 		message = TRUE;
 	}
 	if(u.specialSealsActive&SEAL_COSMOS){
-		putstr(en_win, 0, "A bright, crystalline aureola hangs behind you.");
+		if(show_visual)
+			pt("A bright, crystalline aureola hangs behind you.", "A bright, crystalline aureola hung behind you.");
+		else
+			pt("You feel like something is behind you, but you can't see anything.",
+			   "You felt like something was behind you, but you couldn't see anything.");
 		message = TRUE;
 	}
 	if(u.specialSealsActive&SEAL_LIVING_CRYSTAL){
-		putstr(en_win, 0, "Broken rings of fragmentary glyphs form and dissolve in the dustlight behind you.");
+		if(show_visual)
+			pt("Broken rings of fragmentary glyphs form and dissolve in the dustlight behind you.",
+			   "Broken rings of fragmentary glyphs formed and dissolved in the dustlight behind you.");
+		else
+			pt("You feel like something is behind you, but you can't see anything.",
+			   "You felt like something was behind you, but you couldn't see anything.");
 		message = TRUE;
 	}
 	if(u.specialSealsActive&SEAL_TWO_TREES){
-		putstr(en_win, 0, "Glorious dappled light dances on your body.");
+		pt("Glorious dappled light dances on your body.", "Glorious dappled light danced on your body.");
 		message = TRUE;
 	}
-	if(u.specialSealsActive&SEAL_MISKA && !Invis && u.ulevel >= 10){
-		static char mbuf[BUFSZ] = {'\0'};
+	if(u.specialSealsActive&SEAL_MISKA && (!Invis_dumping || !mirror) && u.ulevel >= 10){
+		char mbuf[BUFSZ] = {'\0'};
 		if(u.ulevel >= 26){
-			int howManyArms = (youracedata->mtyp == PM_VALAVI) ? 6 : 
-						  (youracedata->mtyp == PM_MAN_SERPENT_MAGE) ? 6 : 
-						  (youracedata->mtyp == PM_PHALANX) ? 6 : 
-						  (youracedata->mtyp == PM_MARILITH) ? 8 : 
-						  (youracedata->mtyp == PM_KARY__THE_FIEND_OF_FIRE) ? 8 : 
-						  (youracedata->mtyp == PM_CATHEZAR) ? 8 : 
-						  (youracedata->mtyp == PM_SHAKTARI) ? 8 : 
+			int howManyArms = (youracedata->mtyp == PM_VALAVI) ? 6 :
+						  (youracedata->mtyp == PM_MAN_SERPENT_MAGE) ? 6 :
+						  (youracedata->mtyp == PM_PHALANX) ? 6 :
+						  (youracedata->mtyp == PM_MARILITH) ? 8 :
+						  (youracedata->mtyp == PM_KARY__THE_FIEND_OF_FIRE) ? 8 :
+						  (youracedata->mtyp == PM_CATHEZAR) ? 8 :
+						  (youracedata->mtyp == PM_SHAKTARI) ? 8 :
+						  nohands(youracedata) ? 2 :
 						  4;
-			Sprintf(mbuf, "You have %d arms, and a wolf head grows from each hip.", howManyArms);
-			putstr(en_win, 0, mbuf);
+			Sprintf(mbuf, dumping ? "You had %d arms, and a wolf head grew from each hip."
+			                      : "You have %d arms, and a wolf head grows from each hip.", howManyArms);
+			p(mbuf);
 		} else if(u.ulevel >= 18) {
-			putstr(en_win, 0, "You have a wolf head growing from each hip.");
+			pt("You have a wolf head growing from each hip.", "You had a wolf head growing from each hip.");
 		} else {
-			putstr(en_win, 0, "You have a wolf head growing from your lower stomach.");
+			pt("You have a wolf head growing from your lower stomach.", "You had a wolf head growing from your lower stomach.");
 		}
 		message = TRUE;
 	}
-	if(u.specialSealsActive&SEAL_NUDZIRATH){
-		putstr(en_win, 0, "A nimbus of tiny mirrored shards surrounds your head.");
+	if(u.specialSealsActive&SEAL_NUDZIRATH && show_visual){
+		if(!NoBInvis_dumping)
+			pt("A nimbus of tiny mirrored shards surrounds your head.", "A nimbus of tiny mirrored shards surrounded your head.");
+		else
+			p("A nimbus of tiny mirrored shards fills the mirror.");
 		message = TRUE;
 	}
 	if(u.specialSealsActive&SEAL_ALIGNMENT_THING){
-		putstr(en_win, 0, "You see a small black halo just behind your head. There is an eye in the center, staring at you!");
+		if(show_visual)
+			pt("You see a small black halo just behind your head. There is an eye in the center, staring at you!",
+			   "There was a small black halo just behind your head with an eye in the center, staring at you.");
+		else
+			pt("You feel like someone is staring at the back of your head.",
+			   "You felt like someone was staring at the back of your head.");
+		if(!mirror)
+			pt("You hear an argument raging in the distance.", "You heard an argument raging in the distance.");
 		message = TRUE;
 	}
-	if(u.specialSealsActive&SEAL_BLACK_WEB && !Invis){
-		if(dimness(u.ux, u.uy) <= 0) {
-			putstr(en_win, 0, "Your shadow is wrapped in the black web.");
+	if(u.specialSealsActive&SEAL_BLACK_WEB && !Invis_dumping){
+		if(show_light){
+			pt("Your shadow is wrapped in the black web.", "Your shadow was wrapped in the black web.");
 			message = TRUE;
 		}
 	}
-	if(u.specialSealsActive&SEAL_YOG_SOTHOTH && !Invis){
-		if(check_mutation(YOG_GAZE_2)){
-			if(ublindf && ublindf->otyp != LENSES && ublindf->otyp != SUNGLASSES && ublindf->otyp != LIVING_MASK){
-				char mbuf[BUFSZ] = {0};
-				Sprintf(mbuf, "Your flaming eyes are hidden by your %s.", xname(ublindf));
-				putstr(en_win, 0, mbuf);
+	if(u.specialSealsActive&SEAL_YOG_SOTHOTH && !Invis_dumping){
+		if(show_visual){
+			if(check_mutation(YOG_GAZE_2)){
+				if(ublindf && ublindf->otyp != LENSES && ublindf->otyp != SUNGLASSES && ublindf->otyp != LIVING_MASK){
+					char mbuf[BUFSZ] = {0};
+					Sprintf(mbuf, dumping ? "Your flaming eyes were hidden by your %s."
+										: "Your flaming eyes are hidden by your %s.", xname(ublindf));
+					p(mbuf);
+				} else {
+					pt("Magenta flames flare from your eyesockets.", "Magenta flames flared from your eyesockets.");
+				}
+			} else if(check_mutation(YOG_GAZE_1)){
+				if(ublindf && ublindf->otyp != LENSES && ublindf->otyp != LIVING_MASK){
+					char mbuf[BUFSZ] = {0};
+					Sprintf(mbuf, dumping ? "Your fiery eyes were hidden by your %s."
+										: "Your fiery eyes are hidden by your %s.", xname(ublindf));
+					p(mbuf);
+				} else {
+					pt("Your eyes have irises of magenta fire.", "Your eyes had irises of magenta fire.");
+				}
 			}
-			else {
-				putstr(en_win, 0, "Magenta flames flare from your eyesockets.");
-			}
 		}
-		else if(check_mutation(YOG_GAZE_1)){
-			if(ublindf && ublindf->otyp != LENSES && ublindf->otyp != LIVING_MASK){
-				char mbuf[BUFSZ] = {0};
-				Sprintf(mbuf, "Your fiery eyes are hidden by your %s.", xname(ublindf));
-				putstr(en_win, 0, mbuf);
-			}
-			else {
-				putstr(en_win, 0, "Your eyes have irises of magenta fire.");
-			}
-		}
-		if(!uarm && !(uarmu && arm_blocks_lower_body(uarmu->otyp))){
-			putstr(en_win, 0, "You have a belt of writhing leeches.");
-		}
-		else if(!Invis && moves <= u.yogAttack+5){
-			putstr(en_win, 0, "Your waist-tentacles wave around in search of further prey.");
-		}
-		else {
-			putstr(en_win, 0, "Your blood-sucking tentacles are hidden by your clothes.");
-		}
-		if(!uarmf){
-			putstr(en_win, 0, "Your feet are circular and ridgy-veined.");
-		}
-		else {
-			putstr(en_win, 0, "Your circular feet are hidden by your boots.");
-		}
+		if(!uarm && !(uarmu && arm_blocks_lower_body(uarmu->otyp)))
+			pt("You have a belt of writhing leeches.", "You had a belt of writhing leeches.");
+		else if(!Invis_dumping && moves <= u.yogAttack+5)
+			pt("Your waist-tentacles wave around in search of further prey.",
+			   "Your waist-tentacles waved around in search of further prey.");
+		else
+			pt("Your blood-sucking tentacles are hidden by your clothes.",
+			   "Your blood-sucking tentacles were hidden by your clothes.");
+		if(!uarmf)
+			pt("Your feet are circular and ridgy-veined.", "Your feet were circular and ridgy-veined.");
+		else
+			pt("Your circular feet are hidden by your boots.", "Your circular feet were hidden by your boots.");
 		message = TRUE;
 	}
-	
-	if(!message){
-		putstr(en_win, 0, "You think you look pretty normal.");
+	if(u.specialSealsActive&SEAL_NUMINA && !mirror){
+		p("You are surrounded by whispers.");
+		message = TRUE;
 	}
-	
-	display_nhwindow(en_win, TRUE);
-	destroy_nhwindow(en_win);
+
+	if(!message)
+		pt("You think you look pretty normal.", "You looked pretty normal.");
+
+	if(!dumping){
+		display_nhwindow(en_win, TRUE);
+		destroy_nhwindow(en_win);
+	}
 	return;
+
+#undef pt
+#undef p
 }
 
 
@@ -3132,15 +2916,126 @@ boolean dumping;
 }
 
 STATIC_OVL void
-mutations_enlightenment()
+aasimar_enlightenment_subroutine(boolean dumping)
 {
 	char buf[BUFSZ];
+
+#define pt(s,t) put_or_dump(dumping ? (t) : (s), dumping)
+#define p(s)    put_or_dump((s), dumping)
+
+	switch(flags.aasimar_type){
+	case AASIMAR_TYPE_ARCHON:
+		pt("Your shining halo protects your head.",
+			"Your shining halo protected your head.");
+		if(u.ulevel >= 14)
+			pt("Your aura has formed into wings, granting you flight.",
+			   "Your aura had formed into wings, granting you flight.");
+		break;
+
+	case AASIMAR_TYPE_SERAPH:
+		pt("Your blazing halo protects your head.",
+			"Your blazing halo protected your head.");
+		if(u.ulevel >= 14)
+			pt("Your aura has formed into wings, granting you flight.",
+			   "Your aura had formed into wings, granting you flight.");
+		if(u.seraph_eyes >= SE_FUTURE)
+			pt("You have reclaimed all seven of your stolen eyes.",
+			   "You had reclaimed all seven of your stolen eyes.");
+		else if(u.seraph_eyes > 0){
+			Sprintf(buf, dumping ? "You had recovered %d of your stolen eyes."
+			                     : "You have recovered %d of your stolen eyes.",
+			        (int)u.seraph_eyes);
+			p(buf);
+		} else
+			pt("Your stolen eyes have yet to be recovered.",
+			   "Your stolen eyes were not recovered.");
+		break;
+
+	case AASIMAR_TYPE_DEVA:
+		pt("Your glowing aureola protects your torso.",
+			"Your glowing aureola protected your torso.");
+		if(u.ulevel >= 14)
+			pt("Your aureola has formed into arms of light.",
+			   "Your aureola had formed into arms of light.");
+		break;
+
+	case AASIMAR_TYPE_ELADRIN:
+		if(u.ulevel >= 30)
+			pt("Your powerful aura provides strong protection across your whole body.",
+			   "Your powerful aura provided strong protection across your whole body.");
+		else
+			pt("Your aura provides some protection across your whole body.",
+			   "Your aura provided some protection across your whole body.");
+		if(u.ulevel >= 14){
+			if(storm_aasimar(flags.aasimar_subtype))
+				pt("Your aura has destabilized into a storm.",
+				   "Your aura had destabilized into a storm.");
+			else if(flags.aasimar_subtype == AASIMAR_SUBTYPE_COURE)
+				pt("Your aura has formed into blades of starlight.",
+				   "Your aura had formed into blades of starlight.");
+			else if(flags.aasimar_subtype == AASIMAR_SUBTYPE_GAE)
+				pt("Your aura has formed into reaching vines.",
+				   "Your aura had formed into reaching vines.");
+		}
+		break;
+
+	case AASIMAR_TYPE_PRIMINAL:
+		pt("Your glowing aureola protects your torso.",
+			"Your glowing aureola protected your torso.");
+		if(u.ulevel >= 10)
+			pt("Your skin feels rough and scaly to the touch.",
+			   "Your skin felt rough and scaly.");
+		break;
+
+	case AASIMAR_TYPE_CLOUDFACE:
+		if(Insight >= 21){
+			pt("The toothless mouths on your shoulders mumble constantly, and sometimes bless you with strange prayers.",
+			   "The toothless mouths on your shoulders mumbled constantly, and sometimes blessed you with strange prayers.");
+			pt("The cloudy void in your face unnerves those who gaze upon it.",
+			   "The cloudy void in your face unnerved those who gazed upon it.");
+			if(!uarmg){
+				pt("The fanged maws on your palms can inflict vicious bites.", "The fanged maws on your palms could inflict vicious bites.");
+			}
+		}
+		else {
+			pt("People always find the sight of your face unnerving.",
+				"People always found the sight of your face unnerving.");
+			pt("You mutter and mumble constantly, and sometimes you utter strange prayers without realizing it.",
+				"You muttered and mumbled constantly, and sometimes you uttered strange prayers without realizing it.");
+			if(!uarmg){
+				pt("Your unkempt nails can inflict curiously bite-like wounds.", "Your unkempt nails could inflict curiously bite-like wounds.");
+			}
+		}
+		break;
+
+	case AASIMAR_TYPE_IKSH_NA:
+		if(u.ulevel >= 30)
+			pt("Your powerful aura provides strong protection across your whole body.",
+			   "Your powerful aura provided strong protection across your whole body.");
+		else
+			pt("Your aura provides some protection across your whole body.",
+			   "Your aura provided some protection across your whole body.");
+		/* Eye mutations are described by the mutation listing below. */
+		break;
+	}
+
+#undef pt
+#undef p
+}
+
+STATIC_OVL void
+mutations_enlightenment(boolean dumping)
+{
 	int i;
-	en_win = create_nhwindow(NHW_MENU);
 	extern const struct mutationtype mutationtypes[];
+	if (!dumping)
+		en_win = create_nhwindow(NHW_MENU);
+	if(flags.aasimar_type){
+		aasimar_enlightenment_subroutine(dumping);
+	}
 	for(i= 0; mutationtypes[i].mutation; i++){
 		if(u.next_tiefling_mutation == mutationtypes[i].mutation){
-			putstr(en_win, 0, mutationtypes[i].start_forming);
+			put_or_dump(mutationtypes[i].start_forming, dumping);
 			break;
 		}
 	}
@@ -3152,11 +3047,13 @@ mutations_enlightenment()
 			&& (mutationtypes[i].mutation != TWIN_DREAMS || u.specialSealsActive&SEAL_YOG_SOTHOTH)
 			&& (mutationtypes[i].mutation != TWIN_SAVE || mtyp_on_level(PM_TWIN_SIBLING))
 		){
-			putstr(en_win, 0, mutationtypes[i].description);
+			put_or_dump(mutationtypes[i].description, dumping);
 		}
 	}
-	display_nhwindow(en_win, TRUE);
-	destroy_nhwindow(en_win);
+	if (!dumping) {
+		display_nhwindow(en_win, TRUE);
+		destroy_nhwindow(en_win);
+	}
 	return;
 }
 
@@ -3255,6 +3152,9 @@ research_enlightenment()
 		if(check_vampire(VAMPIRE_GAZE)){
 			putstr(en_win, 0, "    You have learned to hypnotize your prey.");
 		}
+		if(check_vampire(VAMPIRE_SHUB)){
+			putstr(en_win, 0, "    You have joined the communion of Shub-Nugganoth.");
+		}
 		if(rot_count() > 0){
 			if(researcher){
 				if(rot_count() < ROT_COUNT)
@@ -3288,6 +3188,9 @@ research_enlightenment()
 			}
 			if(check_rot(ROT_SPORES)){
 				putstr(en_win, 0, "    Puffball mushrooms errupt from your skin.");
+			}
+			if(check_rot(ROT_SHUB)){
+				putstr(en_win, 0, "    The spores of Shub-Nugganoth have taken root in your flesh.");
 			}
 			if(check_rot(ROT_EXHULT)){
 				putstr(en_win, 0, "    Something in your breast exults the Order of Rot.");
@@ -3368,6 +3271,9 @@ research_enlightenment()
 			sprintf(buf, "    You have positioned %d parasite%s to sting adjacent enemies.", u.jellyfish, u.jellyfish > 1 ? "s" : "");
 			putstr(en_win, 0, buf);
 		}
+		if(check_parasitology(PARISITE_WINDOWS)){
+			putstr(en_win, 0,     "    You have positioned a parasite in your corpus callosum and embraced the visions of Yog-Sothoth.");
+		}
 	}
 	if(active_glyph(ROTTEN_EYES) || u.ualign.god == GOD_THE_COLLEGE || u.ureanimation_research){
 		if(Role_if(PM_UNDEAD_HUNTER)){
@@ -3439,12 +3345,156 @@ research_enlightenment()
 		if(check_reanimation(LAMP_PHASE)){
 			putstr(en_win, 0, "    You have learned to use light to reveal the insubstantial world.");
 		}
+		if(check_reanimation(RE_FLAME)){
+			putstr(en_win, 0, "    You have glimpsed the source of the Silver Light.");
+		}
 	}
-	
-	
+
+
 	display_nhwindow(en_win, TRUE);
 	destroy_nhwindow(en_win);
 	return;
 }
+STATIC_OVL void
+research_dump(void)
+{
+#ifdef DUMP_LOG
+	char buf[BUFSZ];
+	boolean any_preservation = preservation_count() > 0;
+	boolean any_vampire = vampire_count() > 0;
+	boolean any_rot = rot_count() > 0;
+	boolean any_parasite = parasite_count() > 0;
+	boolean any_reanimation = reanimation_count() > 0;
+
+	if(any_preservation)
+			dump("", "Thanks to exsanguination, you:");
+	if (check_preservation(PRESERVE_REDUCE_HUNGER))
+		dump("", "Slowed your metabolism.");
+	if (check_preservation(PRESERVE_PREVENT_ABUSE))
+		dump("", "Made your body resistant to decay.");
+	if (check_preservation(PRESERVE_GAIN_DR)) {
+		if (check_preservation(PRESERVE_GAIN_DR_2))
+			dump("", "Greatly toughened your skin.");
+		else
+			dump("", "Toughened your skin.");
+	}
+	if (check_preservation(PRESERVE_COLD_RES))
+		dump("", "No longer felt cold.");
+	if (check_preservation(PRESERVE_SLEEP_RES))
+		dump("", "No longer felt sleepy.");
+	if (check_preservation(PRESERVE_DEAD_TRUCE))
+		dump("", "No longer interested the undead.");
+	if(any_vampire)
+		dump("", "Through the distillation of your own blood, you had:");
+	if (check_vampire(VAMPIRE_THRALLS))
+		dump("", "Improved your control over your spawn.");
+	if (check_vampire(VAMPIRE_MASTERY))
+		dump("", "Improved your spawns' attacks.");
+	if (check_vampire(VAMPIRE_BLOOD_RIP))
+		dump("", "Learned to manipulate the blood of your victims.");
+	if (check_vampire(VAMPIRE_BLOOD_SPIKES))
+		dump("", "Improved your blood-bullets to spears.");
+	if (check_vampire(VAMPIRE_GAZE))
+		dump("", "Learned to hypnotize your prey.");
+	if (check_vampire(VAMPIRE_SHUB))
+		dump("", "Learned to sense and partake in the strange communion of Shub-Nugganoth.");
+	if(any_rot)
+		dump("", "Through the enlightenment of rot:");
+	if (check_rot(ROT_VOMIT))
+		dump("", "Your guts had blossomed into parasitic caterpillars.");
+	if (check_rot(ROT_WINGS))
+		dump("", "You flew on wings of rot.");
+	if (check_rot(ROT_CLONE))
+		dump("", "Strange butterflies hatched from your wings.");
+	if (check_rot(ROT_TRUCE))
+		dump("", "You no longer interested the beings of rot.");
+	if (check_rot(ROT_KIN))
+		dump("", "You were followed by the kindred of rot.");
+	if (check_rot(ROT_FEAST))
+		dump("", "You feasted on injury and destruction.");
+	if (check_rot(ROT_CENT))
+		dump("", "Monstrous centipedes bored through your body.");
+	if (check_rot(ROT_STING))
+		dump("", "A monstrous scorpion stinger had torn loose from your flesh.");
+	if (check_rot(ROT_SPORES))
+		dump("", "Puffball mushrooms errupted from your skin.");
+	if (check_rot(ROT_SHUB))
+		dump("", "The spores of Shub-Nugganoth took root in your flesh.");
+	if (check_rot(ROT_EXHULT))
+		dump("", "Something in your breast exulted the Order of Rot.");
+	if (check_rot(ROT_WINGSWORD))
+		dump("", "Insect wings sprouted from the flesh of your sword arm.");
+	if (check_rot(ROT_CRICKET))
+		dump("", "Ruinously-chirping cricket wings sprouted from your arms and legs.");
+	if (check_rot(ROT_FORAGE))
+		dump("", "The bugs on the floor brought you gifts.");
+	if(any_parasite)
+		dump("", "In your surgical self-experimentation, you had:");
+	if (u.brainsuckers) {
+		Sprintf(buf, "Positioned %d parasite%s to suck out your enemies' brains.",
+			u.brainsuckers, u.brainsuckers > 1 ? "s" : "");
+		dump("", buf);
+	}
+	if (u.cuckoo) {
+		Sprintf(buf, "Positioned %d parasite%s to empower your charm spells.",
+			u.cuckoo, u.cuckoo > 1 ? "s" : "");
+		dump("", buf);
+	}
+	if (u.explosion_up) {
+		Sprintf(buf, "Positioned %d parasite%s to empower your explosive spells.",
+			u.explosion_up, u.explosion_up > 1 ? "s" : "");
+		dump("", buf);
+	}
+	if (u.mm_up) {
+		Sprintf(buf, "Positioned %d parasite%s to empower your ray and beam spells.",
+			u.mm_up, u.mm_up > 1 ? "s" : "");
+		dump("", buf);
+	}
+	if (u.jellyfish) {
+		Sprintf(buf, "Positioned %d parasite%s to sting adjacent enemies.",
+			u.jellyfish, u.jellyfish > 1 ? "s" : "");
+		dump("", buf);
+	}
+	if (check_parasitology(PARISITE_WINDOWS))
+		dump("", "Positioned a parasite in your corpus callosum and embraced the visions of Yog-Sothoth.");
+	if(any_reanimation)
+		dump("", "In your experiments with the great animating thoughts, you had:");
+	if (check_reanimation(RE_BOLT_RES))
+		dump("", "Made yourself lightning resistant.");
+	if (check_reanimation(RE_WATER_RES))
+		dump("", "Made yourself waterproof.");
+	if (check_reanimation(RE_CLAIR))
+		dump("", "Given yourself clairvoyance.");
+	if (check_reanimation(RE_CLONE_SELF))
+		dump("", "Learned to create blood clones.");
+	if (check_reanimation(ANTENNA_ERRANT))
+		dump("", "Attuned your antennae weapons to conduct the errant thoughts of the cosmos.");
+	if (check_reanimation(ANTENNA_BOLT))
+		dump("", "Attuned your antennae weapons to conduct the cosmic static.");
+	if (check_reanimation(ANTENNA_REJECT))
+		dump("", "Attuned your antennae weapons to rebroadcast rejecting forces.");
+	if (check_reanimation(LAMP_PHASE))
+		dump("", "Learned to use light to reveal the insubstantial world.");
+	if (check_reanimation(RE_FLAME))
+		dump("", "Glimpsed the source of the Silver Light.");
+#endif /* DUMP_LOG */
+}
+
+#ifdef DUMP_LOG
+void
+dump_appearance()
+{
+	dump("", "Final Appearance:");
+	dump("","");
+	mutations_enlightenment(TRUE);
+	dump("","");
+	signs_appearance(TRUE, FALSE);
+	dump("", "");
+	spirits_enlightenment(TRUE);
+	dump("", "");
+	research_dump();
+	dump("", "");
+}
+#endif /* DUMP_LOG */
 
 /*enlighten.c*/

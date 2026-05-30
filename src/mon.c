@@ -1662,6 +1662,11 @@ struct monst *mon;
 		mmove += 3;
 	if(mon->mtyp == PM_OONA)//+0 to +7 (+8 would only occur at 0 hp)
 		mmove += 8*(mon->mhpmax-mon->mhp)/mon->mhpmax;
+	if(mon == u.urider){
+		if(mon_knight_riding(u.urider)){
+			mmove += m_martial_skill(u.urider->data)-1; /* -1 to +3 */
+		}
+	}
     /* Note: MSLOW's `+ 1' prevents slowed speed 1 getting reduced to 0;
      *	     MFAST's `+ 2' prevents hasted speed 1 from becoming a no-op;
      *	     both adjustments have negligible effect on higher speeds.

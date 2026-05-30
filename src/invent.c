@@ -2746,9 +2746,89 @@ struct obj *obj;
 
 	return n;
 }
-/* 
+/* Returns a short description of what the given single etrait flag does.
+ * context_traits is the full trait bitmask of the item (for descriptions that
+ * depend on other traits being present).  Returns NULL for unknown flags. */
+const char *
+etrait_description(long flag, long context_traits, boolean past)
+{
+	switch (flag) {
+	case ETRAIT_HEW:
+		return past ? "could deliver powerful-but-strenuous overhead blows"
+		            : "can deliver powerful-but-strenuous overhead blows";
+	case ETRAIT_FELL:
+		return past ? "could disrupt enemy movement"
+		            : "can disrupt enemy movement";
+	case ETRAIT_KNOCK_BACK:
+		if (context_traits & ETRAIT_KNOCK_BACK_CHARGE)
+			return past ? "could charge and knock enemies back"
+			            : "can charge and knock enemies back";
+		return past ? "could knock enemies back"
+		            : "can knock enemies back";
+	case ETRAIT_KNOCK_BACK_CHARGE:
+		return (const char *)0;
+	case ETRAIT_FOCUS_FIRE:
+		return past ? "could target gaps in enemy armor"
+		            : "can target gaps in enemy armor";
+	case ETRAIT_STUNNING_STRIKE:
+		return past ? "could deliver powerful stunning blows"
+		            : "can deliver powerful stunning blows";
+	case ETRAIT_GRAZE:
+		return past ? "could graze foes on a near miss"
+		            : "may graze foes on a near miss";
+	case ETRAIT_STRIKING:
+		return past ? "allowed skilled users to strike more accurately"
+		            : "skilled users can strike more accurately";
+	case ETRAIT_STOP_THRUST:
+		return past ? "could harness enemy momentum to deliver powerful blows"
+		            : "can harness enemy momentum to deliver powerful blows";
+	case ETRAIT_PENETRATE_ARMOR:
+		return past ? "penetrated enemy armor"
+		            : "penetrates enemy armor";
+	case ETRAIT_LONG_SLASH:
+		return past ? "dealt extra damage against lightly-armored enemies"
+		            : "deals extra damage against lightly-armored enemies";
+	case ETRAIT_BLEED:
+		return past ? "could deliver bleeding wounds"
+		            : "may deliver bleeding wounds";
+	case ETRAIT_CLEAVE:
+		if (context_traits & ETRAIT_HEW)
+			return past ? "cleaved through slain enemies when not using hewing strikes"
+			            : "cleaves through slain enemies when not using hewing strikes";
+		return past ? "cleaved through slain enemies"
+		            : "cleaves through slain enemies";
+	case ETRAIT_PUNCTURE:
+		return past ? "successive hits could deal increased damage"
+		            : "successive hits may deal increased damage";
+	case ETRAIT_LUNGE:
+		return past ? "could be used for lunging attacks"
+		            : "can be used for lunging attacks";
+	case ETRAIT_QUICK:
+		return past ? "struck quickly"
+		            : "strikes quickly";
+	case ETRAIT_SECOND:
+		return past ? "when wielded in the off-hand, struck a second foe after killing the first"
+		            : "when wielded in the off-hand strikes a second foe after killing the first";
+	case ETRAIT_CREATE_OPENING:
+		return past ? "created openings for sneak attacks"
+		            : "creates openings for sneak attacks";
+	case ETRAIT_BRACED:
+		return past ? "delivered powerful counterattacks"
+		            : "delivers powerful counterattacks";
+	case ETRAIT_BLADESONG:
+		return past ? "delivered powerful blows when combined with songs or spells"
+		            : "delivers powerful blows when combined with songs or spells";
+	case ETRAIT_BLADEDANCE:
+		return past ? "delivered powerful blows when moving and striking erratically"
+		            : "delivers powerful blows when moving and striking erratically";
+	default:
+		return (const char *)0;
+	}
+}
+
+/*
  * describe_item()
- * 
+ *
  * Prints lines describing the given object to the passed nhwindow reference
  * Requires that the player knows the name of the object (ie, objects[obj->otyp].oc_name_known == TRUE)
  *   or that obj doesn't exist (ie we are describing what a "cloak of magic resistance" typically is like)
@@ -4859,6 +4939,113 @@ sortloot_cmp(obj1, obj2)
  * any count returned from the menu selection is placed here.
  */
 #ifdef DUMP_LOG
+void
+dump_pestglaive_props(struct obj *obj)
+{
+	static const struct { long flag; const char *name; } props[] = {
+		{ PG_HANDPROTECT,  "hand-protecting"   },
+		{ PG_MATTOCK,      "mattock head"      },
+		{ PG_JOUST,        "jousting tip"      },
+		{ PG_AXE,          "axe blade"         },
+		{ PG_CROOK,        "crook head"        },
+		{ PG_SPEARTHROWER, "spearthrower loop" },
+		{ 0, 0 }
+	};
+	char buf[LONGBUFSZ];
+	int i;
+	boolean first;
+	long bit;
+	const char *desc;
+
+	Sprintf(buf, "could eat with its %s", pg_appendage_name(obj, PGD_FEEDING));
+	dump("        ", buf);
+
+	if (obj->ovar1_pestglaive_props) {
+		buf[0] = '\0';
+		first = TRUE;
+		for (i = 0; props[i].flag; i++) {
+			if (obj->ovar1_pestglaive_props & props[i].flag) {
+				if (!first) Strcat(buf, ", ");
+				Strcat(buf, props[i].name);
+				first = FALSE;
+			}
+		}
+		if (obj->ovar1_pestglaive_props & PG_BULLWHIP) {
+			char buf2[BUFSZ] = {'\0'};
+			Sprintf(buf2, "%swhipping %s", !first ? ", " : "", pg_appendage_name(obj, PGD_SNAGGING));
+			Strcat(buf, buf2);
+			first = FALSE;
+		}
+		if (!first) dump("        absorbed: ", buf);
+	}
+
+	if (obj->ovar2_pg_etraits) {
+		buf[0] = '\0';
+		first = TRUE;
+		for (bit = 1L; bit <= MAX_ETRAIT; bit <<= 1) {
+			if (!(obj->ovar2_pg_etraits & bit)) continue;
+			desc = etrait_description(bit, obj->ovar2_pg_etraits, TRUE);
+			if (!desc) continue;
+			if (!first) Strcat(buf, "; ");
+			Strcat(buf, desc);
+			first = FALSE;
+		}
+		if (!first) dump("        expert traits: ", buf);
+	}
+}
+
+void
+dump_iea_upgrades(struct obj *obj)
+{
+	static const struct { long flag; const char *name; } upgrades[] = {
+		{ IEA_FIXED_ABIL,  "fixed abilities"          },
+		{ IEA_FAST_HEAL,   "fast healing"             },
+		{ IEA_REFLECTING,  "reflection"               },
+		{ IEA_SICK_RES,    "sickness resistance"      },
+		{ IEA_HALF_PHDAM,  "half physical damage"     },
+		{ IEA_HALF_SPDAM,  "half spell damage"        },
+		{ IEA_DISPLACED,   "displacement"             },
+		{ IEA_INVIS,       "invisibility"             },
+		{ IEA_SWIMMING,    "swimming"                 },
+		{ IEA_GOPOWER,     "improved power"           },
+		{ IEA_GODEXTERITY, "improved dexterity"       },
+		{ IEA_INC_DAM,     "increased damage"         },
+		{ IEA_BOLTS,       "lightning bolts"          },
+		{ IEA_FLYING,      "flying"                   },
+		{ IEA_JUMPING,     "jumping"                  },
+		{ IEA_FAST,        "speed"                    },
+		{ IEA_TELEPORT,    "teleportation"            },
+		{ IEA_NOBREATH,    "breathlessness"           },
+		{ IEA_LIFESENSE,   "life sensing"             },
+		{ IEA_SEE_INVIS,   "see invisible"            },
+		{ IEA_TELEPAT,     "telepathy"                },
+		{ IEA_BLIND_RES,   "blindness resistance"     },
+		{ IEA_INC_ACC,     "increased accuracy"       },
+		{ IEA_TELE_CNTRL,  "teleport control"         },
+		{ IEA_KICKING,     "kicking"                  },
+		{ IEA_PROT_SHAPE,  "protection from shape changers" },
+		{ IEA_DEFLECTION,  "deflection"               },
+		{ IEA_STRANGLE,    "strangling"               },
+		{ IEA_MITHRIL,     "mithril reinforcement"    },
+		{ 0, 0 }
+	};
+	char buf[LONGBUFSZ];
+	int i;
+	boolean first = TRUE;
+	long iea_flags = obj->ovar1_iea_upgrades & ~IEA_NOUPGRADES;
+
+	if (!iea_flags) return;
+	buf[0] = '\0';
+	for (i = 0; upgrades[i].flag; i++) {
+		if (iea_flags & upgrades[i].flag) {
+			if (!first) Strcat(buf, ", ");
+			Strcat(buf, upgrades[i].name);
+			first = FALSE;
+		}
+	}
+	if (!first) dump("        upgrades: ", buf);
+}
+
 static char
 display_pickinv(lets, want_reply, out_cnt, want_dump, want_disp)
 register const char *lets;
@@ -5034,6 +5221,10 @@ nextclass:
 	      char letbuf[7];
 	      sprintf(letbuf, "  %c - ", ilet);
 	      dump(letbuf, doname(otmp));
+	      if (otmp->otyp == PEST_GLAIVE)
+	          dump_pestglaive_props(otmp);
+	      else if (is_imperial_elven_armor(otmp))
+	          dump_iea_upgrades(otmp);
 	    }
 	    if (want_disp)
 #endif

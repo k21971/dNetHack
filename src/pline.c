@@ -595,10 +595,10 @@ register struct monst *mtmp;
 				  Strcat(info, ", blind");
 	else if(is_blind(mtmp)) Strcat(info, ", dazzled");
 	if (mtmp->mstun)	  Strcat(info, ", stunned");
-	if (mtmp->msleeping)	  Strcat(info, ", asleep");
 	if (mtmp->mstdy > 0)	  Sprintf(eos(info), ", vulnerable (%d)", mtmp->mstdy);
 	if (mtmp->encouraged != 0)	  Sprintf(eos(info), ", morale (%d)", mtmp->encouraged);
 	else if (mtmp->mstdy < 0)	  Sprintf(eos(info), ", protected (%d)", mtmp->mstdy);
+	if (mtmp->msleeping)	  Strcat(info, ", asleep");
 #if 0	/* unfortunately mfrozen covers temporary sleep and being busy
 	   (donning armor, for instance) as well as paralysis */
 	else if (mtmp->mfrozen)	  Strcat(info, ", paralyzed");

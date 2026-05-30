@@ -49,6 +49,7 @@ void FDECL(list_vanquished, (CHAR_P,BOOLEAN_P));
 extern char msgs[][BUFSZ];
 extern int lastmsg;
 extern void NDECL(dump_spells);
+extern void NDECL(dump_appearance);
 void FDECL(do_vanquished, (int, BOOLEAN_P, BOOLEAN_P));
 #endif /* DUMP_LOG */
 STATIC_DCL boolean FDECL(should_query_disclose_option, (int,char *));
@@ -622,6 +623,7 @@ boolean taken;
 	if (dump_fp) {
 	  show_enlightenment((int) (how >= PANICKED ? 1 : 2), TRUE);
 	  dump_spells();
+	  dump_appearance();
 	}
 #endif
 
@@ -1797,7 +1799,13 @@ boolean identified, all_containers, want_dump, want_disp;
 				if (obj->oartifact) discover_artifact(obj->oartifact);
 			}
 #ifdef DUMP_LOG
-			if (want_dump)  dump("  ", doname(obj));
+			if (want_dump) {
+			    dump("  ", doname(obj));
+			    if (obj->otyp == PEST_GLAIVE)
+			        dump_pestglaive_props(obj);
+			    else if (is_imperial_elven_armor(obj))
+			        dump_iea_upgrades(obj);
+			}
 			if (want_disp)
 #endif
 			putstr(tmpwin, 0, doname(obj));

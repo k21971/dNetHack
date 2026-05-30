@@ -771,6 +771,12 @@ you_calc_movement()
 	else moveamt = youracedata->mmove;
 	if(Race_if(PM_HALF_DRAGON) && flags.HDbreath == AD_ELEC && u.ulevel >= 15)
 		moveamt += 3;
+	if(u.urider){
+		moveamt += P_SKILL(P_RIDING)-1; /* -2 to +2 */
+		if(mon_knight_riding(u.urider)){
+			moveamt += m_martial_skill(u.urider->data)-1;
+		}
+	}
 	if(uarmf && !Flying && !Levitation){
 		if(uarmf->otyp == STILETTOS)
 			moveamt = (moveamt*5)/6;

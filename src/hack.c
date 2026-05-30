@@ -1771,6 +1771,7 @@ domove()
 	if (u.urider) {
 		u.urider->mx = u.ux;
 		u.urider->my = u.uy;
+		exercise_steed();
 	}
 #endif
 
@@ -3112,7 +3113,7 @@ weight_cap()
 		}
 		if (carrcap < 0) carrcap = 0;
 	}
-	if(u.usteed && P_SKILL(P_RIDING) > P_UNSKILLED){
+	if((u.usteed || u.urider) && P_SKILL(P_RIDING) > P_UNSKILLED){
 		carrcap += 100 * (P_SKILL(P_RIDING) - P_UNSKILLED);
 	}
 	
@@ -3241,6 +3242,9 @@ inv_weight()
 		}
 		if(nymph)
 			subtotal = max(0, subtotal - wtmod);
+		if(mon_knight_riding(u.urider)){
+			subtotal -= max(0, subtotal - 100*(m_martial_skill(u.urider->data) - P_UNSKILLED));
+		}
 		wt += subtotal;
 	}
 	

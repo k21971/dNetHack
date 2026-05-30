@@ -493,7 +493,7 @@ mount_steed(mtmp, force)
 void
 exercise_steed()
 {
-	if (!u.usteed)
+	if (!u.usteed && !u.urider)
 		return;
 
 	/* It takes many turns of riding to exercise skill */
